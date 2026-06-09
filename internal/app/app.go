@@ -27,6 +27,7 @@ import (
 	"github.com/vizvim/omnibus/internal/jobs"
 	"github.com/vizvim/omnibus/internal/provider/metadata"
 	"github.com/vizvim/omnibus/internal/repository"
+	"github.com/vizvim/omnibus/internal/service/indexer"
 	jobsservice "github.com/vizvim/omnibus/internal/service/jobs"
 	"github.com/vizvim/omnibus/internal/service/series"
 	"github.com/vizvim/omnibus/internal/transport"
@@ -91,7 +92,10 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// JobService reads run history from River's tables (via the jobs client).
 	jobSvc := jobsservice.New(riverClient)
 
-	srv, err := newServer(cfg, logger, svc, jobSvc, repos.Cover)
+	// IndexerService owns DB-backed indexer CRUD (ADR 0007 domain segmentation).
+	indexerSvc := indexer.New(indexer.Deps{Repos: repos, Logger: logger})
+
+	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, repos.Cover)
 	if err != nil {
 		_ = database.Close()
 		return err
@@ -150,7 +154,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 // newServer builds the h2c-wrapped HTTP server hosting the SeriesService + JobService
 // Connect handlers (with slog + otel interceptors) and the cover handler serving blobs
 // from SQLite, with CORS scoped to the Vite dev origin.
-func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, covers transport.CoverStore) (*http.Server, error) {
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, indexerSvc *indexer.Service, covers transport.CoverStore) (*http.Server, error) {
 	interceptors, err := transport.NewInterceptors(logger)
 	if err != nil {
 		return nil, fmt.Errorf("build interceptors: %w", err)
@@ -167,6 +171,10 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 	jobHandler := transport.NewJobHandler(jobSvc)
 	jobPath, jobH := omnibusv1connect.NewJobServiceHandler(jobHandler, connect.WithInterceptors(interceptors...))
 	mux.Handle("/api"+jobPath, http.StripPrefix("/api", jobH))
+
+	indexerHandler := transport.NewIndexerHandler(indexerSvc)
+	indexerPath, indexerH := omnibusv1connect.NewIndexerServiceHandler(indexerHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+indexerPath, http.StripPrefix("/api", indexerH))
 
 	mux.Handle("/covers/", transport.NewCoverHandler(covers))
 
