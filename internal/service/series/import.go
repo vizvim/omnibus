@@ -2,7 +2,6 @@ package series
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,27 +10,15 @@ import (
 	"github.com/vizvim/omnibus/internal/repository"
 )
 
-// startImport launches the bounded import goroutine for a series. The goroutine is
-// tracked on the WaitGroup and bound to the lifecycle context so shutdown drains it
-// when shutdown is requested. This is currently the only background construct — no
-// scheduler, no jobs table, no worker pool.
-func (s *Service) startImport(ser repository.Series, vol metadata.VolumeDetail) {
-	s.wg.Go(func() {
-		if err := s.runImport(s.lifeCtx, ser, vol); err != nil && !errors.Is(err, errImportCancelled) {
-			s.logger.Error("series import failed",
-				slog.Int64("series_id", ser.ID), slog.Any("error", err))
-		}
-	})
-}
-
 // runImport paginates the volume's issues through the gateway, upserts each (idempotent
 // on comicvine_issue_id with a normalized (sort,qual)), stores covers in the SQLite
 // covers table, and updates have/total counts as issues land. Re-running fills
-// gaps. It checks ctx.Err() between pages and writes so shutdown stops it
-// promptly.
+// gaps. It checks ctx.Err() between pages and writes and returns it on cancellation so
+// the River job is left for recovery (idempotent re-run is safe) when shutdown drains
+// the engine mid-import.
 func (s *Service) runImport(ctx context.Context, ser repository.Series, vol metadata.VolumeDetail) error {
 	if err := ctx.Err(); err != nil {
-		return errImportCancelled
+		return err
 	}
 
 	// Series cover.
@@ -45,7 +32,7 @@ func (s *Service) runImport(ctx context.Context, ser repository.Series, vol meta
 	imported := 0
 	for {
 		if err := ctx.Err(); err != nil {
-			return errImportCancelled
+			return err
 		}
 
 		issues, hasMore, err := s.gw.ListIssues(ctx, ser.ComicvineVolumeID, offset)
@@ -55,7 +42,7 @@ func (s *Service) runImport(ctx context.Context, ser repository.Series, vol meta
 
 		for _, iss := range issues {
 			if err := ctx.Err(); err != nil {
-				return errImportCancelled
+				return err
 			}
 			sortKey, qual := Normalize(iss.IssueNumber)
 			stored, uerr := s.repos.Issue.Upsert(ctx, repository.IssueUpsert{

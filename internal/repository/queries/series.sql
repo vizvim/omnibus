@@ -33,3 +33,16 @@ RETURNING *;
 
 -- name: UpdateSeriesCounts :exec
 UPDATE series SET total_issues = ?, have_issues = ? WHERE id = ?;
+
+-- name: UpdateSeriesLastRefreshed :exec
+UPDATE series SET last_refreshed_at = ? WHERE id = ?;
+
+-- name: ListStaleSeries :many
+-- Active series never refreshed (NULL) or last refreshed before the cutoff, oldest
+-- first (NULLs lead). Bounded by LIMIT to keep each sweep tick small. Paused/Ended
+-- series are excluded: they are not being watched for freshness.
+SELECT * FROM series
+WHERE status = 'Active'
+  AND (last_refreshed_at IS NULL OR last_refreshed_at < ?)
+ORDER BY last_refreshed_at IS NOT NULL, last_refreshed_at
+LIMIT ?;

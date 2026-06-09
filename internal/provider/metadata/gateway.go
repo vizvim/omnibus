@@ -91,6 +91,27 @@ func (g *Gateway) GetVolume(ctx context.Context, volumeID int64) (VolumeDetail, 
 	return detail, nil
 }
 
+// CachedSourceUpdatedAt returns the cached ComicVine date_last_updated marker
+// (source_updated_at) for a volume, reading the same metadata_cache row GetVolume
+// writes (key shape "volume:4050-{id}"). It returns ("", false) when no row exists or
+// the marker is empty. This is a pure read of the marker the gateway already persists
+// (put, below) — it does NOT fetch, pace, or mutate the cache. The conditional refresh
+// (D-05) compares this against a freshly-fetched VolumeDetail.DateLastUpdated.
+func (g *Gateway) CachedSourceUpdatedAt(ctx context.Context, volumeID int64) (string, bool) {
+	key := fmt.Sprintf("volume:4050-%d", volumeID)
+	entry, err := g.cache.Get(ctx, key)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			g.logger.Warn("cached source_updated_at lookup", slog.String("key", key), slog.Any("error", err))
+		}
+		return "", false
+	}
+	if !entry.SourceUpdatedAt.Valid || entry.SourceUpdatedAt.String == "" {
+		return "", false
+	}
+	return entry.SourceUpdatedAt.String, true
+}
+
 // ListIssues paces and caches one page of issues for a volume.
 func (g *Gateway) ListIssues(ctx context.Context, volumeID int64, offset int) ([]IssueDetail, bool, error) {
 	key := fmt.Sprintf("issues:4050-%d:%d", volumeID, offset)

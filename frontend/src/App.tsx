@@ -1,10 +1,11 @@
 import { useState } from "react";
 
+import { Activity } from "./pages/Activity";
 import { Library } from "./pages/Library";
 import { Search } from "./pages/Search";
 import { SeriesDetail } from "./pages/SeriesDetail";
 
-type Route = "library" | "search" | "detail";
+type Route = "library" | "search" | "detail" | "activity";
 
 // App is the minimal-functional shell: a header with Library/Search nav and a small
 // internal router (no router library needed for the Phase 2 surface). initialRoute /
@@ -35,6 +36,9 @@ export function App({
           <button type="button" onClick={() => setRoute("search")} className="text-blue-600">
             Search
           </button>
+          <button type="button" onClick={() => setRoute("activity")} className="text-blue-600">
+            Activity
+          </button>
         </nav>
       </header>
 
@@ -42,6 +46,7 @@ export function App({
         <Library onOpenSeries={openSeries} onSearch={() => setRoute("search")} />
       ) : null}
       {route === "search" ? <Search onAdded={openSeries} /> : null}
+      {route === "activity" ? <Activity /> : null}
       {route === "detail" && seriesId !== undefined ? <SeriesDetail seriesId={seriesId} /> : null}
     </div>
   );

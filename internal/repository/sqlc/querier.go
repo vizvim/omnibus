@@ -21,12 +21,17 @@ type Querier interface {
 	ListArcsBySeries(ctx context.Context, seriesID int64) ([]StoryArc, error)
 	ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Issue, error)
 	ListSeries(ctx context.Context, arg ListSeriesParams) ([]Series, error)
+	// Active series never refreshed (NULL) or last refreshed before the cutoff, oldest
+	// first (NULLs lead). Bounded by LIMIT to keep each sweep tick small. Paused/Ended
+	// series are excluded: they are not being watched for freshness.
+	ListStaleSeries(ctx context.Context, arg ListStaleSeriesParams) ([]Series, error)
 	ListUserConfig(ctx context.Context) ([]UserConfig, error)
 	// Idempotent on cache_key (UNIQUE); refreshes payload + freshness markers.
 	PutMetadataCache(ctx context.Context, arg PutMetadataCacheParams) error
 	SetUserConfig(ctx context.Context, arg SetUserConfigParams) error
 	UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusParams) error
 	UpdateSeriesCounts(ctx context.Context, arg UpdateSeriesCountsParams) error
+	UpdateSeriesLastRefreshed(ctx context.Context, arg UpdateSeriesLastRefreshedParams) error
 	UpdateSeriesSettings(ctx context.Context, arg UpdateSeriesSettingsParams) (Series, error)
 	// Idempotent on the immutable comicvine_arc_id.
 	UpsertArc(ctx context.Context, arg UpsertArcParams) (StoryArc, error)

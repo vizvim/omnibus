@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderResult } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 
+import { JobService } from "../gen/omnibus/v1/jobs_pb";
 import { SeriesService } from "../gen/omnibus/v1/series_pb";
 
 // SeriesServiceImpl is a partial stub of the SeriesService RPCs for component tests.
@@ -20,6 +21,16 @@ export function makeTransport(
 ): Transport {
   return createRouterTransport(({ service }) => {
     service(SeriesService, impl as never);
+  });
+}
+
+// makeJobTransport builds an in-memory Connect transport serving JobService method
+// stubs (e.g. listJobRuns) for Activity-page component tests.
+export function makeJobTransport(
+  impl: Record<string, (req: never) => unknown>,
+): Transport {
+  return createRouterTransport(({ service }) => {
+    service(JobService, impl as never);
   });
 }
 

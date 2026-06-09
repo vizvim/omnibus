@@ -38,3 +38,11 @@ export const getSeries = SeriesService.method.getSeries;
  * @generated from rpc omnibus.v1.SeriesService.UpdateSeriesSettings
  */
 export const updateSeriesSettings = SeriesService.method.updateSeriesSettings;
+
+/**
+ * RefreshSeries enqueues a durable, unique conditional metadata refresh for a
+ * series and returns the current series row (the UI polls GetSeries for the result).
+ *
+ * @generated from rpc omnibus.v1.SeriesService.RefreshSeries
+ */
+export const refreshSeries = SeriesService.method.refreshSeries;

@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package omnibus.v1;
+
+option go_package = "github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1";
+
+// JobRunState is the UI-facing five-state vocabulary for a background job run,
+// collapsed from River's internal state set (available/scheduled/pending → queued;
+// running; completed; discarded/retryable-with-error → failed; cancelled).
+enum JobRunState {
+  JOB_RUN_STATE_UNSPECIFIED = 0;
+  JOB_RUN_STATE_QUEUED = 1;
+  JOB_RUN_STATE_RUNNING = 2;
+  JOB_RUN_STATE_COMPLETED = 3;
+  JOB_RUN_STATE_FAILED = 4;
+  JOB_RUN_STATE_CANCELLED = 5;
+}
+
+// JobRun is one background job run as read from the engine's own tables.
+message JobRun {
+  string id = 1;
+  string kind = 2;
+  JobRunState state = 3;
+  string started_at = 4;
+  string finished_at = 5;
+  string error = 6;
+  int32 attempt = 7;
+}
+
+message ListJobRunsRequest {
+  int32 limit = 1;
+}
+
+message ListJobRunsResponse {
+  repeated JobRun runs = 1;
+}
+
+// JobService owns background job-run visibility (ADR 0007). It reads run history
+// directly from the engine's tables; it does not own series add/watch/refresh.
+service JobService {
+  // ListJobRuns returns the most recent background job runs, newest first.
+  rpc ListJobRuns(ListJobRunsRequest) returns (ListJobRunsResponse);
+}

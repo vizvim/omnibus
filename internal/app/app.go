@@ -1,8 +1,8 @@
 // Package app wires omnibus's runtime components and owns the server lifecycle:
 // run migrations, open the DB pools, build the gateway + repositories + series service,
-// serve the SeriesService + cover handler over h2c, and on context cancellation drain
-// the HTTP server, the in-flight import goroutines, then the DB pools in order.
-// It is separated from main so the lifecycle is testable.
+// start the River job engine, serve the SeriesService + cover handler over h2c, and on
+// context cancellation drain the HTTP server, the job engine (Stop), then the DB pools
+// in order. It is separated from main so the lifecycle is testable.
 package app
 
 import (
@@ -11,10 +11,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"sync"
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/riverqueue/river"
 	"github.com/rs/cors"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -24,8 +24,10 @@ import (
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
 	"github.com/vizvim/omnibus/internal/config"
 	"github.com/vizvim/omnibus/internal/db"
+	"github.com/vizvim/omnibus/internal/jobs"
 	"github.com/vizvim/omnibus/internal/provider/metadata"
 	"github.com/vizvim/omnibus/internal/repository"
+	jobsservice "github.com/vizvim/omnibus/internal/service/jobs"
 	"github.com/vizvim/omnibus/internal/service/series"
 	"github.com/vizvim/omnibus/internal/transport"
 )
@@ -42,7 +44,7 @@ const (
 )
 
 // Run starts the server and blocks until ctx is canceled (e.g. SIGINT/SIGTERM) or a
-// fatal error occurs. On shutdown it drains the HTTP server, the import goroutines,
+// fatal error occurs. On shutdown it drains the HTTP server, the River job engine,
 // then closes the DB pools.
 func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// Migrations run before the server accepts traffic.
@@ -62,23 +64,35 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	limiter := rate.NewLimiter(rate.Every(parseRate(cfg.ComicVineRate)), 1)
 	gateway := metadata.NewGateway(provider, repos.MetadataCache, limiter, logger, metadataTTL)
 
-	// importCtx bounds background import goroutines; it is canceled on shutdown so the
-	// WaitGroup join below drains them.
-	importCtx, cancelImports := context.WithCancel(context.Background())
-	var importWG sync.WaitGroup
-
+	// Build the series service first (with a nil enqueuer), then the jobs client that
+	// references it as the import runner, then inject the client back as the service's
+	// enqueuer — this resolves the service<->jobs construction cycle (D-11).
 	svc := series.New(series.Deps{
-		Gateway:    gateway,
-		Repos:      repos,
-		AttemptCap: attemptCap,
-		Logger:     logger,
-		LifeCtx:    importCtx,
-		WaitGroup:  &importWG,
+		Gateway:            gateway,
+		Repos:              repos,
+		AttemptCap:         attemptCap,
+		Logger:             logger,
+		StalenessThreshold: time.Duration(cfg.StalenessThresholdDays) * 24 * time.Hour,
 	})
 
-	srv, err := newServer(cfg, logger, svc, repos.Cover)
+	workers := river.NewWorkers()
+	river.AddWorker(workers, jobs.NewImportWorker(svc))
+	river.AddWorker(workers, jobs.NewRefreshWorker(svc))
+	river.AddWorker(workers, jobs.NewSweepWorker(svc))
+
+	sweepInterval := time.Duration(cfg.RefreshIntervalHours) * time.Hour
+	riverClient, err := jobs.New(ctx, database.Write, database.Read, cfg.RiverWorkers, sweepInterval, logger, workers)
 	if err != nil {
-		cancelImports()
+		_ = database.Close()
+		return fmt.Errorf("build jobs client: %w", err)
+	}
+	svc.SetEnqueuer(riverClient)
+
+	// JobService reads run history from River's tables (via the jobs client).
+	jobSvc := jobsservice.New(riverClient)
+
+	srv, err := newServer(cfg, logger, svc, jobSvc, repos.Cover)
+	if err != nil {
 		_ = database.Close()
 		return err
 	}
@@ -94,18 +108,26 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	})
 
 	g.Go(func() error {
+		if err := riverClient.Start(ctx); err != nil {
+			return fmt.Errorf("start jobs engine: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
 		<-ctx.Done()
 		logger.Info("shutdown signal received, draining")
 
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
-		// Order: stop accepting requests, drain imports, close pools.
+		// Order: stop accepting requests, drain the job engine, close pools (D-12).
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			logger.Error("http shutdown", slog.Any("error", err))
 		}
-		cancelImports()
-		importWG.Wait()
+		if err := riverClient.Stop(shutdownCtx); err != nil {
+			logger.Error("jobs engine drain", slog.Any("error", err))
+		}
 		if err := database.Close(); err != nil {
 			logger.Error("close database", slog.Any("error", err))
 		}
@@ -114,30 +136,38 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	})
 
 	if err := g.Wait(); err != nil {
-		cancelImports()
-		importWG.Wait()
+		stopCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if stopErr := riverClient.Stop(stopCtx); stopErr != nil {
+			logger.Error("jobs engine drain", slog.Any("error", stopErr))
+		}
 		_ = database.Close()
 		return err
 	}
 	return nil
 }
 
-// newServer builds the h2c-wrapped HTTP server hosting the SeriesService Connect
-// handler (with slog + otel interceptors) and the cover handler serving blobs from
-// SQLite, with CORS scoped to the Vite dev origin.
-func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, covers transport.CoverStore) (*http.Server, error) {
+// newServer builds the h2c-wrapped HTTP server hosting the SeriesService + JobService
+// Connect handlers (with slog + otel interceptors) and the cover handler serving blobs
+// from SQLite, with CORS scoped to the Vite dev origin.
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, covers transport.CoverStore) (*http.Server, error) {
 	interceptors, err := transport.NewInterceptors(logger)
 	if err != nil {
 		return nil, fmt.Errorf("build interceptors: %w", err)
 	}
 
 	mux := http.NewServeMux()
-	seriesHandler := transport.NewSeriesHandler(svc)
-	path, handler := omnibusv1connect.NewSeriesServiceHandler(seriesHandler, connect.WithInterceptors(interceptors...))
 	// The frontend Connect transport uses baseUrl "/api" (both under the Vite dev
-	// proxy and the production SPA), so the RPC handler is served under that prefix.
+	// proxy and the production SPA), so each RPC handler is served under that prefix.
 	// StripPrefix restores the bare procedure path the Connect handler routes on.
-	mux.Handle("/api"+path, http.StripPrefix("/api", handler))
+	seriesHandler := transport.NewSeriesHandler(svc)
+	seriesPath, seriesH := omnibusv1connect.NewSeriesServiceHandler(seriesHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+seriesPath, http.StripPrefix("/api", seriesH))
+
+	jobHandler := transport.NewJobHandler(jobSvc)
+	jobPath, jobH := omnibusv1connect.NewJobServiceHandler(jobHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+jobPath, http.StripPrefix("/api", jobH))
+
 	mux.Handle("/covers/", transport.NewCoverHandler(covers))
 
 	corsHandler := cors.New(cors.Options{

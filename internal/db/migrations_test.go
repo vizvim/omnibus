@@ -12,10 +12,12 @@ import (
 	"github.com/vizvim/omnibus/internal/db"
 )
 
-// allTables is every table the schema defines (the full schema shipped in 0001).
+// allTables is every table the schema defines at the latest migration. There are
+// no jobs/job_history tables here: the River engine owns its own jobs schema via
+// its own migrator (ADR 0006), not golang-migrate.
 var allTables = []string{
 	"blacklists", "covers", "download_history", "downloads", "issue_events", "issues",
-	"job_history", "jobs", "metadata_cache", "publishers", "series",
+	"metadata_cache", "publishers", "series",
 	"story_arc_issues", "story_arcs", "user_config",
 }
 
