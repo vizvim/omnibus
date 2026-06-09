@@ -12,7 +12,7 @@ export const file_omnibus_v1_common: GenFile = /*@__PURE__*/
   fileDesc("ChdvbW5pYnVzL3YxL2NvbW1vbi5wcm90bxIKb21uaWJ1cy52MSrkAQoLSXNzdWVTdGF0dXMSHAoYSVNTVUVfU1RBVFVTX1VOU1BFQ0lGSUVEEAASFwoTSVNTVUVfU1RBVFVTX1dBTlRFRBABEhkKFUlTU1VFX1NUQVRVU19TTkFUQ0hFRBACEhsKF0lTU1VFX1NUQVRVU19ET1dOTE9BREVEEAMSGQoVSVNTVUVfU1RBVFVTX0FSQ0hJVkVEEAQSGAoUSVNTVUVfU1RBVFVTX1NLSVBQRUQQBRIXChNJU1NVRV9TVEFUVVNfRkFJTEVEEAYSGAoUSVNTVUVfU1RBVFVTX0lHTk9SRUQQByr3AQoOSXNzdWVFdmVudFR5cGUSIAocSVNTVUVfRVZFTlRfVFlQRV9VTlNQRUNJRklFRBAAEh0KGUlTU1VFX0VWRU5UX1RZUEVfU0VBUkNIRUQQARInCiNJU1NVRV9FVkVOVF9UWVBFX0NBTkRJREFURV9TRUxFQ1RFRBACEh0KGUlTU1VFX0VWRU5UX1RZUEVfU05BVENIRUQQAxIbChdJU1NVRV9FVkVOVF9UWVBFX0ZBSUxFRBAEEh8KG0lTU1VFX0VWRU5UX1RZUEVfRE9XTkxPQURFRBAFEh4KGklTU1VFX0VWRU5UX1RZUEVfUFJPQ0VTU0VEEAZCN1o1Z2l0aHViLmNvbS92aXp2aW0vb21uaWJ1cy9nZW4vZ28vb21uaWJ1cy92MTtvbW5pYnVzdjFiBnByb3RvMw");
 
 /**
- * IssueStatus is the lifecycle state of a single issue (schema.md / ADR 0004).
+ * IssueStatus is the lifecycle state of a single issue.
  * New issues default to ISSUE_STATUS_WANTED; the service layer owns transitions.
  *
  * @generated from enum omnibus.v1.IssueStatus
@@ -66,8 +66,8 @@ export const IssueStatusSchema: GenEnum<IssueStatus> = /*@__PURE__*/
   enumDesc(file_omnibus_v1_common, 0);
 
 /**
- * IssueEventType enumerates the per-issue timeline events (OBS-01). Phase 2 only
- * stores series/issues; the enum is defined now so later phases reuse one source.
+ * IssueEventType enumerates the per-issue timeline events. The enum is defined
+ * up front so the rest of the system shares one source for these event types.
  *
  * @generated from enum omnibus.v1.IssueEventType
  */

@@ -15,9 +15,9 @@ export const file_omnibus_v1_series: GenFile = /*@__PURE__*/
   fileDesc("ChdvbW5pYnVzL3YxL3Nlcmllcy5wcm90bxIKb21uaWJ1cy52MSK0AQoGU2VyaWVzEgoKAmlkGAEgASgDEhsKE2NvbWljdmluZV92b2x1bWVfaWQYAiABKAMSDAoEbmFtZRgDIAEoCRISCgpzdGFydF95ZWFyGAQgASgFEhEKCXB1Ymxpc2hlchgFIAEoCRIOCgZzdGF0dXMYBiABKAkSEQoJY292ZXJfdXJsGAcgASgJEhQKDHRvdGFsX2lzc3VlcxgIIAEoBRITCgtoYXZlX2lzc3VlcxgJIAEoBSLyAQoFSXNzdWUSCgoCaWQYASABKAMSEQoJc2VyaWVzX2lkGAIgASgDEhoKEmNvbWljdmluZV9pc3N1ZV9pZBgDIAEoAxIUCgxpc3N1ZV9udW1iZXIYBCABKAkSGQoRaXNzdWVfbnVtYmVyX3NvcnQYBSABKAESHgoWaXNzdWVfbnVtYmVyX3F1YWxpZmllchgGIAEoCRINCgV0aXRsZRgHIAEoCRISCgpjb3Zlcl9kYXRlGAggASgJEicKBnN0YXR1cxgJIAEoDjIXLm9tbmlidXMudjEuSXNzdWVTdGF0dXMSEQoJY292ZXJfdXJsGAogASgJIj4KCFN0b3J5QXJjEgoKAmlkGAEgASgDEhgKEGNvbWljdmluZV9hcmNfaWQYAiABKAMSDAoEbmFtZRgDIAEoCSInChZTZWFyY2hDb21pY1ZpbmVSZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJIkEKF1NlYXJjaENvbWljVmluZVJlc3BvbnNlEiYKCmNhbmRpZGF0ZXMYASADKAsyEi5vbW5pYnVzLnYxLlNlcmllcyIvChBBZGRTZXJpZXNSZXF1ZXN0EhsKE2NvbWljdmluZV92b2x1bWVfaWQYASABKAMiNwoRQWRkU2VyaWVzUmVzcG9uc2USIgoGc2VyaWVzGAEgASgLMhIub21uaWJ1cy52MS5TZXJpZXMiMQoRTGlzdFNlcmllc1JlcXVlc3QSDAoEcGFnZRgBIAEoBRIOCgZmaWx0ZXIYAiABKAkiOAoSTGlzdFNlcmllc1Jlc3BvbnNlEiIKBnNlcmllcxgBIAMoCzISLm9tbmlidXMudjEuU2VyaWVzIiUKEEdldFNlcmllc1JlcXVlc3QSEQoJc2VyaWVzX2lkGAEgASgDIpcBChFHZXRTZXJpZXNSZXNwb25zZRIiCgZzZXJpZXMYASABKAsyEi5vbW5pYnVzLnYxLlNlcmllcxIhCgZpc3N1ZXMYAiADKAsyES5vbW5pYnVzLnYxLklzc3VlEhEKCXB1Ymxpc2hlchgDIAEoCRIoCgpzdG9yeV9hcmNzGAQgAygLMhQub21uaWJ1cy52MS5TdG9yeUFyYyJAChtVcGRhdGVTZXJpZXNTZXR0aW5nc1JlcXVlc3QSEQoJc2VyaWVzX2lkGAEgASgDEg4KBnN0YXR1cxgCIAEoCSJCChxVcGRhdGVTZXJpZXNTZXR0aW5nc1Jlc3BvbnNlEiIKBnNlcmllcxgBIAEoCzISLm9tbmlidXMudjEuU2VyaWVzMrcDCg1TZXJpZXNTZXJ2aWNlEloKD1NlYXJjaENvbWljVmluZRIiLm9tbmlidXMudjEuU2VhcmNoQ29taWNWaW5lUmVxdWVzdBojLm9tbmlidXMudjEuU2VhcmNoQ29taWNWaW5lUmVzcG9uc2USSAoJQWRkU2VyaWVzEhwub21uaWJ1cy52MS5BZGRTZXJpZXNSZXF1ZXN0Gh0ub21uaWJ1cy52MS5BZGRTZXJpZXNSZXNwb25zZRJLCgpMaXN0U2VyaWVzEh0ub21uaWJ1cy52MS5MaXN0U2VyaWVzUmVxdWVzdBoeLm9tbmlidXMudjEuTGlzdFNlcmllc1Jlc3BvbnNlEkgKCUdldFNlcmllcxIcLm9tbmlidXMudjEuR2V0U2VyaWVzUmVxdWVzdBodLm9tbmlidXMudjEuR2V0U2VyaWVzUmVzcG9uc2USaQoUVXBkYXRlU2VyaWVzU2V0dGluZ3MSJy5vbW5pYnVzLnYxLlVwZGF0ZVNlcmllc1NldHRpbmdzUmVxdWVzdBooLm9tbmlidXMudjEuVXBkYXRlU2VyaWVzU2V0dGluZ3NSZXNwb25zZUI3WjVnaXRodWIuY29tL3ZpenZpbS9vbW5pYnVzL2dlbi9nby9vbW5pYnVzL3YxO29tbmlidXN2MWIGcHJvdG8z", [file_omnibus_v1_common]);
 
 /**
- * Series is a watched comic volume, pinned to its immutable ComicVine volume id
- * (META-06). cover_url is a backend-served URL mapping to the locally stored
- * cover bytes (D-07 / Pitfall 5) — never a hotlinked ComicVine URL.
+ * Series is a watched comic volume, pinned to its immutable ComicVine volume id.
+ * cover_url is a backend-served URL mapping to the locally stored cover bytes —
+ * never a hotlinked ComicVine URL.
  *
  * @generated from message omnibus.v1.Series
  */
@@ -79,7 +79,7 @@ export const SeriesSchema: GenMessage<Series> = /*@__PURE__*/
 
 /**
  * Issue is a single issue within a series. issue_number is the raw display form;
- * issue_number_sort + issue_number_qualifier are the normalized sort key (SER-05)
+ * issue_number_sort + issue_number_qualifier are the normalized sort key
  * so "7" never collides with "7.INH".
  *
  * @generated from message omnibus.v1.Issue
@@ -144,7 +144,7 @@ export const IssueSchema: GenMessage<Issue> = /*@__PURE__*/
   messageDesc(file_omnibus_v1_series, 1);
 
 /**
- * StoryArc is a named arc a series participates in (SER-06).
+ * StoryArc is a named arc a series participates in.
  *
  * @generated from message omnibus.v1.StoryArc
  */
@@ -370,14 +370,14 @@ export const UpdateSeriesSettingsResponseSchema: GenMessage<UpdateSeriesSettings
   messageDesc(file_omnibus_v1_series, 12);
 
 /**
- * SeriesService owns series/issue/publisher/arc read+write (SER-*, META-01/06).
- * Phase 2 implements the search -> add -> import -> view vertical slice.
+ * SeriesService owns series/issue/publisher/arc read+write, covering the
+ * search -> add -> import -> view flow.
  *
  * @generated from service omnibus.v1.SeriesService
  */
 export const SeriesService: GenService<{
   /**
-   * SearchComicVine searches ComicVine for series candidates (META-01).
+   * SearchComicVine searches ComicVine for series candidates.
    *
    * @generated from rpc omnibus.v1.SeriesService.SearchComicVine
    */
@@ -387,7 +387,7 @@ export const SeriesService: GenService<{
     output: typeof SearchComicVineResponseSchema;
   },
   /**
-   * AddSeries adds/watches a series by immutable volume id, returning fast (SER-01, D-03).
+   * AddSeries adds/watches a series by immutable volume id, returning fast.
    *
    * @generated from rpc omnibus.v1.SeriesService.AddSeries
    */
@@ -407,7 +407,7 @@ export const SeriesService: GenService<{
     output: typeof ListSeriesResponseSchema;
   },
   /**
-   * GetSeries returns a series with its issues, publisher, and story arcs (SER-03).
+   * GetSeries returns a series with its issues, publisher, and story arcs.
    *
    * @generated from rpc omnibus.v1.SeriesService.GetSeries
    */

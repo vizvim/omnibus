@@ -114,7 +114,7 @@ func TestComicVineGetCoverRejectsBadURL(t *testing.T) {
 
 func TestFakeProviderFromFixtures(t *testing.T) {
 	t.Parallel()
-	// No network — proves the CI posture (D-10).
+	// No network — proves the CI posture.
 	fake, err := metadata.NewFakeProvider("testdata/fixtures")
 	require.NoError(t, err)
 

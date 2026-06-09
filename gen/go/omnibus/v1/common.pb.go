@@ -21,7 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// IssueStatus is the lifecycle state of a single issue (schema.md / ADR 0004).
+// IssueStatus is the lifecycle state of a single issue.
 // New issues default to ISSUE_STATUS_WANTED; the service layer owns transitions.
 type IssueStatus int32
 
@@ -87,8 +87,8 @@ func (IssueStatus) EnumDescriptor() ([]byte, []int) {
 	return file_omnibus_v1_common_proto_rawDescGZIP(), []int{0}
 }
 
-// IssueEventType enumerates the per-issue timeline events (OBS-01). Phase 2 only
-// stores series/issues; the enum is defined now so later phases reuse one source.
+// IssueEventType enumerates the per-issue timeline events. The enum is defined
+// up front so the rest of the system shares one source for these event types.
 type IssueEventType int32
 
 const (

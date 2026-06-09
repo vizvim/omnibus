@@ -21,9 +21,9 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Series is a watched comic volume, pinned to its immutable ComicVine volume id
-// (META-06). cover_url is a backend-served URL mapping to the locally stored
-// cover bytes (D-07 / Pitfall 5) — never a hotlinked ComicVine URL.
+// Series is a watched comic volume, pinned to its immutable ComicVine volume id.
+// cover_url is a backend-served URL mapping to the locally stored cover bytes —
+// never a hotlinked ComicVine URL.
 type Series struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Id                int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -133,7 +133,7 @@ func (x *Series) GetHaveIssues() int32 {
 }
 
 // Issue is a single issue within a series. issue_number is the raw display form;
-// issue_number_sort + issue_number_qualifier are the normalized sort key (SER-05)
+// issue_number_sort + issue_number_qualifier are the normalized sort key
 // so "7" never collides with "7.INH".
 type Issue struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
@@ -251,7 +251,7 @@ func (x *Issue) GetCoverUrl() string {
 	return ""
 }
 
-// StoryArc is a named arc a series participates in (SER-06).
+// StoryArc is a named arc a series participates in.
 type StoryArc struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Id             int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`

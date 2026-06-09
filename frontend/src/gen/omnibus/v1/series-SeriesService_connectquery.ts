@@ -5,14 +5,14 @@
 import { SeriesService } from "./series_pb";
 
 /**
- * SearchComicVine searches ComicVine for series candidates (META-01).
+ * SearchComicVine searches ComicVine for series candidates.
  *
  * @generated from rpc omnibus.v1.SeriesService.SearchComicVine
  */
 export const searchComicVine = SeriesService.method.searchComicVine;
 
 /**
- * AddSeries adds/watches a series by immutable volume id, returning fast (SER-01, D-03).
+ * AddSeries adds/watches a series by immutable volume id, returning fast.
  *
  * @generated from rpc omnibus.v1.SeriesService.AddSeries
  */
@@ -26,7 +26,7 @@ export const addSeries = SeriesService.method.addSeries;
 export const listSeries = SeriesService.method.listSeries;
 
 /**
- * GetSeries returns a series with its issues, publisher, and story arcs (SER-03).
+ * GetSeries returns a series with its issues, publisher, and story arcs.
  *
  * @generated from rpc omnibus.v1.SeriesService.GetSeries
  */

@@ -50,13 +50,13 @@ const (
 
 // SeriesServiceClient is a client for the omnibus.v1.SeriesService service.
 type SeriesServiceClient interface {
-	// SearchComicVine searches ComicVine for series candidates (META-01).
+	// SearchComicVine searches ComicVine for series candidates.
 	SearchComicVine(context.Context, *connect.Request[v1.SearchComicVineRequest]) (*connect.Response[v1.SearchComicVineResponse], error)
-	// AddSeries adds/watches a series by immutable volume id, returning fast (SER-01, D-03).
+	// AddSeries adds/watches a series by immutable volume id, returning fast.
 	AddSeries(context.Context, *connect.Request[v1.AddSeriesRequest]) (*connect.Response[v1.AddSeriesResponse], error)
 	// ListSeries lists watched series.
 	ListSeries(context.Context, *connect.Request[v1.ListSeriesRequest]) (*connect.Response[v1.ListSeriesResponse], error)
-	// GetSeries returns a series with its issues, publisher, and story arcs (SER-03).
+	// GetSeries returns a series with its issues, publisher, and story arcs.
 	GetSeries(context.Context, *connect.Request[v1.GetSeriesRequest]) (*connect.Response[v1.GetSeriesResponse], error)
 	// UpdateSeriesSettings updates per-series settings (e.g. watch status).
 	UpdateSeriesSettings(context.Context, *connect.Request[v1.UpdateSeriesSettingsRequest]) (*connect.Response[v1.UpdateSeriesSettingsResponse], error)
@@ -142,13 +142,13 @@ func (c *seriesServiceClient) UpdateSeriesSettings(ctx context.Context, req *con
 
 // SeriesServiceHandler is an implementation of the omnibus.v1.SeriesService service.
 type SeriesServiceHandler interface {
-	// SearchComicVine searches ComicVine for series candidates (META-01).
+	// SearchComicVine searches ComicVine for series candidates.
 	SearchComicVine(context.Context, *connect.Request[v1.SearchComicVineRequest]) (*connect.Response[v1.SearchComicVineResponse], error)
-	// AddSeries adds/watches a series by immutable volume id, returning fast (SER-01, D-03).
+	// AddSeries adds/watches a series by immutable volume id, returning fast.
 	AddSeries(context.Context, *connect.Request[v1.AddSeriesRequest]) (*connect.Response[v1.AddSeriesResponse], error)
 	// ListSeries lists watched series.
 	ListSeries(context.Context, *connect.Request[v1.ListSeriesRequest]) (*connect.Response[v1.ListSeriesResponse], error)
-	// GetSeries returns a series with its issues, publisher, and story arcs (SER-03).
+	// GetSeries returns a series with its issues, publisher, and story arcs.
 	GetSeries(context.Context, *connect.Request[v1.GetSeriesRequest]) (*connect.Response[v1.GetSeriesResponse], error)
 	// UpdateSeriesSettings updates per-series settings (e.g. watch status).
 	UpdateSeriesSettings(context.Context, *connect.Request[v1.UpdateSeriesSettingsRequest]) (*connect.Response[v1.UpdateSeriesSettingsResponse], error)

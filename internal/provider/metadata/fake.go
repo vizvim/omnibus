@@ -9,7 +9,7 @@ import (
 )
 
 // FakeProvider is a fixture-backed MetadataProvider for tests and local dev — it does
-// no network I/O, so CI needs no ComicVine API key (D-10). It parses the same
+// no network I/O, so CI needs no ComicVine API key. It parses the same
 // CV-shaped fixtures the real provider would receive.
 type FakeProvider struct {
 	search    []SeriesResult
