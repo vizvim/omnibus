@@ -120,4 +120,8 @@ func TestRPCInputValidation(t *testing.T) {
 	_, err = client.GetSeries(ctx, connect.NewRequest(&omnibusv1.GetSeriesRequest{SeriesId: -1}))
 	require.Error(t, err)
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+
+	_, err = client.RefreshSeries(ctx, connect.NewRequest(&omnibusv1.RefreshSeriesRequest{SeriesId: 0}))
+	require.Error(t, err)
+	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 }

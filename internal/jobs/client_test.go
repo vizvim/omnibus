@@ -36,6 +36,15 @@ func (r *recordingRunner) RunImport(_ context.Context, seriesID, comicvineVolume
 	return nil
 }
 
+// RunRefresh lets recordingRunner double as a RefreshRunner for the dedup test.
+func (r *recordingRunner) RunRefresh(_ context.Context, seriesID, comicvineVolumeID int64) error {
+	r.mu.Lock()
+	r.calls = append(r.calls, [2]int64{seriesID, comicvineVolumeID})
+	r.mu.Unlock()
+	r.called <- struct{}{}
+	return nil
+}
+
 func (r *recordingRunner) snapshot() [][2]int64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -90,6 +99,33 @@ func TestEnqueueImportRunsWorker(t *testing.T) {
 	calls := runner.snapshot()
 	require.Len(t, calls, 1)
 	require.Equal(t, [2]int64{42, 4050}, calls[0])
+}
+
+// TestEnqueueRefreshIsUnique proves a duplicate refresh enqueue for the same series,
+// while one is already pending, collapses into a no-op (River unique jobs, D-03). The
+// client is constructed but NOT started, so the first job stays pending.
+func TestEnqueueRefreshIsUnique(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "unique.db")
+	require.NoError(t, db.Migrate(ctx, path))
+	d, err := db.Open(ctx, path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.Close() })
+
+	workers := river.NewWorkers()
+	river.AddWorker(workers, jobs.NewRefreshWorker(newRecordingRunner()))
+	c, err := jobs.New(ctx, d.Write, 2, testLogger(), workers)
+	require.NoError(t, err)
+
+	require.NoError(t, c.EnqueueRefresh(ctx, 99, 4050))
+	// Second enqueue for the same series is a no-op (unique-by-args); it must not error.
+	require.NoError(t, c.EnqueueRefresh(ctx, 99, 4050))
+
+	var pending int
+	require.NoError(t, d.Read.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM river_job WHERE kind = 'refresh_series'`).Scan(&pending))
+	require.Equal(t, 1, pending, "duplicate refresh enqueue must collapse to a single job")
 }
 
 // TestImportSurvivesRestart proves persistence across restart (JOBS-02): a job
