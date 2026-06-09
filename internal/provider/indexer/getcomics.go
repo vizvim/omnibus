@@ -51,6 +51,9 @@ var _ IndexerProvider = (*GetComicsProvider)(nil)
 // Kind reports the provider type.
 func (p *GetComicsProvider) Kind() string { return "getcomics" }
 
+// Host returns the base_url host the gateway keys its per-host limiter on.
+func (p *GetComicsProvider) Host() string { return hostOf(p.baseURL) }
+
 // Search scrapes the results page for a query.
 func (p *GetComicsProvider) Search(ctx context.Context, query string) ([]Candidate, error) {
 	q := url.Values{}
