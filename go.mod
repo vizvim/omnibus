@@ -11,6 +11,8 @@ require (
 	github.com/knadh/koanf/providers/env v1.1.0
 	github.com/knadh/koanf/providers/file v1.2.1
 	github.com/knadh/koanf/v2 v2.3.5
+	github.com/riverqueue/river v0.39.0
+	github.com/riverqueue/river/riverdriver/riversqlite v0.39.0
 	github.com/rs/cors v1.11.1
 	github.com/sqlc-dev/sqlc v1.31.1
 	github.com/stretchr/testify v1.11.1
@@ -58,9 +60,7 @@ require (
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20260418072757-ce92298d1124 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/riverqueue/river v0.39.0 // indirect
 	github.com/riverqueue/river/riverdriver v0.39.0 // indirect
-	github.com/riverqueue/river/riverdriver/riversqlite v0.39.0 // indirect
 	github.com/riverqueue/river/rivershared v0.39.0 // indirect
 	github.com/riverqueue/river/rivertype v0.39.0 // indirect
 	github.com/riza-io/grpc-go v0.2.0 // indirect
