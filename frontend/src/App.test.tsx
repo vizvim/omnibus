@@ -127,4 +127,34 @@ describe("series detail", () => {
       expect(img.getAttribute("src")).toContain("/covers/");
     }
   });
+
+  it("renders a Refresh now button that enqueues a refresh when idle", async () => {
+    const series = { ...daredevil1964, id: 7n, totalIssues: 2, haveIssues: 2, lastRefreshedAt: "" };
+    let refreshed = 0;
+    const transport = makeTransport({
+      getSeries: () => ({ series, issues: [], publisher: "Marvel", storyArcs: [] }),
+      refreshSeries: () => {
+        refreshed += 1;
+        return { series };
+      },
+    });
+    renderWithProviders(<App initialRoute="detail" initialSeriesId={7n} />, transport);
+
+    const button = await screen.findByRole("button", { name: /refresh now/i });
+    expect(button).toBeEnabled();
+
+    fireEvent.click(button);
+    await waitFor(() => expect(refreshed).toBe(1));
+  });
+
+  it("disables Refresh now while the series is still importing", async () => {
+    const importing = { ...daredevil1964, id: 8n, totalIssues: 100, haveIssues: 10, lastRefreshedAt: "" };
+    const transport = makeTransport({
+      getSeries: () => ({ series: importing, issues: [], publisher: "Marvel", storyArcs: [] }),
+    });
+    renderWithProviders(<App initialRoute="detail" initialSeriesId={8n} />, transport);
+
+    const button = await screen.findByRole("button", { name: /refresh now/i });
+    expect(button).toBeDisabled();
+  });
 });
