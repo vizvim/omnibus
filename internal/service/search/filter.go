@@ -128,6 +128,8 @@ func rejectReasonFor(c indexer.Candidate, target IssueMatch, bl BlacklistSet, op
 }
 
 // tokenSeparators splits a release title into tokens for ignore-word matching.
+//
+//nolint:gosec // G101 false positive: this is a set of title delimiter characters, not a credential.
 const tokenSeparators = "._-[]() \t\n"
 
 // hasIgnoreWord reports whether any whole token of the title equals an ignore-word
@@ -140,9 +142,8 @@ func hasIgnoreWord(title string, ignoreWords []string) bool {
 		return strings.ContainsRune(tokenSeparators, r)
 	})
 	for _, tok := range tokens {
-		lt := strings.ToLower(tok)
 		for _, w := range ignoreWords {
-			if lt == strings.ToLower(w) {
+			if strings.EqualFold(tok, w) {
 				return true
 			}
 		}
