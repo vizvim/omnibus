@@ -40,6 +40,8 @@ type Candidate struct {
 // query; Feed returns the recent-uploads RSS feed (same normalization). Kind reports
 // the provider type ("newznab"/"getcomics"). Implementations must NOT rate-limit
 // internally — pacing lives in the Gateway.
+//
+//nolint:revive // IndexerProvider is the deliberate, canonical contract name (ADR 0005 / plan 04-02); the package-qualified stutter is intentional and mirrors metadata.MetadataProvider.
 type IndexerProvider interface {
 	// Search returns candidates for a free-text query.
 	Search(ctx context.Context, query string) ([]Candidate, error)

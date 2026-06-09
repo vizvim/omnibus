@@ -71,7 +71,7 @@ var sizeRe = regexp.MustCompile(`(?i)size\s*:?\s*([\d.]+)\s*(MB|GB)`)
 
 // fetch downloads and parses a GetComics results/listing page.
 func (p *GetComicsProvider) fetch(ctx context.Context, pageURL string) ([]Candidate, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("build getcomics request: %w", err)
 	}

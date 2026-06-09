@@ -23,19 +23,18 @@ func parseIssueNumber(title string) string {
 	return strings.TrimSpace(m[2])
 }
 
-// inferFormat returns the container format implied by the title extension, or "".
+// formatRe matches a cbz/cbr/pdf token in a title whether it appears as a file
+// extension (".cbz") or a parenthesized/standalone tag ("(cbz)", " cbr "). The token
+// must be delimited so "pdfsomething" does not match.
+var formatRe = regexp.MustCompile(`(?i)(?:^|[^a-z])(cbz|cbr|pdf)(?:[^a-z]|$)`)
+
+// inferFormat returns the container format implied by the title, or "".
 func inferFormat(title string) string {
-	lower := strings.ToLower(title)
-	switch {
-	case strings.Contains(lower, ".cbz"):
-		return "cbz"
-	case strings.Contains(lower, ".cbr"):
-		return "cbr"
-	case strings.Contains(lower, ".pdf"):
-		return "pdf"
-	default:
+	m := formatRe.FindStringSubmatch(title)
+	if m == nil {
 		return ""
 	}
+	return strings.ToLower(m[1])
 }
 
 // looksLikePack reports whether the title indicates a volume/pack rather than a single

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:newznab="http://www.newznab.com/DTD/2010/feeds/attributes/">
+  <channel>
+    <title>Indexer</title>
+    <item>
+      <title>Saga 007 (2013) (Digital) (cbz)</title>
+      <guid isPermaLink="false">abc123guid</guid>
+      <enclosure url="https://nzb.example.test/getnzb/abc123.nzb" length="52428800" type="application/x-nzb" />
+      <newznab:attr name="category" value="7030" />
+      <newznab:attr name="size" value="52428800" />
+    </item>
+    <item>
+      <title>Daredevil #015 (2024) (Digital) (cbr)</title>
+      <guid isPermaLink="false">def456guid</guid>
+      <enclosure url="https://nzb.example.test/getnzb/def456.nzb" length="41943040" type="application/x-nzb" />
+      <newznab:attr name="category" value="7030" />
+      <newznab:attr name="size" value="41943040" />
+    </item>
+    <item>
+      <title>Batman Vol. 1 Complete (pdf)</title>
+      <enclosure url="https://nzb.example.test/getnzb/ghi789.nzb" length="104857600" type="application/x-nzb" />
+      <newznab:attr name="category" value="7030" />
+    </item>
+  </channel>
+</rss>

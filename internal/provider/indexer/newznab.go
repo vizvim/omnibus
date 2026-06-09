@@ -105,7 +105,7 @@ func (p *NewznabProvider) fetch(ctx context.Context, query string) ([]Candidate,
 	}
 	endpoint := p.baseURL + "/api?" + q.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("build newznab request: %w", err)
 	}

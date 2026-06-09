@@ -72,7 +72,7 @@ func (g *Gateway) run(
 	for _, p := range providers {
 		key := limiterKey(p)
 		if err := g.wait(ctx, key); err != nil {
-			// A limiter wait error means the context was cancelled — stop entirely.
+			// A limiter wait error means the context was canceled — stop entirely.
 			return out, err
 		}
 		candidates, err := fetch(p)
