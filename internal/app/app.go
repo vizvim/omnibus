@@ -135,7 +135,10 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service) (*ht
 	mux := http.NewServeMux()
 	seriesHandler := transport.NewSeriesHandler(svc)
 	path, handler := omnibusv1connect.NewSeriesServiceHandler(seriesHandler, connect.WithInterceptors(interceptors...))
-	mux.Handle(path, handler)
+	// The frontend Connect transport uses baseUrl "/api" (both under the Vite dev
+	// proxy and the production SPA), so the RPC handler is served under that prefix.
+	// StripPrefix restores the bare procedure path the Connect handler routes on.
+	mux.Handle("/api"+path, http.StripPrefix("/api", handler))
 	mux.Handle("/covers/", transport.NewCoverHandler(cfg.DataPath))
 
 	corsHandler := cors.New(cors.Options{
