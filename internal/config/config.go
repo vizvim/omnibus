@@ -41,6 +41,15 @@ type Config struct {
 	// sweep refreshes it. Fixed default (7 days), env-overridable
 	// (OMNIBUS_STALENESS_THRESHOLD_DAYS), not a user-facing UI knob.
 	StalenessThresholdDays int `koanf:"staleness_threshold_days"`
+	// SabnzbdURL is the SABnzbd download-client base URL (OMNIBUS_SABNZBD_URL). SAB is
+	// the download client, NOT an indexer (D-16) — it lives in config, not the DB. Empty
+	// means no SAB configured (NZB grabs fail loudly).
+	SabnzbdURL string `koanf:"sabnzbd_url"`
+	// SabnzbdAPIKey is the SABnzbd API key (OMNIBUS_SABNZBD_API_KEY). Secret — redacted
+	// in LogValue.
+	SabnzbdAPIKey string `koanf:"sabnzbd_api_key"`
+	// SabnzbdCategory is the SAB category NZBs are added under (default "comics").
+	SabnzbdCategory string `koanf:"sabnzbd_category"`
 }
 
 // Load reads configuration. If filePath is non-empty it is parsed as YAML first;
@@ -58,6 +67,9 @@ func Load(filePath string) (Config, error) {
 		"river_workers":            2,
 		"refresh_interval_hours":   6,
 		"staleness_threshold_days": 7,
+		"sabnzbd_url":              "",
+		"sabnzbd_api_key":          "",
+		"sabnzbd_category":         "comics",
 	}
 	if err := k.Load(confmap.Provider(defaults, "."), nil); err != nil {
 		return Config{}, fmt.Errorf("load defaults: %w", err)
@@ -91,6 +103,10 @@ func (c Config) LogValue() slog.Value {
 	if c.ComicVineAPIKey != "" {
 		key = "REDACTED"
 	}
+	sabKey := ""
+	if c.SabnzbdAPIKey != "" {
+		sabKey = "REDACTED"
+	}
 	return slog.GroupValue(
 		slog.String("http_addr", c.HTTPAddr),
 		slog.String("db_path", c.DBPath),
@@ -98,5 +114,8 @@ func (c Config) LogValue() slog.Value {
 		slog.String("log_level", c.LogLevel),
 		slog.String("log_format", c.LogFormat),
 		slog.String("comicvine_api_key", key),
+		slog.String("sabnzbd_url", c.SabnzbdURL),
+		slog.String("sabnzbd_api_key", sabKey),
+		slog.String("sabnzbd_category", c.SabnzbdCategory),
 	)
 }

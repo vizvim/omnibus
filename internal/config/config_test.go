@@ -56,6 +56,22 @@ func TestSecretNeverLogged(t *testing.T) {
 	require.Contains(t, buf.String(), "REDACTED", "secret should be masked")
 }
 
+func TestSabnzbdKeyNeverLogged(t *testing.T) {
+	const sabSecret = "TOPSECRET-sab-key-67890"
+	t.Setenv("OMNIBUS_SABNZBD_API_KEY", sabSecret)
+	cfg, err := config.Load("")
+	require.NoError(t, err)
+	require.Equal(t, sabSecret, cfg.SabnzbdAPIKey)
+	require.Equal(t, "comics", cfg.SabnzbdCategory, "default category")
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	logger.Info("loaded config", slog.Any("config", cfg))
+
+	require.NotContains(t, buf.String(), sabSecret, "SABnzbd API key must never appear in logs")
+	require.Contains(t, buf.String(), "REDACTED", "secret should be masked")
+}
+
 func TestNewLoggerProducesValidLogger(t *testing.T) {
 	for _, format := range []string{"json", "text"} {
 		cfg := config.Config{LogLevel: "debug", LogFormat: format}
