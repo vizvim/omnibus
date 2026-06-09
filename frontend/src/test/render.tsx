@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderResult } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 
+import { IndexerService } from "../gen/omnibus/v1/indexers_pb";
 import { JobService } from "../gen/omnibus/v1/jobs_pb";
 import { SeriesService } from "../gen/omnibus/v1/series_pb";
 
@@ -31,6 +32,16 @@ export function makeJobTransport(
 ): Transport {
   return createRouterTransport(({ service }) => {
     service(JobService, impl as never);
+  });
+}
+
+// makeIndexerTransport builds an in-memory Connect transport serving IndexerService
+// method stubs (e.g. listIndexers/createIndexer) for Indexers-page component tests.
+export function makeIndexerTransport(
+  impl: Record<string, (req: never) => unknown>,
+): Transport {
+  return createRouterTransport(({ service }) => {
+    service(IndexerService, impl as never);
   });
 }
 
