@@ -315,3 +315,29 @@ func imageURL(i *cvImage) string {
 	}
 	return i.best()
 }
+
+// encodeSearchEnvelope re-encodes normalized search results into the CV-shaped
+// envelope decodeSearch consumes, so the gateway can cache then re-read search hits.
+func encodeSearchEnvelope(results []SeriesResult) ([]byte, error) {
+	vols := make([]cvVolume, 0, len(results))
+	for _, r := range results {
+		vols = append(vols, cvVolume{
+			ID:            r.ComicvineVolumeID,
+			Name:          r.Name,
+			StartYear:     strconv.Itoa(int(r.StartYear)),
+			CountOfIssues: r.CountOfIssues,
+			Description:   r.Description,
+			Publisher:     &cvPublisher{Name: r.Publisher},
+			Image:         &cvImage{SuperURL: r.CoverURL},
+		})
+	}
+	env := struct {
+		StatusCode int        `json:"status_code"`
+		Results    []cvVolume `json:"results"`
+	}{StatusCode: 1, Results: vols}
+	b, err := json.Marshal(env)
+	if err != nil {
+		return nil, fmt.Errorf("encode search envelope: %w", err)
+	}
+	return b, nil
+}
