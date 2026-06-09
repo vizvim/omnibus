@@ -28,6 +28,7 @@ type Gateway interface {
 // the inverted ImportRunner interface).
 type Enqueuer interface {
 	EnqueueImport(ctx context.Context, seriesID, comicvineVolumeID int64) error
+	EnqueueRefresh(ctx context.Context, seriesID, comicvineVolumeID int64) error
 }
 
 // Deps are the Service's injected collaborators.
@@ -255,6 +256,28 @@ func (s *Service) UpdateSeriesSettings(ctx context.Context, seriesID int64, stat
 		return Series{}, err
 	}
 	return seriesFromRow(row, "", s.coverPresent(ctx, "series", row.ID)), nil
+}
+
+// RefreshSeries enqueues a durable, unique conditional refresh job for a series and
+// returns the current series row immediately (the UI polls GetSeries for the result,
+// mirroring AddSeries' fast-return shape). A duplicate enqueue while a refresh is
+// already queued/running for the series is a no-op (River unique jobs).
+func (s *Service) RefreshSeries(ctx context.Context, seriesID int64) (Series, error) {
+	ser, err := s.repos.Series.GetByID(ctx, seriesID)
+	if err != nil {
+		return Series{}, fmt.Errorf("get series %d: %w", seriesID, err)
+	}
+	if err := s.enqueuer.EnqueueRefresh(ctx, ser.ID, ser.ComicvineVolumeID); err != nil {
+		return Series{}, fmt.Errorf("enqueue refresh for series %d: %w", ser.ID, err)
+	}
+
+	publisher := ""
+	if ser.PublisherID.Valid {
+		if p, perr := s.repos.Publisher.GetByID(ctx, ser.PublisherID.Int64); perr == nil {
+			publisher = p.Name
+		}
+	}
+	return seriesFromRow(ser, publisher, s.coverPresent(ctx, "series", ser.ID)), nil
 }
 
 func nowISO() string { return time.Now().UTC().Format(time.RFC3339) }

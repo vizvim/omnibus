@@ -25,6 +25,7 @@ type SeriesServicer interface {
 	ListSeries(ctx context.Context, page int32) ([]series.Series, error)
 	GetSeries(ctx context.Context, seriesID int64) (series.View, error)
 	UpdateSeriesSettings(ctx context.Context, seriesID int64, status string) (series.Series, error)
+	RefreshSeries(ctx context.Context, seriesID int64) (series.Series, error)
 }
 
 // SeriesHandler implements the generated SeriesServiceHandler by delegating to the
@@ -144,6 +145,22 @@ func (h *SeriesHandler) UpdateSeriesSettings(
 	return connect.NewResponse(&omnibusv1.UpdateSeriesSettingsResponse{Series: seriesToProto(s)}), nil
 }
 
+// RefreshSeries handles the on-demand refresh RPC: it enqueues a conditional refresh
+// job and returns the current series (the UI polls GetSeries for the result).
+func (h *SeriesHandler) RefreshSeries(
+	ctx context.Context, req *connect.Request[omnibusv1.RefreshSeriesRequest],
+) (*connect.Response[omnibusv1.RefreshSeriesResponse], error) {
+	seriesID := req.Msg.GetSeriesId()
+	if seriesID <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("series_id must be positive"))
+	}
+	s, err := h.svc.RefreshSeries(ctx, seriesID)
+	if err != nil {
+		return nil, serviceError(err)
+	}
+	return connect.NewResponse(&omnibusv1.RefreshSeriesResponse{Series: seriesToProto(s)}), nil
+}
+
 // seriesToProto maps a domain series to the proto message, mapping the stored cover to
 // the backend /covers route (never a ComicVine hotlink).
 func seriesToProto(s series.Series) *omnibusv1.Series {
@@ -157,6 +174,7 @@ func seriesToProto(s series.Series) *omnibusv1.Series {
 		CoverUrl:          coverURL("series", s.ID, s.HasCover),
 		TotalIssues:       s.TotalIssues,
 		HaveIssues:        s.HaveIssues,
+		LastRefreshedAt:   s.LastRefreshedAt,
 	}
 }
 

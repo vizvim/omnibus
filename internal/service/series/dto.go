@@ -32,6 +32,7 @@ type Series struct {
 	HasCover          bool
 	TotalIssues       int32
 	HaveIssues        int32
+	LastRefreshedAt   string
 }
 
 // Issue is the domain view of a single issue.
@@ -66,6 +67,7 @@ func seriesFromRow(r repository.Series, publisher string, hasCover bool) Series 
 		HasCover:          hasCover,
 		TotalIssues:       toInt32(r.TotalIssues),
 		HaveIssues:        toInt32(r.HaveIssues),
+		LastRefreshedAt:   r.LastRefreshedAt.String,
 	}
 }
 

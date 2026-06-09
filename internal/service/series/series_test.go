@@ -65,8 +65,9 @@ func newService(t *testing.T) (*series.Service, *repository.Repositories) {
 // fakeEnqueuer records EnqueueImport calls without running the import, so a test can
 // assert AddSeries enqueues and returns fast rather than importing inline.
 type fakeEnqueuer struct {
-	mu    sync.Mutex
-	calls [][2]int64
+	mu        sync.Mutex
+	calls     [][2]int64
+	refreshes [][2]int64
 }
 
 func (f *fakeEnqueuer) EnqueueImport(_ context.Context, seriesID, comicvineVolumeID int64) error {
@@ -76,10 +77,23 @@ func (f *fakeEnqueuer) EnqueueImport(_ context.Context, seriesID, comicvineVolum
 	return nil
 }
 
+func (f *fakeEnqueuer) EnqueueRefresh(_ context.Context, seriesID, comicvineVolumeID int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.refreshes = append(f.refreshes, [2]int64{seriesID, comicvineVolumeID})
+	return nil
+}
+
 func (f *fakeEnqueuer) count() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.calls)
+}
+
+func (f *fakeEnqueuer) refreshCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.refreshes)
 }
 
 func TestAddSeriesIdempotentFastReturn(t *testing.T) {
