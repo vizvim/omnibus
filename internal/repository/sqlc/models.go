@@ -49,6 +49,20 @@ type DownloadHistory struct {
 	OccurredAt string
 }
 
+type Indexer struct {
+	ID         int64
+	Name       string
+	Kind       string
+	BaseUrl    string
+	ApiKey     sql.NullString
+	Enabled    int64
+	Categories sql.NullString
+	Priority   int64
+	UseForRss  int64
+	CreatedAt  string
+	UpdatedAt  string
+}
+
 type Issue struct {
 	ID               int64
 	SeriesID         int64

@@ -11,7 +11,10 @@ import (
 type Querier interface {
 	CountIssuesBySeries(ctx context.Context, seriesID int64) (int64, error)
 	CoverExists(ctx context.Context, arg CoverExistsParams) (bool, error)
+	CreateIndexer(ctx context.Context, arg CreateIndexerParams) (Indexer, error)
+	DeleteIndexer(ctx context.Context, id int64) error
 	GetCover(ctx context.Context, arg GetCoverParams) (GetCoverRow, error)
+	GetIndexer(ctx context.Context, id int64) (Indexer, error)
 	GetMetadataCache(ctx context.Context, cacheKey string) (MetadataCache, error)
 	GetPublisherByID(ctx context.Context, id int64) (Publisher, error)
 	GetSeriesByID(ctx context.Context, id int64) (Series, error)
@@ -19,6 +22,8 @@ type Querier interface {
 	GetUserConfig(ctx context.Context, key string) (UserConfig, error)
 	LinkArcIssue(ctx context.Context, arg LinkArcIssueParams) error
 	ListArcsBySeries(ctx context.Context, seriesID int64) ([]StoryArc, error)
+	ListEnabledIndexers(ctx context.Context) ([]Indexer, error)
+	ListIndexers(ctx context.Context) ([]Indexer, error)
 	ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Issue, error)
 	ListSeries(ctx context.Context, arg ListSeriesParams) ([]Series, error)
 	// Active series never refreshed (NULL) or last refreshed before the cutoff, oldest
@@ -29,6 +34,7 @@ type Querier interface {
 	// Idempotent on cache_key (UNIQUE); refreshes payload + freshness markers.
 	PutMetadataCache(ctx context.Context, arg PutMetadataCacheParams) error
 	SetUserConfig(ctx context.Context, arg SetUserConfigParams) error
+	UpdateIndexer(ctx context.Context, arg UpdateIndexerParams) (Indexer, error)
 	UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusParams) error
 	UpdateSeriesCounts(ctx context.Context, arg UpdateSeriesCountsParams) error
 	UpdateSeriesLastRefreshed(ctx context.Context, arg UpdateSeriesLastRefreshedParams) error

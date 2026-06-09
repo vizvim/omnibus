@@ -12,6 +12,7 @@ type Repositories struct {
 	Arc           ArcRepository
 	MetadataCache MetadataCacheRepository
 	UserConfig    UserConfigRepository
+	Indexers      IndexerRepository
 }
 
 // NewRepositories constructs all repositories bound to the read/write pools.
@@ -24,5 +25,6 @@ func NewRepositories(d *db.DB) *Repositories {
 		Arc:           NewArcRepository(d),
 		MetadataCache: NewMetadataCacheRepository(d),
 		UserConfig:    NewUserConfigRepository(d),
+		Indexers:      NewIndexerRepository(d),
 	}
 }
