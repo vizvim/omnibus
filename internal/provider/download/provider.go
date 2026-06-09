@@ -18,6 +18,8 @@ type GrabRequest struct {
 
 // DownloadProvider hands a release off to a download client and returns a client-side
 // reference (e.g. a SABnzbd nzo_id or a DDL job id) used later (Phase 5) to track it.
+//
+//nolint:revive // DownloadProvider is the deliberate, canonical contract name (ADR 0005); the package-qualified stutter is intentional and mirrors metadata.MetadataProvider / indexer.IndexerProvider.
 type DownloadProvider interface {
 	// Submit hands the release off and returns the client reference, or an error.
 	Submit(ctx context.Context, req GrabRequest) (clientRef string, err error)

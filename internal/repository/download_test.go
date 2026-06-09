@@ -79,5 +79,5 @@ func TestIssueEventsListInOccurredAtOrder(t *testing.T) {
 	require.Equal(t, "searched", events[0].EventType)
 	require.Equal(t, "candidate-selected", events[1].EventType)
 	require.Equal(t, "snatched", events[2].EventType)
-	require.Equal(t, `{"release_key":"rk"}`, events[2].PayloadJSON)
+	require.JSONEq(t, `{"release_key":"rk"}`, events[2].PayloadJSON)
 }
