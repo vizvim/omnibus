@@ -1,8 +1,8 @@
 // Package app wires omnibus's runtime components and owns the server lifecycle:
 // run migrations, open the DB pools, build the gateway + repositories + series service,
-// serve the SeriesService + cover handler over h2c, and on context cancellation drain
-// the HTTP server, the in-flight import goroutines, then the DB pools in order.
-// It is separated from main so the lifecycle is testable.
+// start the River job engine, serve the SeriesService + cover handler over h2c, and on
+// context cancellation drain the HTTP server, the job engine (Stop), then the DB pools
+// in order. It is separated from main so the lifecycle is testable.
 package app
 
 import (
@@ -11,10 +11,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"sync"
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/riverqueue/river"
 	"github.com/rs/cors"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -24,6 +24,7 @@ import (
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
 	"github.com/vizvim/omnibus/internal/config"
 	"github.com/vizvim/omnibus/internal/db"
+	"github.com/vizvim/omnibus/internal/jobs"
 	"github.com/vizvim/omnibus/internal/provider/metadata"
 	"github.com/vizvim/omnibus/internal/repository"
 	"github.com/vizvim/omnibus/internal/service/series"
@@ -42,7 +43,7 @@ const (
 )
 
 // Run starts the server and blocks until ctx is canceled (e.g. SIGINT/SIGTERM) or a
-// fatal error occurs. On shutdown it drains the HTTP server, the import goroutines,
+// fatal error occurs. On shutdown it drains the HTTP server, the River job engine,
 // then closes the DB pools.
 func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// Migrations run before the server accepts traffic.
@@ -62,23 +63,28 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	limiter := rate.NewLimiter(rate.Every(parseRate(cfg.ComicVineRate)), 1)
 	gateway := metadata.NewGateway(provider, repos.MetadataCache, limiter, logger, metadataTTL)
 
-	// importCtx bounds background import goroutines; it is canceled on shutdown so the
-	// WaitGroup join below drains them.
-	importCtx, cancelImports := context.WithCancel(context.Background())
-	var importWG sync.WaitGroup
-
+	// Build the series service first (with a nil enqueuer), then the jobs client that
+	// references it as the import runner, then inject the client back as the service's
+	// enqueuer — this resolves the service<->jobs construction cycle (D-11).
 	svc := series.New(series.Deps{
 		Gateway:    gateway,
 		Repos:      repos,
 		AttemptCap: attemptCap,
 		Logger:     logger,
-		LifeCtx:    importCtx,
-		WaitGroup:  &importWG,
 	})
+
+	workers := river.NewWorkers()
+	river.AddWorker(workers, jobs.NewImportWorker(svc))
+
+	riverClient, err := jobs.New(ctx, database.Write, cfg.RiverWorkers, logger, workers)
+	if err != nil {
+		_ = database.Close()
+		return fmt.Errorf("build jobs client: %w", err)
+	}
+	svc.SetEnqueuer(riverClient)
 
 	srv, err := newServer(cfg, logger, svc, repos.Cover)
 	if err != nil {
-		cancelImports()
 		_ = database.Close()
 		return err
 	}
@@ -94,18 +100,26 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	})
 
 	g.Go(func() error {
+		if err := riverClient.Start(ctx); err != nil {
+			return fmt.Errorf("start jobs engine: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
 		<-ctx.Done()
 		logger.Info("shutdown signal received, draining")
 
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
-		// Order: stop accepting requests, drain imports, close pools.
+		// Order: stop accepting requests, drain the job engine, close pools (D-12).
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			logger.Error("http shutdown", slog.Any("error", err))
 		}
-		cancelImports()
-		importWG.Wait()
+		if err := riverClient.Stop(shutdownCtx); err != nil {
+			logger.Error("jobs engine drain", slog.Any("error", err))
+		}
 		if err := database.Close(); err != nil {
 			logger.Error("close database", slog.Any("error", err))
 		}
@@ -114,8 +128,9 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	})
 
 	if err := g.Wait(); err != nil {
-		cancelImports()
-		importWG.Wait()
+		stopCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		_ = riverClient.Stop(stopCtx)
 		_ = database.Close()
 		return err
 	}
