@@ -62,9 +62,17 @@ func NewCoverHandler(store CoverStore) http.Handler {
 		}
 
 		w.Header().Set("Content-Type", contentType)
+		// nosniff stops the browser from re-interpreting the blob as anything other than
+		// the stored image content-type (defense-in-depth against MIME confusion).
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		// Covers are immutable per (kind,id) within a refresh window; allow client caching
 		// (carried over from the prior FileServer's implicit caching).
 		w.Header().Set("Cache-Control", "public, max-age=3600")
-		_, _ = w.Write(image)
+		// The body is the stored cover blob served with an explicit, non-HTML content-type
+		// and nosniff, so it is not an XSS sink; a write failure (client disconnect) is
+		// unrecoverable here, so the checked error is intentionally dropped.
+		if _, err := w.Write(image); err != nil { //nolint:gosec // G705: image blob, explicit content-type + nosniff, not an HTML/XSS sink
+			return
+		}
 	})
 }

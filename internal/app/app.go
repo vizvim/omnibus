@@ -70,14 +70,13 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	svc := series.New(series.Deps{
 		Gateway:    gateway,
 		Repos:      repos,
-		DataPath:   cfg.DataPath,
 		AttemptCap: attemptCap,
 		Logger:     logger,
 		LifeCtx:    importCtx,
 		WaitGroup:  &importWG,
 	})
 
-	srv, err := newServer(cfg, logger, svc)
+	srv, err := newServer(cfg, logger, svc, repos.Cover)
 	if err != nil {
 		cancelImports()
 		_ = database.Close()
@@ -124,9 +123,9 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 }
 
 // newServer builds the h2c-wrapped HTTP server hosting the SeriesService Connect
-// handler (with slog + otel interceptors) and the local cover file handler, with CORS
-// scoped to the Vite dev origin.
-func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service) (*http.Server, error) {
+// handler (with slog + otel interceptors) and the cover handler serving blobs from
+// SQLite, with CORS scoped to the Vite dev origin.
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, covers transport.CoverStore) (*http.Server, error) {
 	interceptors, err := transport.NewInterceptors(logger)
 	if err != nil {
 		return nil, fmt.Errorf("build interceptors: %w", err)
@@ -139,7 +138,7 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service) (*ht
 	// proxy and the production SPA), so the RPC handler is served under that prefix.
 	// StripPrefix restores the bare procedure path the Connect handler routes on.
 	mux.Handle("/api"+path, http.StripPrefix("/api", handler))
-	mux.Handle("/covers/", transport.NewCoverHandler(cfg.DataPath))
+	mux.Handle("/covers/", transport.NewCoverHandler(covers))
 
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins: []string{"http://localhost:5173"},
