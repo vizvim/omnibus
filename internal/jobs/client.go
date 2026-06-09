@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riversqlite"
@@ -34,9 +35,11 @@ type Client struct {
 // schema migration (via rivermigrate, NOT golang-migrate) before the client is
 // returned, so River's tables exist and stay distinct from the application migrations.
 // workers is the registry of River workers to run; pass the number of concurrent
-// worker goroutines via maxWorkers (single-user app → low). The returned client is not
-// yet started — call Start to begin working jobs.
-func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, logger *slog.Logger, workers *river.Workers) (*Client, error) {
+// worker goroutines via maxWorkers (single-user app → low). sweepInterval, when > 0,
+// registers the stale-only refresh sweep (SweepArgs) as a River native periodic job at
+// that interval (it does NOT run on start, to avoid a ComicVine burst right after boot).
+// The returned client is not yet started — call Start to begin working jobs.
+func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, sweepInterval time.Duration, logger *slog.Logger, workers *river.Workers) (*Client, error) {
 	if maxWorkers < 1 {
 		maxWorkers = 1
 	}
@@ -53,13 +56,25 @@ func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, logger *s
 		return nil, fmt.Errorf("apply river migrations: %w", migErr)
 	}
 
+	var periodicJobs []*river.PeriodicJob
+	if sweepInterval > 0 {
+		// River's native periodic scheduler runs the sweep (D-03) — no hand-rolled
+		// time.Ticker. RunOnStart is false so boot does not trigger a ComicVine burst.
+		periodicJobs = append(periodicJobs, river.NewPeriodicJob(
+			river.PeriodicInterval(sweepInterval),
+			func() (river.JobArgs, *river.InsertOpts) { return SweepArgs{}, nil },
+			&river.PeriodicJobOpts{RunOnStart: false},
+		))
+	}
+
 	riverClient, err := river.NewClient(driver, &river.Config{
 		Logger:      logger,
 		MaxAttempts: defaultMaxAttempts,
 		Queues: map[string]river.QueueConfig{
 			river.QueueDefault: {MaxWorkers: maxWorkers},
 		},
-		Workers: workers,
+		Workers:      workers,
+		PeriodicJobs: periodicJobs,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build river client: %w", err)

@@ -67,7 +67,7 @@ func newClient(ctx context.Context, t *testing.T, path string, runner jobs.Impor
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewImportWorker(runner))
 
-	c, err := jobs.New(ctx, d.Write, d.Read, 2, testLogger(), workers)
+	c, err := jobs.New(ctx, d.Write, d.Read, 2, 0, testLogger(), workers)
 	require.NoError(t, err)
 	require.NoError(t, c.Start(ctx))
 	t.Cleanup(func() {
@@ -115,7 +115,7 @@ func TestEnqueueRefreshIsUnique(t *testing.T) {
 
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewRefreshWorker(newRecordingRunner()))
-	c, err := jobs.New(ctx, d.Write, d.Read, 2, testLogger(), workers)
+	c, err := jobs.New(ctx, d.Write, d.Read, 2, 0, testLogger(), workers)
 	require.NoError(t, err)
 
 	require.NoError(t, c.EnqueueRefresh(ctx, 99, 4050))
@@ -143,7 +143,7 @@ func TestImportSurvivesRestart(t *testing.T) {
 
 	enqueueWorkers := river.NewWorkers()
 	river.AddWorker(enqueueWorkers, jobs.NewImportWorker(newRecordingRunner()))
-	c1, err := jobs.New(ctx, d1.Write, d1.Read, 2, testLogger(), enqueueWorkers)
+	c1, err := jobs.New(ctx, d1.Write, d1.Read, 2, 0, testLogger(), enqueueWorkers)
 	require.NoError(t, err)
 	// Do NOT Start c1 — the job stays durably persisted (pending) without being worked.
 	require.NoError(t, c1.EnqueueImport(ctx, 7, 1234))
@@ -159,7 +159,7 @@ func TestImportSurvivesRestart(t *testing.T) {
 	t.Cleanup(func() { _ = d2.Close() })
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewImportWorker(runner))
-	c2, err := jobs.New(ctx, d2.Write, d2.Read, 2, testLogger(), workers)
+	c2, err := jobs.New(ctx, d2.Write, d2.Read, 2, 0, testLogger(), workers)
 	require.NoError(t, err)
 	require.NoError(t, c2.Start(ctx))
 	t.Cleanup(func() {

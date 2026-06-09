@@ -25,7 +25,7 @@ func newHistoryClient(ctx context.Context, t *testing.T) (*jobs.Client, *db.DB) 
 
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewImportWorker(newRecordingRunner()))
-	c, err := jobs.New(ctx, d.Write, d.Read, 2, testLogger(), workers)
+	c, err := jobs.New(ctx, d.Write, d.Read, 2, 0, testLogger(), workers)
 	require.NoError(t, err)
 	return c, d
 }

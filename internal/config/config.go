@@ -33,6 +33,14 @@ type Config struct {
 	// self-hosted app needs little concurrency; default 2. Override with
 	// OMNIBUS_RIVER_WORKERS.
 	RiverWorkers int `koanf:"river_workers"`
+	// RefreshIntervalHours is how often the scheduled stale-only refresh sweep runs.
+	// Fixed sensible default (6h) this phase, env-overridable
+	// (OMNIBUS_REFRESH_INTERVAL_HOURS), not a user-facing UI knob.
+	RefreshIntervalHours int `koanf:"refresh_interval_hours"`
+	// StalenessThresholdDays is how old a series' last_refreshed_at must be before the
+	// sweep refreshes it. Fixed default (7 days), env-overridable
+	// (OMNIBUS_STALENESS_THRESHOLD_DAYS), not a user-facing UI knob.
+	StalenessThresholdDays int `koanf:"staleness_threshold_days"`
 }
 
 // Load reads configuration. If filePath is non-empty it is parsed as YAML first;
@@ -42,12 +50,14 @@ func Load(filePath string) (Config, error) {
 	k := koanf.New(".")
 
 	defaults := map[string]any{
-		"http_addr":     ":8080",
-		"db_path":       "/data/omnibus.db",
-		"data_path":     "/data",
-		"log_level":     "info",
-		"log_format":    "json",
-		"river_workers": 2,
+		"http_addr":                ":8080",
+		"db_path":                  "/data/omnibus.db",
+		"data_path":                "/data",
+		"log_level":                "info",
+		"log_format":               "json",
+		"river_workers":            2,
+		"refresh_interval_hours":   6,
+		"staleness_threshold_days": 7,
 	}
 	if err := k.Load(confmap.Provider(defaults, "."), nil); err != nil {
 		return Config{}, fmt.Errorf("load defaults: %w", err)

@@ -68,17 +68,20 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// references it as the import runner, then inject the client back as the service's
 	// enqueuer — this resolves the service<->jobs construction cycle (D-11).
 	svc := series.New(series.Deps{
-		Gateway:    gateway,
-		Repos:      repos,
-		AttemptCap: attemptCap,
-		Logger:     logger,
+		Gateway:            gateway,
+		Repos:              repos,
+		AttemptCap:         attemptCap,
+		Logger:             logger,
+		StalenessThreshold: time.Duration(cfg.StalenessThresholdDays) * 24 * time.Hour,
 	})
 
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewImportWorker(svc))
 	river.AddWorker(workers, jobs.NewRefreshWorker(svc))
+	river.AddWorker(workers, jobs.NewSweepWorker(svc))
 
-	riverClient, err := jobs.New(ctx, database.Write, database.Read, cfg.RiverWorkers, logger, workers)
+	sweepInterval := time.Duration(cfg.RefreshIntervalHours) * time.Hour
+	riverClient, err := jobs.New(ctx, database.Write, database.Read, cfg.RiverWorkers, sweepInterval, logger, workers)
 	if err != nil {
 		_ = database.Close()
 		return fmt.Errorf("build jobs client: %w", err)

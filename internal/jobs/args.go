@@ -43,3 +43,20 @@ func (RefreshArgs) InsertOpts() river.InsertOpts {
 		UniqueOpts: river.UniqueOpts{ByArgs: true},
 	}
 }
+
+// SweepArgs are the (empty) arguments for the scheduled stale-only refresh sweep. It is
+// registered as a River periodic job; uniqueness on its kind prevents overlapping ticks
+// from stacking sweeps.
+type SweepArgs struct{}
+
+// Kind uniquely identifies the sweep job type, stable across deploys.
+func (SweepArgs) Kind() string { return "refresh_sweep" }
+
+// InsertOpts makes the sweep unique by kind so an overlapping periodic tick (while a
+// previous sweep is still queued/running) collapses into the existing one.
+func (SweepArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{
+		Queue:      river.QueueDefault,
+		UniqueOpts: river.UniqueOpts{},
+	}
+}
