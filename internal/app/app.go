@@ -1,7 +1,8 @@
 // Package app wires omnibus's runtime components and owns the server lifecycle:
-// run migrations, open the DB pools, build repositories + the Connect handler, serve
-// over h2c, and on context cancellation drain the HTTP server then close the DB pools
-// in order (PLAT-08). It is separated from main so the lifecycle is testable.
+// run migrations, open the DB pools, build the gateway + repositories + series service,
+// serve the SeriesService + cover handler over h2c, and on context cancellation drain
+// the HTTP server, the in-flight import goroutines, then the DB pools in order
+// (PLAT-08). It is separated from main so the lifecycle is testable.
 package app
 
 import (
@@ -10,26 +11,39 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/rs/cors"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/time/rate"
 
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
 	"github.com/vizvim/omnibus/internal/config"
 	"github.com/vizvim/omnibus/internal/db"
+	"github.com/vizvim/omnibus/internal/provider/metadata"
 	"github.com/vizvim/omnibus/internal/repository"
+	"github.com/vizvim/omnibus/internal/service/series"
 	"github.com/vizvim/omnibus/internal/transport"
 )
 
-// shutdownTimeout bounds the graceful-shutdown drain so the process exits promptly
-// under orchestrator stop signals (deployment.md).
-const shutdownTimeout = 15 * time.Second
+const (
+	// shutdownTimeout bounds the graceful-shutdown drain (deployment.md).
+	shutdownTimeout = 15 * time.Second
+	// defaultCVRate is the fallback ComicVine pace (~1 req / 2s, Mylar3's floor).
+	defaultCVRate = 2 * time.Second
+	// attemptCap bounds Failed->Wanted re-search loops (ADR 0004). Phase 2 default.
+	attemptCap = 5
+	// metadataTTL is the metadata_cache freshness window.
+	metadataTTL = 24 * time.Hour
+)
 
 // Run starts the server and blocks until ctx is canceled (e.g. SIGINT/SIGTERM) or a
-// fatal error occurs. On shutdown it drains the HTTP server then closes the DB pools.
+// fatal error occurs. On shutdown it drains the HTTP server, the import goroutines,
+// then closes the DB pools.
 func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// Migrations run before the server accepts traffic (ADR 0003).
 	if err := db.Migrate(ctx, cfg.DBPath); err != nil {
@@ -41,12 +55,34 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("open database: %w", err)
 	}
 
-	// Repositories are constructed here and handed to the service layer (02-04).
-	// Building them now proves the wiring and surfaces pool issues at startup.
-	repos := buildRepositories(database)
-	_ = repos
+	repos := repository.NewRepositories(database)
 
-	srv := newServer(cfg, logger)
+	// The gateway is the single ComicVine chokepoint (limiter + cache).
+	provider := metadata.NewComicVineProvider(cfg.ComicVineAPIKey)
+	limiter := rate.NewLimiter(rate.Every(parseRate(cfg.ComicVineRate)), 1)
+	gateway := metadata.NewGateway(provider, repos.MetadataCache, limiter, logger, metadataTTL)
+
+	// importCtx bounds background import goroutines; it is canceled on shutdown so the
+	// WaitGroup join below drains them (PLAT-08, D-05).
+	importCtx, cancelImports := context.WithCancel(context.Background())
+	var importWG sync.WaitGroup
+
+	svc := series.New(series.Deps{
+		Gateway:    gateway,
+		Repos:      repos,
+		DataPath:   cfg.DataPath,
+		AttemptCap: attemptCap,
+		Logger:     logger,
+		LifeCtx:    importCtx,
+		WaitGroup:  &importWG,
+	})
+
+	srv, err := newServer(cfg, logger, svc)
+	if err != nil {
+		cancelImports()
+		_ = database.Close()
+		return err
+	}
 
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -58,8 +94,6 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return nil
 	})
 
-	// Shutdown goroutine: when the lifecycle context is canceled, drain the server
-	// then close the DB pools (read first, write last) within the bounded deadline.
 	g.Go(func() error {
 		<-ctx.Done()
 		logger.Info("shutdown signal received, draining")
@@ -67,9 +101,12 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
+		// Order (deployment.md): stop accepting requests, drain imports, close pools.
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			logger.Error("http shutdown", slog.Any("error", err))
 		}
+		cancelImports()
+		importWG.Wait()
 		if err := database.Close(); err != nil {
 			logger.Error("close database", slog.Any("error", err))
 		}
@@ -78,41 +115,28 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	})
 
 	if err := g.Wait(); err != nil {
+		cancelImports()
+		importWG.Wait()
 		_ = database.Close()
 		return err
 	}
 	return nil
 }
 
-// repositories bundles the Phase-2 repositories the service layer will consume (02-04).
-type repositories struct {
-	Series        repository.SeriesRepository
-	Issue         repository.IssueRepository
-	Publisher     repository.PublisherRepository
-	Arc           repository.ArcRepository
-	MetadataCache repository.MetadataCacheRepository
-	UserConfig    repository.UserConfigRepository
-}
-
-func buildRepositories(d *db.DB) repositories {
-	return repositories{
-		Series:        repository.NewSeriesRepository(d),
-		Issue:         repository.NewIssueRepository(d),
-		Publisher:     repository.NewPublisherRepository(d),
-		Arc:           repository.NewArcRepository(d),
-		MetadataCache: repository.NewMetadataCacheRepository(d),
-		UserConfig:    repository.NewUserConfigRepository(d),
-	}
-}
-
 // newServer builds the h2c-wrapped HTTP server hosting the SeriesService Connect
-// handler with CORS scoped to the Vite dev origin.
-func newServer(cfg config.Config, _ *slog.Logger) *http.Server {
-	mux := http.NewServeMux()
+// handler (with slog + otel interceptors) and the local cover file handler, with CORS
+// scoped to the Vite dev origin.
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service) (*http.Server, error) {
+	interceptors, err := transport.NewInterceptors(logger)
+	if err != nil {
+		return nil, fmt.Errorf("build interceptors: %w", err)
+	}
 
-	seriesHandler := transport.NewSeriesHandler()
-	path, handler := omnibusv1connect.NewSeriesServiceHandler(seriesHandler)
+	mux := http.NewServeMux()
+	seriesHandler := transport.NewSeriesHandler(svc)
+	path, handler := omnibusv1connect.NewSeriesServiceHandler(seriesHandler, connect.WithInterceptors(interceptors...))
 	mux.Handle(path, handler)
+	mux.Handle("/covers/", transport.NewCoverHandler(cfg.DataPath))
 
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins: []string{"http://localhost:5173"},
@@ -132,5 +156,18 @@ func newServer(cfg config.Config, _ *slog.Logger) *http.Server {
 		Addr:              cfg.HTTPAddr,
 		Handler:           h2c.NewHandler(corsHandler, &http2.Server{}),
 		ReadHeaderTimeout: 10 * time.Second,
+	}, nil
+}
+
+// parseRate maps the OMNIBUS_COMICVINE_RATE config (a Go duration like "2s") to the
+// minimum interval between ComicVine calls, falling back to the conservative default.
+func parseRate(raw string) time.Duration {
+	if raw == "" {
+		return defaultCVRate
 	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		return defaultCVRate
+	}
+	return d
 }

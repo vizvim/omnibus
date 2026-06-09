@@ -91,7 +91,7 @@ func TestImportPopulatesIssuesPublisherArcs(t *testing.T) {
 	// Non-integer issue numbers present and distinct (SER-05).
 	raws := map[string]bool{}
 	for _, i := range view.Issues {
-		raws[i.IssueNumberRaw] = true
+		raws[i.IssueNumber] = true
 	}
 	require.True(t, raws["7.INH"])
 	require.True(t, raws["½"])

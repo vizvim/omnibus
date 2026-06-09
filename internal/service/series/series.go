@@ -45,12 +45,13 @@ type Service struct {
 	wg         *sync.WaitGroup
 }
 
-// View is the assembled GetSeries result.
+// View is the assembled GetSeries result, expressed entirely in series-owned domain
+// types so the transport layer never imports repository (PLAT-05).
 type View struct {
-	Series    repository.Series
-	Issues    []repository.Issue
+	Series    Series
+	Issues    []Issue
 	Publisher string
-	StoryArcs []repository.StoryArc
+	StoryArcs []StoryArc
 }
 
 // New constructs a Service.
@@ -66,17 +67,45 @@ func New(d Deps) *Service {
 	}
 }
 
+// SearchResult is a transport-agnostic search candidate so the transport layer does
+// not import the provider package (package-layout.md layer rule).
+type SearchResult struct {
+	ComicvineVolumeID int64
+	Name              string
+	StartYear         int32
+	Publisher         string
+	CountOfIssues     int32
+	CoverURL          string
+	Description       string
+}
+
 // SearchComicVine returns candidate volumes for a query (META-01).
-func (s *Service) SearchComicVine(ctx context.Context, query string) ([]metadata.SeriesResult, error) {
-	return s.gw.SearchSeries(ctx, query)
+func (s *Service) SearchComicVine(ctx context.Context, query string) ([]SearchResult, error) {
+	results, err := s.gw.SearchSeries(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SearchResult, 0, len(results))
+	for _, r := range results {
+		out = append(out, SearchResult{
+			ComicvineVolumeID: r.ComicvineVolumeID,
+			Name:              r.Name,
+			StartYear:         r.StartYear,
+			Publisher:         r.Publisher,
+			CountOfIssues:     r.CountOfIssues,
+			CoverURL:          r.CoverURL,
+			Description:       r.Description,
+		})
+	}
+	return out, nil
 }
 
 // AddSeries upserts the series on its immutable volume id and returns immediately
 // (D-03), launching a bounded background import goroutine (D-03/04/05).
-func (s *Service) AddSeries(ctx context.Context, volumeID int64) (repository.Series, error) {
+func (s *Service) AddSeries(ctx context.Context, volumeID int64) (Series, error) {
 	vol, err := s.gw.GetVolume(ctx, volumeID)
 	if err != nil {
-		return repository.Series{}, fmt.Errorf("fetch volume %d: %w", volumeID, err)
+		return Series{}, fmt.Errorf("fetch volume %d: %w", volumeID, err)
 	}
 
 	var publisherID *int64
@@ -103,21 +132,34 @@ func (s *Service) AddSeries(ctx context.Context, volumeID int64) (repository.Ser
 		CreatedAt:         nowISO(),
 	})
 	if err != nil {
-		return repository.Series{}, fmt.Errorf("upsert series: %w", err)
+		return Series{}, fmt.Errorf("upsert series: %w", err)
 	}
 
 	// Fast return: import runs in the background, bounded by the lifecycle context.
 	s.startImport(created, vol)
-	return created, nil
+
+	publisher := ""
+	if vol.Publisher.Name != "" {
+		publisher = vol.Publisher.Name
+	}
+	return seriesFromRow(created, publisher), nil
 }
 
 // ListSeries returns watched series (paged).
-func (s *Service) ListSeries(ctx context.Context, page int32) ([]repository.Series, error) {
+func (s *Service) ListSeries(ctx context.Context, page int32) ([]Series, error) {
 	const pageLen = 50
 	if page < 0 {
 		page = 0
 	}
-	return s.repos.Series.List(ctx, pageLen, page*pageLen)
+	rows, err := s.repos.Series.List(ctx, pageLen, page*pageLen)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Series, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, seriesFromRow(r, ""))
+	}
+	return out, nil
 }
 
 // GetSeries returns the full series view: series + issues + publisher + arcs (SER-03).
@@ -126,11 +168,11 @@ func (s *Service) GetSeries(ctx context.Context, seriesID int64) (View, error) {
 	if err != nil {
 		return View{}, fmt.Errorf("get series %d: %w", seriesID, err)
 	}
-	issues, err := s.repos.Issue.ListBySeries(ctx, seriesID)
+	issueRows, err := s.repos.Issue.ListBySeries(ctx, seriesID)
 	if err != nil {
 		return View{}, fmt.Errorf("list issues: %w", err)
 	}
-	arcs, err := s.repos.Arc.ListBySeries(ctx, seriesID)
+	arcRows, err := s.repos.Arc.ListBySeries(ctx, seriesID)
 	if err != nil {
 		return View{}, fmt.Errorf("list arcs: %w", err)
 	}
@@ -142,17 +184,30 @@ func (s *Service) GetSeries(ctx context.Context, seriesID int64) (View, error) {
 		}
 	}
 
-	return View{Series: ser, Issues: issues, Publisher: publisher, StoryArcs: arcs}, nil
+	issues := make([]Issue, 0, len(issueRows))
+	for _, r := range issueRows {
+		issues = append(issues, issueFromRow(r))
+	}
+	arcs := make([]StoryArc, 0, len(arcRows))
+	for _, r := range arcRows {
+		arcs = append(arcs, arcFromRow(r))
+	}
+
+	return View{Series: seriesFromRow(ser, publisher), Issues: issues, Publisher: publisher, StoryArcs: arcs}, nil
 }
 
 // UpdateSeriesSettings updates the watch status (Active/Paused/Ended).
-func (s *Service) UpdateSeriesSettings(ctx context.Context, seriesID int64, status string) (repository.Series, error) {
+func (s *Service) UpdateSeriesSettings(ctx context.Context, seriesID int64, status string) (Series, error) {
 	switch status {
 	case "Active", "Paused", "Ended":
 	default:
-		return repository.Series{}, fmt.Errorf("invalid series status %q", status)
+		return Series{}, fmt.Errorf("invalid series status %q", status)
 	}
-	return s.repos.Series.UpdateSettings(ctx, seriesID, status, "")
+	row, err := s.repos.Series.UpdateSettings(ctx, seriesID, status, "")
+	if err != nil {
+		return Series{}, err
+	}
+	return seriesFromRow(row, ""), nil
 }
 
 func nowISO() string { return time.Now().UTC().Format(time.RFC3339) }
