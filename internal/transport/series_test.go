@@ -49,7 +49,7 @@ func newClient(t *testing.T) (omnibusv1connect.SeriesServiceClient, *series.Serv
 	// that the engine runs — exercising the same path app.go uses.
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewImportWorker(svc))
-	jobsClient, err := jobs.New(ctx, d.Write, 2, logger, workers)
+	jobsClient, err := jobs.New(ctx, d.Write, d.Read, 2, logger, workers)
 	require.NoError(t, err)
 	svc.SetEnqueuer(jobsClient)
 	require.NoError(t, jobsClient.Start(ctx))

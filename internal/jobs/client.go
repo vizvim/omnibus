@@ -21,19 +21,22 @@ import (
 const defaultMaxAttempts = 5
 
 // Client wraps the River client and the queue configuration omnibus runs. All writes
-// flow through the single-writer pool the client was constructed with.
+// flow through the single-writer write pool; job-run history reads go through the
+// read pool (ADR 0002).
 type Client struct {
 	river  *river.Client[*sql.Tx]
+	readDB *sql.DB
 	logger *slog.Logger
 }
 
-// New constructs the jobs client against the single-writer write pool. It runs
-// River's own schema migration (via rivermigrate, NOT golang-migrate) before the
-// client is returned, so River's tables exist and stay distinct from the application
-// migrations. workers is the registry of River workers to run; pass the number of
-// concurrent worker goroutines via maxWorkers (single-user app → low). The returned
-// client is not yet started — call Start to begin working jobs.
-func New(ctx context.Context, writeDB *sql.DB, maxWorkers int, logger *slog.Logger, workers *river.Workers) (*Client, error) {
+// New constructs the jobs client against the single-writer write pool (for River's own
+// engine writes) and the read pool (for job-run history reads). It runs River's own
+// schema migration (via rivermigrate, NOT golang-migrate) before the client is
+// returned, so River's tables exist and stay distinct from the application migrations.
+// workers is the registry of River workers to run; pass the number of concurrent
+// worker goroutines via maxWorkers (single-user app → low). The returned client is not
+// yet started — call Start to begin working jobs.
+func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, logger *slog.Logger, workers *river.Workers) (*Client, error) {
 	if maxWorkers < 1 {
 		maxWorkers = 1
 	}
@@ -62,7 +65,7 @@ func New(ctx context.Context, writeDB *sql.DB, maxWorkers int, logger *slog.Logg
 		return nil, fmt.Errorf("build river client: %w", err)
 	}
 
-	return &Client{river: riverClient, logger: logger}, nil
+	return &Client{river: riverClient, readDB: readDB, logger: logger}, nil
 }
 
 // Start begins working jobs. Jobs executed by the client inherit from ctx.

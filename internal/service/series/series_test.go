@@ -49,7 +49,7 @@ func newService(t *testing.T) (*series.Service, *repository.Repositories) {
 
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewImportWorker(svc))
-	client, err := jobs.New(ctx, d.Write, 2, logger, workers)
+	client, err := jobs.New(ctx, d.Write, d.Read, 2, logger, workers)
 	require.NoError(t, err)
 	svc.SetEnqueuer(client)
 	require.NoError(t, client.Start(ctx))

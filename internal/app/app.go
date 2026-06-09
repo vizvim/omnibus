@@ -77,7 +77,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	river.AddWorker(workers, jobs.NewImportWorker(svc))
 	river.AddWorker(workers, jobs.NewRefreshWorker(svc))
 
-	riverClient, err := jobs.New(ctx, database.Write, cfg.RiverWorkers, logger, workers)
+	riverClient, err := jobs.New(ctx, database.Write, database.Read, cfg.RiverWorkers, logger, workers)
 	if err != nil {
 		_ = database.Close()
 		return fmt.Errorf("build jobs client: %w", err)
