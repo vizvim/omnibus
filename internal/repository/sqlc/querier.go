@@ -22,7 +22,7 @@ type Querier interface {
 	ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Issue, error)
 	ListSeries(ctx context.Context, arg ListSeriesParams) ([]Series, error)
 	ListUserConfig(ctx context.Context) ([]UserConfig, error)
-	// Idempotent on cache_key (UNIQUE); refreshes payload + freshness markers (META-04/05).
+	// Idempotent on cache_key (UNIQUE); refreshes payload + freshness markers.
 	PutMetadataCache(ctx context.Context, arg PutMetadataCacheParams) error
 	SetUserConfig(ctx context.Context, arg SetUserConfigParams) error
 	UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusParams) error
@@ -32,11 +32,11 @@ type Querier interface {
 	UpsertArc(ctx context.Context, arg UpsertArcParams) (StoryArc, error)
 	// Idempotent upsert of a cover blob keyed on (entity_type, entity_id).
 	UpsertCover(ctx context.Context, arg UpsertCoverParams) error
-	// Idempotent upsert keyed on the immutable comicvine_issue_id (D-04).
+	// Idempotent upsert keyed on the immutable comicvine_issue_id.
 	UpsertIssue(ctx context.Context, arg UpsertIssueParams) (Issue, error)
 	// Idempotent on name (UNIQUE); records the CV publisher id when known.
 	UpsertPublisher(ctx context.Context, arg UpsertPublisherParams) (Publisher, error)
-	// Idempotent upsert keyed on the immutable comicvine_volume_id (META-06).
+	// Idempotent upsert keyed on the immutable comicvine_volume_id.
 	UpsertSeries(ctx context.Context, arg UpsertSeriesParams) (Series, error)
 }
 

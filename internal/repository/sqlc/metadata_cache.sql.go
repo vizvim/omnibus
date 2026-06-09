@@ -43,7 +43,7 @@ type PutMetadataCacheParams struct {
 	FetchedAt       string
 }
 
-// Idempotent on cache_key (UNIQUE); refreshes payload + freshness markers (META-04/05).
+// Idempotent on cache_key (UNIQUE); refreshes payload + freshness markers.
 func (q *Queries) PutMetadataCache(ctx context.Context, arg PutMetadataCacheParams) error {
 	_, err := q.db.ExecContext(ctx, putMetadataCache,
 		arg.CacheKey,

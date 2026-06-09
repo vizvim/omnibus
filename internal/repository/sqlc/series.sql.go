@@ -183,7 +183,7 @@ type UpsertSeriesParams struct {
 	CreatedAt         string
 }
 
-// Idempotent upsert keyed on the immutable comicvine_volume_id (META-06).
+// Idempotent upsert keyed on the immutable comicvine_volume_id.
 func (q *Queries) UpsertSeries(ctx context.Context, arg UpsertSeriesParams) (Series, error) {
 	row := q.db.QueryRowContext(ctx, upsertSeries,
 		arg.ComicvineVolumeID,
