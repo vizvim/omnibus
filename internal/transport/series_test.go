@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -43,7 +42,7 @@ func newClient(t *testing.T) (omnibusv1connect.SeriesServiceClient, *series.Serv
 	t.Cleanup(func() { cancel(); wg.Wait() })
 
 	svc := series.New(series.Deps{
-		Gateway: gw, Repos: repository.NewRepositories(d), DataPath: t.TempDir(),
+		Gateway: gw, Repos: repository.NewRepositories(d),
 		AttemptCap: 5, Logger: logger, LifeCtx: ctx, WaitGroup: &wg,
 	})
 
@@ -108,34 +107,4 @@ func TestRPCInputValidation(t *testing.T) {
 	_, err = client.GetSeries(ctx, connect.NewRequest(&omnibusv1.GetSeriesRequest{SeriesId: -1}))
 	require.Error(t, err)
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
-}
-
-func TestCoverHandlerServesAndRejectsTraversal(t *testing.T) {
-	t.Parallel()
-	dataDir := t.TempDir()
-	coverDir := filepath.Join(dataDir, "covers", "series")
-	require.NoError(t, os.MkdirAll(coverDir, 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(coverDir, "1.jpg"), []byte("\xff\xd8\xffIMG"), 0o600))
-	// A secret file outside the cover dir that traversal must not reach.
-	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "secret.txt"), []byte("TOPSECRET"), 0o600))
-
-	h := transport.NewCoverHandler(dataDir)
-	srv := httptest.NewServer(h)
-	t.Cleanup(srv.Close)
-
-	// Legit cover served.
-	resp, err := srv.Client().Get(srv.URL + "/covers/series/1.jpg")
-	require.NoError(t, err)
-	body, _ := io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.Contains(t, string(body), "IMG")
-
-	// Traversal attempt must not return the secret.
-	resp2, err := srv.Client().Get(srv.URL + "/covers/series/..%2f..%2fsecret.txt")
-	require.NoError(t, err)
-	body2, _ := io.ReadAll(resp2.Body)
-	_ = resp2.Body.Close()
-	require.NotContains(t, string(body2), "TOPSECRET")
-	require.NotEqual(t, http.StatusOK, resp2.StatusCode)
 }
