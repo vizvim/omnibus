@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package omnibus.v1;
+
+option go_package = "github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1";
+
+// Indexer is a DB-backed search source (Newznab or GetComics). The api_key is
+// intentionally absent: it is write-only and masked, never returned in a response
+// (D-17 / T-4-01). It is accepted only on the create/update request messages.
+message Indexer {
+  int64 id = 1;
+  string name = 2;
+  string kind = 3; // newznab/getcomics
+  string base_url = 4;
+  bool enabled = 5;
+  string categories = 6; // Newznab category ids, comma-separated; ignored by GetComics
+  int32 priority = 7;
+  bool use_for_rss = 8;
+  string created_at = 9;
+  string updated_at = 10;
+}
+
+message ListIndexersRequest {}
+
+message ListIndexersResponse {
+  repeated Indexer indexers = 1;
+}
+
+message CreateIndexerRequest {
+  string name = 1;
+  string kind = 2; // newznab/getcomics
+  string base_url = 3;
+  string api_key = 4; // write-only; stored but never returned
+  string categories = 5;
+  int32 priority = 6;
+  bool use_for_rss = 7;
+}
+
+message CreateIndexerResponse {
+  Indexer indexer = 1;
+}
+
+message UpdateIndexerRequest {
+  int64 id = 1;
+  string name = 2;
+  string kind = 3;
+  string base_url = 4;
+  // api_key may be empty to leave the stored key unchanged.
+  string api_key = 5;
+  bool enabled = 6;
+  string categories = 7;
+  int32 priority = 8;
+  bool use_for_rss = 9;
+}
+
+message UpdateIndexerResponse {
+  Indexer indexer = 1;
+}
+
+message DeleteIndexerRequest {
+  int64 id = 1;
+}
+
+message DeleteIndexerResponse {}
+
+message TestIndexerRequest {
+  int64 id = 1;
+}
+
+message TestIndexerResponse {
+  bool ok = 1;
+  string detail = 2;
+}
+
+// IndexerService owns CRUD for DB-backed indexers (D-16, SRCH-09). It is a
+// domain-segmented service (ADR 0007), separate from SeriesService.
+service IndexerService {
+  // ListIndexers returns all indexers (api_key never included).
+  rpc ListIndexers(ListIndexersRequest) returns (ListIndexersResponse);
+  // CreateIndexer adds a new indexer.
+  rpc CreateIndexer(CreateIndexerRequest) returns (CreateIndexerResponse);
+  // UpdateIndexer edits an indexer; an empty api_key leaves the stored key unchanged.
+  rpc UpdateIndexer(UpdateIndexerRequest) returns (UpdateIndexerResponse);
+  // DeleteIndexer removes an indexer.
+  rpc DeleteIndexer(DeleteIndexerRequest) returns (DeleteIndexerResponse);
+  // TestIndexer probes an indexer's connectivity (best-effort).
+  rpc TestIndexer(TestIndexerRequest) returns (TestIndexerResponse);
+}
