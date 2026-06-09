@@ -27,6 +27,7 @@ import (
 	"github.com/vizvim/omnibus/internal/jobs"
 	"github.com/vizvim/omnibus/internal/provider/metadata"
 	"github.com/vizvim/omnibus/internal/repository"
+	jobsservice "github.com/vizvim/omnibus/internal/service/jobs"
 	"github.com/vizvim/omnibus/internal/service/series"
 	"github.com/vizvim/omnibus/internal/transport"
 )
@@ -84,7 +85,10 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	}
 	svc.SetEnqueuer(riverClient)
 
-	srv, err := newServer(cfg, logger, svc, repos.Cover)
+	// JobService reads run history from River's tables (via the jobs client).
+	jobSvc := jobsservice.New(riverClient)
+
+	srv, err := newServer(cfg, logger, svc, jobSvc, repos.Cover)
 	if err != nil {
 		_ = database.Close()
 		return err
@@ -140,22 +144,27 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	return nil
 }
 
-// newServer builds the h2c-wrapped HTTP server hosting the SeriesService Connect
-// handler (with slog + otel interceptors) and the cover handler serving blobs from
-// SQLite, with CORS scoped to the Vite dev origin.
-func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, covers transport.CoverStore) (*http.Server, error) {
+// newServer builds the h2c-wrapped HTTP server hosting the SeriesService + JobService
+// Connect handlers (with slog + otel interceptors) and the cover handler serving blobs
+// from SQLite, with CORS scoped to the Vite dev origin.
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, covers transport.CoverStore) (*http.Server, error) {
 	interceptors, err := transport.NewInterceptors(logger)
 	if err != nil {
 		return nil, fmt.Errorf("build interceptors: %w", err)
 	}
 
 	mux := http.NewServeMux()
-	seriesHandler := transport.NewSeriesHandler(svc)
-	path, handler := omnibusv1connect.NewSeriesServiceHandler(seriesHandler, connect.WithInterceptors(interceptors...))
 	// The frontend Connect transport uses baseUrl "/api" (both under the Vite dev
-	// proxy and the production SPA), so the RPC handler is served under that prefix.
+	// proxy and the production SPA), so each RPC handler is served under that prefix.
 	// StripPrefix restores the bare procedure path the Connect handler routes on.
-	mux.Handle("/api"+path, http.StripPrefix("/api", handler))
+	seriesHandler := transport.NewSeriesHandler(svc)
+	seriesPath, seriesH := omnibusv1connect.NewSeriesServiceHandler(seriesHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+seriesPath, http.StripPrefix("/api", seriesH))
+
+	jobHandler := transport.NewJobHandler(jobSvc)
+	jobPath, jobH := omnibusv1connect.NewJobServiceHandler(jobHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+jobPath, http.StripPrefix("/api", jobH))
+
 	mux.Handle("/covers/", transport.NewCoverHandler(covers))
 
 	corsHandler := cors.New(cors.Options{
