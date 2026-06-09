@@ -29,6 +29,10 @@ type Config struct {
 	LogFormat       string `koanf:"log_format"`
 	ComicVineAPIKey string `koanf:"comicvine_api_key"`
 	ComicVineRate   string `koanf:"comicvine_rate"`
+	// RiverWorkers is the number of concurrent River worker goroutines. A single-user
+	// self-hosted app needs little concurrency; default 2. Override with
+	// OMNIBUS_RIVER_WORKERS.
+	RiverWorkers int `koanf:"river_workers"`
 }
 
 // Load reads configuration. If filePath is non-empty it is parsed as YAML first;
@@ -38,11 +42,12 @@ func Load(filePath string) (Config, error) {
 	k := koanf.New(".")
 
 	defaults := map[string]any{
-		"http_addr":  ":8080",
-		"db_path":    "/data/omnibus.db",
-		"data_path":  "/data",
-		"log_level":  "info",
-		"log_format": "json",
+		"http_addr":     ":8080",
+		"db_path":       "/data/omnibus.db",
+		"data_path":     "/data",
+		"log_level":     "info",
+		"log_format":    "json",
+		"river_workers": 2,
 	}
 	if err := k.Load(confmap.Provider(defaults, "."), nil); err != nil {
 		return Config{}, fmt.Errorf("load defaults: %w", err)
