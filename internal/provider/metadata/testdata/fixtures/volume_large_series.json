@@ -1,0 +1,19 @@
+{
+  "status_code": 1,
+  "error": "OK",
+  "results": {
+    "id": 4050,
+    "name": "The Amazing Spider-Man",
+    "start_year": "1963",
+    "count_of_issues": 250,
+    "description": "A long-running series used to exercise paginated import.",
+    "date_last_updated": "2026-05-01 12:00:00",
+    "publisher": { "id": 31, "name": "Marvel" },
+    "image": {
+      "icon_url": "https://comicvine.gamespot.com/a/uploads/scale_avatar/0/asm-icon.jpg",
+      "super_url": "https://comicvine.gamespot.com/a/uploads/scale_large/0/asm.jpg"
+    },
+    "associated_images": [],
+    "issues": []
+  }
+}
