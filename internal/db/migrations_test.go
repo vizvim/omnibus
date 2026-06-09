@@ -12,7 +12,7 @@ import (
 	"github.com/vizvim/omnibus/internal/db"
 )
 
-// allTables is every table schema.md defines (the full schema shipped in 0001).
+// allTables is every table the schema defines (the full schema shipped in 0001).
 var allTables = []string{
 	"blacklists", "covers", "download_history", "downloads", "issue_events", "issues",
 	"job_history", "jobs", "metadata_cache", "publishers", "series",

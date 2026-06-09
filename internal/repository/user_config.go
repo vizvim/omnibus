@@ -10,7 +10,7 @@ import (
 // UserConfig is the domain view of a user_config row.
 type UserConfig = sqlc.UserConfig
 
-// UserConfigRepository persists typed user configuration keys (CFG-02).
+// UserConfigRepository persists typed user configuration keys.
 type UserConfigRepository interface {
 	Get(ctx context.Context, key string) (string, error)
 	Set(ctx context.Context, key, value string) error

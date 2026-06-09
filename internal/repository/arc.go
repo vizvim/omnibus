@@ -17,7 +17,7 @@ type ArcUpsert struct {
 	CreatedAt      string
 }
 
-// ArcRepository persists story arcs and their issue membership (SER-06).
+// ArcRepository persists story arcs and their issue membership.
 type ArcRepository interface {
 	Upsert(ctx context.Context, in ArcUpsert) (StoryArc, error)
 	LinkIssue(ctx context.Context, arcID, issueID int64, position int32) error

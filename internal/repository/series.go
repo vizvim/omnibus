@@ -1,8 +1,8 @@
 // Package repository defines the domain persistence interfaces and their
 // sqlc-backed implementations. Each repository wraps the generated sqlc Queries,
-// routing writes through the single-writer pool and reads through the read pool
-// (ADR 0002). The service layer depends only on these interfaces, never on sqlc
-// or *sql.DB directly (package-layout.md layer rule).
+// routing writes through the single-writer pool and reads through the read pool.
+// The service layer depends only on these interfaces, never on sqlc or *sql.DB
+// directly.
 package repository
 
 import (
@@ -17,7 +17,7 @@ import (
 type Series = sqlc.Series
 
 // SeriesUpsert carries the fields needed to insert or update a series, keyed on the
-// immutable ComicVine volume id (META-06).
+// immutable ComicVine volume id.
 type SeriesUpsert struct {
 	ComicvineVolumeID int64
 	PublisherID       *int64

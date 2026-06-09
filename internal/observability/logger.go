@@ -1,6 +1,6 @@
 // Package observability builds the injected *slog.Logger for omnibus. The logger is
 // constructed once at startup and passed explicitly to collaborators — never via
-// slog.Default() globals (CLAUDE.md). JSON in prod, text in dev (PLAT-06, OBS-02).
+// slog.Default() globals. JSON in prod, text in dev.
 package observability
 
 import (

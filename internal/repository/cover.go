@@ -11,7 +11,7 @@ import (
 )
 
 // CoverRepository persists cover art blobs keyed on (entity_type, entity_id). Covers
-// live in their own table so the series/issues hot rows stay free of BLOBs (D-07).
+// live in their own table so the series/issues hot rows stay free of BLOBs.
 type CoverRepository interface {
 	Upsert(ctx context.Context, entityType string, id int64, image []byte, contentType string) error
 	Get(ctx context.Context, entityType string, id int64) (image []byte, contentType string, found bool, err error)

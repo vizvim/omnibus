@@ -27,13 +27,13 @@ type Deps struct {
 	Repos      *repository.Repositories
 	AttemptCap int
 	Logger     *slog.Logger
-	// LifeCtx bounds background import goroutines; cancel it on shutdown (PLAT-08).
+	// LifeCtx bounds background import goroutines; cancel it on shutdown.
 	LifeCtx   context.Context
 	WaitGroup *sync.WaitGroup
 }
 
-// Service implements the SeriesService domain logic (ADR 0007 segmentation). It
-// depends only on repository interfaces and the metadata gateway.
+// Service implements the SeriesService domain logic. It depends only on repository
+// interfaces and the metadata gateway.
 type Service struct {
 	gw         Gateway
 	repos      *repository.Repositories
@@ -44,7 +44,7 @@ type Service struct {
 }
 
 // View is the assembled GetSeries result, expressed entirely in series-owned domain
-// types so the transport layer never imports repository (PLAT-05).
+// types so the transport layer never imports repository.
 type View struct {
 	Series    Series
 	Issues    []Issue
@@ -65,7 +65,7 @@ func New(d Deps) *Service {
 }
 
 // SearchResult is a transport-agnostic search candidate so the transport layer does
-// not import the provider package (package-layout.md layer rule).
+// not import the provider package.
 type SearchResult struct {
 	ComicvineVolumeID int64
 	Name              string
@@ -76,7 +76,7 @@ type SearchResult struct {
 	Description       string
 }
 
-// SearchComicVine returns candidate volumes for a query (META-01).
+// SearchComicVine returns candidate volumes for a query.
 func (s *Service) SearchComicVine(ctx context.Context, query string) ([]SearchResult, error) {
 	results, err := s.gw.SearchSeries(ctx, query)
 	if err != nil {
@@ -97,8 +97,8 @@ func (s *Service) SearchComicVine(ctx context.Context, query string) ([]SearchRe
 	return out, nil
 }
 
-// AddSeries upserts the series on its immutable volume id and returns immediately
-// (D-03), launching a bounded background import goroutine (D-03/04/05).
+// AddSeries upserts the series on its immutable volume id and returns immediately,
+// launching a bounded background import goroutine.
 func (s *Service) AddSeries(ctx context.Context, volumeID int64) (Series, error) {
 	vol, err := s.gw.GetVolume(ctx, volumeID)
 	if err != nil {
@@ -172,7 +172,7 @@ func (s *Service) ListSeries(ctx context.Context, page int32) ([]Series, error) 
 	return out, nil
 }
 
-// GetSeries returns the full series view: series + issues + publisher + arcs (SER-03).
+// GetSeries returns the full series view: series + issues + publisher + arcs.
 func (s *Service) GetSeries(ctx context.Context, seriesID int64) (View, error) {
 	ser, err := s.repos.Series.GetByID(ctx, seriesID)
 	if err != nil {

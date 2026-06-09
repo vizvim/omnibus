@@ -38,7 +38,7 @@ func TestUpsertSeriesIdempotentOnVolumeID(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Same volume_id updates in place (no duplicate row) — META-06 idempotency.
+	// Same volume_id updates in place (no duplicate row) — upsert is idempotent.
 	second, err := repo.Upsert(ctx, repository.SeriesUpsert{
 		ComicvineVolumeID: 4050,
 		Name:              "Saga (renamed)",

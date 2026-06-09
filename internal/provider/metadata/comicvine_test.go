@@ -54,7 +54,7 @@ func TestComicVineSearchSameTitle(t *testing.T) {
 	results, err := p.SearchSeries(context.Background(), "Daredevil")
 	require.NoError(t, err)
 	require.Len(t, results, 2)
-	// Distinguishable by start_year + count (D-09 disambiguation signal).
+	// Distinguishable by start_year + count (the disambiguation signal).
 	require.NotEqual(t, results[0].StartYear, results[1].StartYear)
 	require.Equal(t, "Marvel", results[0].Publisher)
 	require.NotEmpty(t, results[0].CoverURL)

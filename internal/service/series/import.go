@@ -13,8 +13,8 @@ import (
 
 // startImport launches the bounded import goroutine for a series. The goroutine is
 // tracked on the WaitGroup and bound to the lifecycle context so shutdown drains it
-// (D-05, PLAT-08). This is the ONLY background construct in Phase 2 — no scheduler,
-// no jobs table, no worker pool (Phase 3 / D-05).
+// when shutdown is requested. This is currently the only background construct — no
+// scheduler, no jobs table, no worker pool.
 func (s *Service) startImport(ser repository.Series, vol metadata.VolumeDetail) {
 	s.wg.Go(func() {
 		if err := s.runImport(s.lifeCtx, ser, vol); err != nil && !errors.Is(err, errImportCancelled) {
@@ -26,9 +26,9 @@ func (s *Service) startImport(ser repository.Series, vol metadata.VolumeDetail) 
 
 // runImport paginates the volume's issues through the gateway, upserts each (idempotent
 // on comicvine_issue_id with a normalized (sort,qual)), stores covers in the SQLite
-// covers table, and updates have/total counts as issues land (D-06). Re-running fills
-// gaps (D-04). It checks ctx.Err() between pages and writes so shutdown stops it
-// promptly (D-05).
+// covers table, and updates have/total counts as issues land. Re-running fills
+// gaps. It checks ctx.Err() between pages and writes so shutdown stops it
+// promptly.
 func (s *Service) runImport(ctx context.Context, ser repository.Series, vol metadata.VolumeDetail) error {
 	if err := ctx.Err(); err != nil {
 		return errImportCancelled
@@ -83,7 +83,7 @@ func (s *Service) runImport(ctx context.Context, ser repository.Series, vol meta
 			}
 		}
 
-		// Update progress counts as issues land (D-06 syncing signal).
+		// Update progress counts as issues land (the syncing signal).
 		total := max(vol.CountOfIssues, int32(imported))
 		if uerr := s.repos.Series.UpdateCounts(ctx, ser.ID, total, int32(imported)); uerr != nil {
 			s.logger.Warn("update series counts", slog.Int64("series_id", ser.ID), slog.Any("error", uerr))

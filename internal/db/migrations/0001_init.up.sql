@@ -1,6 +1,6 @@
--- 0001_init: full schema.md realized as the first golang-migrate migration (D-08).
+-- 0001_init: the full initial schema realized as the first golang-migrate migration.
 -- PRAGMAs (WAL, busy_timeout, foreign_keys) are applied at connection open by
--- internal/db (ADR 0002), not in DDL.
+-- internal/db, not in DDL.
 
 CREATE TABLE publishers (
   id                     INTEGER PRIMARY KEY,

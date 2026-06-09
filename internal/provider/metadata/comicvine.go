@@ -26,7 +26,7 @@ const (
 	// coverHostSuffix is the only host GetCover will fetch from (SSRF guard).
 	coverHostSuffix = "comicvine.gamespot.com"
 	// volumeFieldList / issueFieldList request only the fields we use (fewer bytes,
-	// fewer chances to trip CV's per-resource budget — Pitfall 1).
+	// fewer chances to trip ComicVine's per-resource budget).
 	volumeFieldList = "id,name,start_year,count_of_issues,description,publisher,image,date_last_updated"
 	issueFieldList  = "id,issue_number,name,cover_date,store_date,image,date_last_updated"
 	searchFieldList = "id,name,start_year,count_of_issues,description,publisher,image"

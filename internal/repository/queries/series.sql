@@ -1,5 +1,5 @@
 -- name: UpsertSeries :one
--- Idempotent upsert keyed on the immutable comicvine_volume_id (META-06).
+-- Idempotent upsert keyed on the immutable comicvine_volume_id.
 INSERT INTO series (
   comicvine_volume_id, publisher_id, name, start_year, description,
   status, total_issues, have_issues, settings_json,

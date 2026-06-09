@@ -1,7 +1,7 @@
 // Package transport holds the Connect RPC handlers and HTTP transport wiring. The
 // SeriesService handler maps RPCs to the series.Service and translates domain types to
-// proto messages. Per package-layout.md it imports the service layer only — never
-// repository, provider, or db.
+// proto messages. It imports the service layer only — never repository, provider,
+// or db.
 package transport
 
 import (
@@ -17,7 +17,7 @@ import (
 )
 
 // SeriesServicer is the subset of series.Service the handler depends on (interface so
-// the handler stays testable and the dependency is explicit). Per PLAT-05 the transport
+// the handler stays testable and the dependency is explicit). The transport
 // layer depends only on the service package, never on repository/provider/db.
 type SeriesServicer interface {
 	SearchComicVine(ctx context.Context, query string) ([]series.SearchResult, error)
@@ -39,7 +39,7 @@ func NewSeriesHandler(svc SeriesServicer) *SeriesHandler {
 	return &SeriesHandler{svc: svc}
 }
 
-// SearchComicVine handles the search RPC (META-01).
+// SearchComicVine handles the search RPC.
 func (h *SeriesHandler) SearchComicVine(
 	ctx context.Context, req *connect.Request[omnibusv1.SearchComicVineRequest],
 ) (*connect.Response[omnibusv1.SearchComicVineResponse], error) {
@@ -65,7 +65,7 @@ func (h *SeriesHandler) SearchComicVine(
 	return connect.NewResponse(&omnibusv1.SearchComicVineResponse{Candidates: candidates}), nil
 }
 
-// AddSeries handles the add RPC (SER-01).
+// AddSeries handles the add RPC.
 func (h *SeriesHandler) AddSeries(
 	ctx context.Context, req *connect.Request[omnibusv1.AddSeriesRequest],
 ) (*connect.Response[omnibusv1.AddSeriesResponse], error) {
@@ -95,7 +95,7 @@ func (h *SeriesHandler) ListSeries(
 	return connect.NewResponse(&omnibusv1.ListSeriesResponse{Series: out}), nil
 }
 
-// GetSeries handles the detail RPC (SER-03).
+// GetSeries handles the detail RPC.
 func (h *SeriesHandler) GetSeries(
 	ctx context.Context, req *connect.Request[omnibusv1.GetSeriesRequest],
 ) (*connect.Response[omnibusv1.GetSeriesResponse], error) {
@@ -145,7 +145,7 @@ func (h *SeriesHandler) UpdateSeriesSettings(
 }
 
 // seriesToProto maps a domain series to the proto message, mapping the stored cover to
-// the backend /covers route (never a ComicVine hotlink — D-07 / Pitfall 5).
+// the backend /covers route (never a ComicVine hotlink).
 func seriesToProto(s series.Series) *omnibusv1.Series {
 	return &omnibusv1.Series{
 		Id:                s.ID,

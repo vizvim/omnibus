@@ -49,7 +49,7 @@ func TestFailedToWantedAttemptCap(t *testing.T) {
 	const attemptCap = 3
 	// Below the cap: Failed -> Wanted allowed.
 	require.True(t, series.CanTransition(series.StatusFailed, series.StatusWanted, 2, attemptCap))
-	// At/above the cap: blocked (loop prevention, ADR 0004).
+	// At/above the cap: blocked (loop prevention).
 	require.False(t, series.CanTransition(series.StatusFailed, series.StatusWanted, 3, attemptCap))
 	require.False(t, series.CanTransition(series.StatusFailed, series.StatusWanted, 4, attemptCap))
 }

@@ -11,16 +11,16 @@ import (
 const coverPrefix = "/covers/"
 
 // CoverStore is the covers source the handler reads from. It is owned by the transport
-// layer so transport never imports the repository package (PLAT-05); the app layer
+// layer so transport never imports the repository package; the app layer
 // satisfies it with the covers repository.
 type CoverStore interface {
 	Get(ctx context.Context, entityType string, id int64) (image []byte, contentType string, found bool, err error)
 }
 
 // NewCoverHandler serves cover blobs from the store, e.g. /covers/series/1.jpg and
-// /covers/issues/42.jpg (D-07). Because kind is whitelisted and id is parsed as a
+// /covers/issues/42.jpg. Because kind is whitelisted and id is parsed as a
 // positive integer, no path-traversal input can reach the store (replaces the old
-// FileServer confinement guard, V12 / T-02-04-PATH).
+// FileServer confinement guard).
 func NewCoverHandler(store CoverStore) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {

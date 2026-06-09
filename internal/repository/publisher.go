@@ -17,7 +17,7 @@ type PublisherUpsert struct {
 	CreatedAt            string
 }
 
-// PublisherRepository persists publishers (SER-06).
+// PublisherRepository persists publishers.
 type PublisherRepository interface {
 	Upsert(ctx context.Context, in PublisherUpsert) (Publisher, error)
 	GetByID(ctx context.Context, id int64) (Publisher, error)

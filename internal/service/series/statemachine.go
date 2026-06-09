@@ -2,11 +2,11 @@ package series
 
 import "fmt"
 
-// IssueStatus is the typed issue lifecycle state (ADR 0004), backed by the string
+// IssueStatus is the typed issue lifecycle state, backed by the string
 // values stored in issues.status.
 type IssueStatus string
 
-// The seven issue statuses (schema.md / ADR 0004).
+// The seven issue statuses.
 const (
 	StatusWanted     IssueStatus = "Wanted"
 	StatusSnatched   IssueStatus = "Snatched"
@@ -17,7 +17,7 @@ const (
 	StatusIgnored    IssueStatus = "Ignored"
 )
 
-// legalTransitions encodes ADR 0004's legal issue-status edges. Failed→Wanted is
+// legalTransitions encodes the legal issue-status edges. Failed→Wanted is
 // special-cased by the attempt cap in CanTransition.
 var legalTransitions = map[IssueStatus]map[IssueStatus]bool{
 	StatusWanted:     {StatusSnatched: true, StatusSkipped: true, StatusIgnored: true},
@@ -29,7 +29,7 @@ var legalTransitions = map[IssueStatus]map[IssueStatus]bool{
 	StatusArchived:   {StatusWanted: true},
 }
 
-// CanTransition reports whether moving from -> to is legal per ADR 0004. The
+// CanTransition reports whether moving from -> to is legal. The
 // Failed→Wanted edge is additionally gated by the attempt cap (loop prevention): once
 // attempts reach the cap, the issue stays Failed pending user action.
 func CanTransition(from, to IssueStatus, attempts, attemptCap int) bool {

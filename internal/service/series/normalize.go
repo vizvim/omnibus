@@ -1,7 +1,7 @@
 // Package series holds the SeriesService domain logic: the issue-number normalizer,
-// the issue-status state machine (ADR 0004), the search/add/view service, and the
-// bounded import orchestration. It depends only on repository interfaces and the
-// metadata gateway — never on transport or concrete SQL (package-layout.md).
+// the issue-status state machine, the search/add/view service, and the bounded
+// import orchestration. It depends only on repository interfaces and the metadata
+// gateway — never on transport or concrete SQL.
 package series
 
 import (
@@ -11,7 +11,7 @@ import (
 )
 
 // Normalize maps a raw ComicVine issue-number string to a sortable numeric key and a
-// qualifier, per schema.md's three-field model (SER-05). Decimal suffixes fold into
+// qualifier, per the three-field model. Decimal suffixes fold into
 // the fractional part of sort; pure-text qualifiers (INH, NOW, annual, half) keep the
 // integer base in sort and set qual. This guarantees "7" (7.0,"") and "7.INH"
 // (7.0,"INH") are distinct — pitfall #3.

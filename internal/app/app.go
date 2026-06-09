@@ -1,8 +1,8 @@
 // Package app wires omnibus's runtime components and owns the server lifecycle:
 // run migrations, open the DB pools, build the gateway + repositories + series service,
 // serve the SeriesService + cover handler over h2c, and on context cancellation drain
-// the HTTP server, the in-flight import goroutines, then the DB pools in order
-// (PLAT-08). It is separated from main so the lifecycle is testable.
+// the HTTP server, the in-flight import goroutines, then the DB pools in order.
+// It is separated from main so the lifecycle is testable.
 package app
 
 import (
@@ -31,11 +31,11 @@ import (
 )
 
 const (
-	// shutdownTimeout bounds the graceful-shutdown drain (deployment.md).
+	// shutdownTimeout bounds the graceful-shutdown drain.
 	shutdownTimeout = 15 * time.Second
 	// defaultCVRate is the fallback ComicVine pace (~1 req / 2s, Mylar3's floor).
 	defaultCVRate = 2 * time.Second
-	// attemptCap bounds Failed->Wanted re-search loops (ADR 0004). Phase 2 default.
+	// attemptCap bounds Failed->Wanted re-search loops.
 	attemptCap = 5
 	// metadataTTL is the metadata_cache freshness window.
 	metadataTTL = 24 * time.Hour
@@ -45,7 +45,7 @@ const (
 // fatal error occurs. On shutdown it drains the HTTP server, the import goroutines,
 // then closes the DB pools.
 func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	// Migrations run before the server accepts traffic (ADR 0003).
+	// Migrations run before the server accepts traffic.
 	if err := db.Migrate(ctx, cfg.DBPath); err != nil {
 		return fmt.Errorf("run migrations: %w", err)
 	}
@@ -63,7 +63,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	gateway := metadata.NewGateway(provider, repos.MetadataCache, limiter, logger, metadataTTL)
 
 	// importCtx bounds background import goroutines; it is canceled on shutdown so the
-	// WaitGroup join below drains them (PLAT-08, D-05).
+	// WaitGroup join below drains them.
 	importCtx, cancelImports := context.WithCancel(context.Background())
 	var importWG sync.WaitGroup
 
@@ -100,7 +100,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
-		// Order (deployment.md): stop accepting requests, drain imports, close pools.
+		// Order: stop accepting requests, drain imports, close pools.
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			logger.Error("http shutdown", slog.Any("error", err))
 		}

@@ -58,7 +58,7 @@ func TestAddSeriesIdempotentFastReturn(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(4050), s1.ComicvineVolumeID)
 
-	// Re-run is idempotent — one series row (META-06, D-04).
+	// Re-run is idempotent — one series row.
 	s2, err := svc.AddSeries(ctx, 4050)
 	require.NoError(t, err)
 	require.Equal(t, s1.ID, s2.ID)
@@ -87,7 +87,7 @@ func TestImportPopulatesIssuesPublisherArcs(t *testing.T) {
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(view.Issues), 4)
 
-	// Non-integer issue numbers present and distinct (SER-05).
+	// Non-integer issue numbers present and distinct.
 	raws := map[string]bool{}
 	for _, i := range view.Issues {
 		raws[i.IssueNumber] = true
@@ -96,7 +96,7 @@ func TestImportPopulatesIssuesPublisherArcs(t *testing.T) {
 	require.True(t, raws["½"])
 	require.True(t, raws["Annual 1"])
 
-	// Publisher populated (SER-06).
+	// Publisher populated.
 	require.Equal(t, "Marvel", view.Publisher)
 }
 
@@ -115,7 +115,7 @@ func TestImportReRunFillsGaps(t *testing.T) {
 	first, err := repos.Issue.CountBySeries(ctx, s.ID)
 	require.NoError(t, err)
 
-	// Re-run import: idempotent, still the same count (no duplicates) — D-04.
+	// Re-run import: idempotent, still the same count (no duplicates).
 	_, err = svc.AddSeries(ctx, 4050)
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
@@ -142,7 +142,7 @@ func TestGetSeriesShape(t *testing.T) {
 	require.Equal(t, s.ID, view.Series.ID)
 	require.NotEmpty(t, view.Issues)
 	for _, i := range view.Issues {
-		require.NotEmpty(t, i.Status, "each issue has a status (SER-02)")
+		require.NotEmpty(t, i.Status, "each issue has a status")
 	}
 }
 
@@ -166,7 +166,7 @@ func TestImportStopsOnShutdown(t *testing.T) {
 	require.NoError(t, err)
 
 	// Cancel the lifecycle context; the import goroutine must drain and the WaitGroup
-	// must join within the deadline (PLAT-08, D-05).
+	// must join within the deadline.
 	cancel()
 	done := make(chan struct{})
 	go func() { wg.Wait(); close(done) }()

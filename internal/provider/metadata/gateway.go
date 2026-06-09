@@ -13,13 +13,13 @@ import (
 	"github.com/vizvim/omnibus/internal/repository"
 )
 
-// timeFormat is the ISO-8601 UTC layout used for cache timestamps (schema.md).
+// timeFormat is the ISO-8601 UTC layout used for cache timestamps.
 const timeFormat = time.RFC3339
 
-// Gateway is the single ComicVine chokepoint (architecture.md, ADR 0005). It fronts a
-// MetadataProvider with one global token-bucket limiter (META-03) and the
-// metadata_cache (META-04), so no call path can bypass pacing or re-hit a fresh entry.
-// Conditional refresh is keyed on cache TTL (and, in Phase 3, CV date_last_updated).
+// Gateway is the single ComicVine chokepoint. It fronts a MetadataProvider with one
+// global token-bucket limiter and the metadata_cache, so no call path can bypass
+// pacing or re-hit a fresh entry. Conditional refresh is keyed on cache TTL (and,
+// later, CV date_last_updated).
 type Gateway struct {
 	provider MetadataProvider
 	cache    repository.MetadataCacheRepository
@@ -30,7 +30,7 @@ type Gateway struct {
 }
 
 // NewGateway builds a Gateway. ttl bounds cache freshness; limiter paces every network
-// fetch; logger receives cache hit/miss + rate-wait lines (OBS-02).
+// fetch; logger receives cache hit/miss + rate-wait lines.
 func NewGateway(
 	provider MetadataProvider,
 	cache repository.MetadataCacheRepository,
@@ -48,7 +48,7 @@ func NewGateway(
 	}
 }
 
-// SearchSeries paces and caches a series search (META-01/03/04).
+// SearchSeries paces and caches a series search.
 func (g *Gateway) SearchSeries(ctx context.Context, query string) ([]SeriesResult, error) {
 	key := "search:" + query
 	if raw, ok := g.freshCache(ctx, key); ok {
@@ -146,8 +146,8 @@ func (g *Gateway) freshCache(ctx context.Context, key string) ([]byte, bool) {
 	return []byte(entry.Payload), true
 }
 
-// wait blocks on the global limiter before any network fetch (META-03). No fetch path
-// may skip this — it is the single point that prevents a ComicVine ban (Pitfall 1).
+// wait blocks on the global limiter before any network fetch. No fetch path
+// may skip this — it is the single point that prevents a ComicVine ban.
 func (g *Gateway) wait(ctx context.Context, key string) error {
 	g.logger.Debug("rate-limit wait", slog.String("key", key))
 	if err := g.limiter.Wait(ctx); err != nil {

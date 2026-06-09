@@ -11,8 +11,8 @@ import (
 type Issue = sqlc.Issue
 
 // IssueUpsert carries the fields needed to insert or update an issue, keyed on the
-// immutable ComicVine issue id (D-04). The three issue-number fields preserve the
-// distinctness of e.g. 7 vs 7.INH (SER-05).
+// immutable ComicVine issue id. The three issue-number fields preserve the
+// distinctness of e.g. 7 vs 7.INH.
 type IssueUpsert struct {
 	SeriesID         int64
 	ComicvineIssueID int64

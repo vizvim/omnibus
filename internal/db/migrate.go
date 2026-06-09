@@ -59,8 +59,8 @@ func Migrate(ctx context.Context, path string) error {
 	return nil
 }
 
-// MigrateDown rolls every migration back down (used by tests to prove reversibility,
-// per ADR 0003). It tolerates ErrNoChange.
+// MigrateDown rolls every migration back down (used by tests to prove
+// reversibility). It tolerates ErrNoChange.
 func MigrateDown(ctx context.Context, path string) error {
 	m, err := newMigrator(ctx, path)
 	if err != nil {

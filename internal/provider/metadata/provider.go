@@ -1,13 +1,13 @@
-// Package metadata defines the swappable MetadataProvider abstraction (ADR 0005)
-// and the gateway that fronts it with a global rate limiter and the metadata_cache
-// (architecture.md). ComicVine is the first real implementation; a fixture-backed
-// fake satisfies the same interface for tests so CI needs no ComicVine API key (D-10).
+// Package metadata defines the swappable MetadataProvider abstraction and the
+// gateway that fronts it with a global rate limiter and the metadata_cache.
+// ComicVine is the first real implementation; a fixture-backed fake satisfies the
+// same interface for tests so CI needs no ComicVine API key.
 package metadata
 
 import "context"
 
 // SeriesResult is a search candidate — enough to disambiguate same-title volumes
-// (D-09): name, start year, publisher, issue count, and a cover thumbnail URL.
+// by name, start year, publisher, issue count, and a cover thumbnail URL.
 type SeriesResult struct {
 	ComicvineVolumeID int64
 	Name              string
@@ -41,12 +41,12 @@ type VolumeDetail struct {
 	Arcs              []ArcRef
 	CoverURL          string
 	// DateLastUpdated is CV's date_last_updated, stored as the conditional-refresh
-	// marker (META-05, used in Phase 3).
+	// marker.
 	DateLastUpdated string
 }
 
 // IssueDetail is a single issue's metadata. IssueNumber is the raw display form; the
-// service layer normalizes it into the (sort, qualifier) model (SER-05).
+// service layer normalizes it into the (sort, qualifier) model.
 type IssueDetail struct {
 	ComicvineIssueID int64
 	IssueNumber      string
@@ -57,12 +57,12 @@ type IssueDetail struct {
 	Arcs             []ArcRef
 }
 
-// MetadataProvider is the swappable metadata source (ADR 0005). Methods returning raw
+// MetadataProvider is the swappable metadata source. Methods returning raw
 // bytes do so the gateway can cache the exact provider payload (metadata_cache).
 //
-//nolint:revive // ADR 0005 + the plan name this interface MetadataProvider exactly; the metadata.MetadataProvider stutter is the deliberate, contract-mandated name.
+//nolint:revive // MetadataProvider is the deliberate, canonical contract name for this interface; the metadata.MetadataProvider package-qualified stutter is intentional.
 type MetadataProvider interface {
-	// SearchSeries returns candidate volumes for a free-text query (META-01).
+	// SearchSeries returns candidate volumes for a free-text query.
 	SearchSeries(ctx context.Context, query string) ([]SeriesResult, error)
 	// GetVolume returns a volume's detail plus the raw payload for caching.
 	GetVolume(ctx context.Context, volumeID int64) (VolumeDetail, []byte, error)

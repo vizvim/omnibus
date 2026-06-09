@@ -1,7 +1,7 @@
 // Package db owns SQLite connection management: a single-writer write pool and a
 // multi-connection read pool, both with WAL, busy_timeout, and foreign-key PRAGMAs
-// applied to every connection (ADR 0002). It also runs the embedded golang-migrate
-// migrations (ADR 0003). Repositories receive the *sql.DB pools; they never open
+// applied to every connection. It also runs the embedded golang-migrate
+// migrations. Repositories receive the *sql.DB pools; they never open
 // their own connections.
 package db
 
@@ -19,15 +19,16 @@ import (
 const driverName = "sqlite"
 
 // DB holds the read and write connection pools. Write is capped at a single
-// connection so all writes serialize through one writer (ADR 0002); Read may use
+// connection so all writes serialize through one writer; Read may use
 // many connections. Both pools point at the same file and carry the same PRAGMAs.
 type DB struct {
 	Read  *sql.DB
 	Write *sql.DB
 }
 
-// dsn builds a modernc DSN that applies the ADR 0002 PRAGMAs on every connection in
-// the pool via the `_pragma=` query-param form (one param per PRAGMA).
+// dsn builds a modernc DSN that applies the WAL, busy_timeout, and foreign-key
+// PRAGMAs on every connection in the pool via the `_pragma=` query-param form (one
+// param per PRAGMA).
 func dsn(path string) string {
 	return fmt.Sprintf(
 		"file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)",
@@ -44,7 +45,7 @@ func Open(ctx context.Context, path string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open write pool: %w", err)
 	}
-	// Single writer: every write serializes through one connection (ADR 0002).
+	// Single writer: every write serializes through one connection.
 	writeDB.SetMaxOpenConns(1)
 
 	readDB, err := sql.Open(driverName, connStr)

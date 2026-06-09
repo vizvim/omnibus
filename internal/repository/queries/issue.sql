@@ -1,5 +1,5 @@
 -- name: UpsertIssue :one
--- Idempotent upsert keyed on the immutable comicvine_issue_id (D-04).
+-- Idempotent upsert keyed on the immutable comicvine_issue_id.
 INSERT INTO issues (
   series_id, comicvine_issue_id, issue_number_raw, issue_number_sort,
   issue_number_qual, title, cover_date, store_date, release_date,

@@ -19,7 +19,7 @@ func toInt32(v int64) int32 {
 }
 
 // The series package owns the domain types the transport layer consumes, so transport
-// imports only this service package — never repository/provider/db (PLAT-05 layer rule).
+// imports only this service package — never repository/provider/db.
 
 // Series is the domain view of a watched series.
 type Series struct {

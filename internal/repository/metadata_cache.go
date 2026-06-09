@@ -10,7 +10,7 @@ import (
 // MetadataCache is the domain view of a metadata_cache row.
 type MetadataCache = sqlc.MetadataCache
 
-// MetadataCacheEntry carries a cache write (META-04/05).
+// MetadataCacheEntry carries a cache write.
 type MetadataCacheEntry struct {
 	CacheKey        string
 	Payload         string
@@ -18,7 +18,7 @@ type MetadataCacheEntry struct {
 	FetchedAt       string
 }
 
-// MetadataCacheRepository persists cached provider responses (META-04).
+// MetadataCacheRepository persists cached provider responses.
 type MetadataCacheRepository interface {
 	Get(ctx context.Context, cacheKey string) (MetadataCache, error)
 	Put(ctx context.Context, in MetadataCacheEntry) error

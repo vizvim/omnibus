@@ -1,7 +1,7 @@
 -- 0002_covers: move cover art from the filesystem into SQLite. A dedicated covers
 -- table holds the blob + content-type keyed on (entity_type, entity_id), and the
 -- now-superseded cover_path columns are dropped from series and issues. PRAGMAs are
--- applied at connection open by internal/db (ADR 0002), not in DDL.
+-- applied at connection open by internal/db, not in DDL.
 
 CREATE TABLE covers (
   entity_type  TEXT NOT NULL,

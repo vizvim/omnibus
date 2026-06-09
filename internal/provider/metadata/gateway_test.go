@@ -81,7 +81,7 @@ func TestGatewayCacheHitCallsProviderOnce(t *testing.T) {
 	v, err := gw.GetVolume(ctx, 4050)
 	require.NoError(t, err)
 
-	require.Equal(t, 1, cp.getVolume, "second GetVolume served from cache (META-04)")
+	require.Equal(t, 1, cp.getVolume, "second GetVolume served from cache")
 	require.Equal(t, int64(4050), v.ComicvineVolumeID)
 }
 
@@ -92,7 +92,7 @@ func TestGatewayLimiterGatesProvider(t *testing.T) {
 	cp := &countingProvider{inner: fake}
 
 	// Zero-rate, zero-burst limiter: Wait must fail under a short deadline, so the
-	// provider is never reached (META-03 — no bypass path).
+	// provider is never reached (no bypass path).
 	limiter := rate.NewLimiter(0, 0)
 	gw := newGateway(t, cp, limiter, &bytes.Buffer{})
 
@@ -163,6 +163,6 @@ func TestGatewayEmitsLogs(t *testing.T) {
 	require.NoError(t, err)
 
 	out := buf.String()
-	require.True(t, strings.Contains(out, "miss") || strings.Contains(out, "cache"), "expected cache log lines (OBS-02)")
+	require.True(t, strings.Contains(out, "miss") || strings.Contains(out, "cache"), "expected cache log lines")
 	require.Contains(t, out, "hit")
 }

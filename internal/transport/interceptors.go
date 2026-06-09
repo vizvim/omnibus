@@ -10,9 +10,8 @@ import (
 )
 
 // NewInterceptors returns the Connect interceptors for every RPC: a request-scoped
-// slog interceptor (PLAT-06/OBS-02) and the OpenTelemetry interceptor (observability
-// goal). The OTel interceptor uses the global providers; wiring real exporters is a
-// later concern.
+// slog interceptor and the OpenTelemetry interceptor. The OTel interceptor uses the
+// global providers; wiring real exporters is a later concern.
 func NewInterceptors(logger *slog.Logger) ([]connect.Interceptor, error) {
 	otelInterceptor, err := otelconnect.NewInterceptor()
 	if err != nil {

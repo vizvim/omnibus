@@ -1,7 +1,7 @@
 // Command omnibus is the single entrypoint for the omnibus server. It wires config,
 // the SQLite pools (after running migrations), the SeriesService Connect handler over
 // h2c, structured slog logging, and a signal-driven graceful shutdown that drains the
-// HTTP server then closes the DB pools (PLAT-06/07/08).
+// HTTP server then closes the DB pools.
 package main
 
 import (

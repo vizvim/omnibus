@@ -1,7 +1,7 @@
 // Package config loads omnibus configuration from an optional file overlaid by
 // OMNIBUS_-prefixed environment variables (env wins), unmarshaled into a typed
-// Config (PLAT-07, CFG-01). Secrets (the ComicVine API key) are loaded env-first
-// and redacted from log output (V7).
+// Config. Secrets (the ComicVine API key) are loaded env-first and redacted from
+// log output.
 package config
 
 import (
@@ -70,7 +70,7 @@ func Load(filePath string) (Config, error) {
 }
 
 // LogValue implements slog.LogValuer so the ComicVine API key is never written to
-// logs. Only non-secret fields are emitted; the key is masked (V7 / T-02-02-SECRET).
+// logs. Only non-secret fields are emitted; the key is masked.
 func (c Config) LogValue() slog.Value {
 	key := ""
 	if c.ComicVineAPIKey != "" {
