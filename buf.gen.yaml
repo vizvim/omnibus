@@ -1,0 +1,23 @@
+version: v2
+clean: true
+plugins:
+  # Go: protobuf messages
+  - local: protoc-gen-go
+    out: gen/go
+    opt: paths=source_relative
+  # Go: Connect service stubs (handlers + clients)
+  - local: protoc-gen-connect-go
+    out: gen/go
+    opt: paths=source_relative
+  # TS: messages + services (Connect-ES v2 unified plugin — NOT protoc-gen-connect-es).
+  # Output lands inside the frontend package (frontend/src/gen) so the generated
+  # modules resolve against frontend/node_modules (package-layout.md).
+  - local: ./frontend/node_modules/.bin/protoc-gen-es
+    out: frontend/src/gen
+    opt: target=ts
+  # TS: TanStack Query hooks (connect-query v2)
+  - local: ./frontend/node_modules/.bin/protoc-gen-connect-query
+    out: frontend/src/gen
+    opt: target=ts
+inputs:
+  - directory: proto

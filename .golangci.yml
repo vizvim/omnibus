@@ -3,6 +3,14 @@ version: "2"
 run:
   tests: true
 
+issues:
+  # gen/ holds buf-generated Go (proto + Connect); internal/repository/sqlc holds
+  # sqlc-generated query code. Both are generated and excluded from lint + coverage
+  # per package-layout.md.
+  exclude-dirs:
+    - gen
+    - internal/repository/sqlc
+
 linters:
   default: none
   enable:
@@ -140,6 +148,13 @@ linters:
           - gosec
           - noctx
           - unparam
+      # h2c is the cleartext-HTTP/2 transport locked by CLAUDE.md (x/net is pinned in
+      # the stack). staticcheck SA1019 flags it as deprecated in favour of the native
+      # http.Server.Protocols path; migrating off h2c is a deliberate later-phase
+      # decision, so suppress only this specific deprecation.
+      - linters:
+          - staticcheck
+        text: "SA1019:.*h2c"
 
 formatters:
   enable:
