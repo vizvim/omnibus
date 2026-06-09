@@ -40,7 +40,6 @@ func newService(t *testing.T) (*series.Service, *repository.Repositories, contex
 	svc := series.New(series.Deps{
 		Gateway:    gw,
 		Repos:      repos,
-		DataPath:   t.TempDir(),
 		AttemptCap: 5,
 		Logger:     logger,
 		LifeCtx:    ctx,

@@ -55,7 +55,7 @@ type StoryArc struct {
 	Name           string
 }
 
-func seriesFromRow(r repository.Series, publisher string) Series {
+func seriesFromRow(r repository.Series, publisher string, hasCover bool) Series {
 	return Series{
 		ID:                r.ID,
 		ComicvineVolumeID: r.ComicvineVolumeID,
@@ -63,13 +63,13 @@ func seriesFromRow(r repository.Series, publisher string) Series {
 		StartYear:         toInt32(r.StartYear.Int64),
 		Publisher:         publisher,
 		Status:            r.Status,
-		HasCover:          r.CoverPath.Valid,
+		HasCover:          hasCover,
 		TotalIssues:       toInt32(r.TotalIssues),
 		HaveIssues:        toInt32(r.HaveIssues),
 	}
 }
 
-func issueFromRow(r repository.Issue) Issue {
+func issueFromRow(r repository.Issue, hasCover bool) Issue {
 	return Issue{
 		ID:               r.ID,
 		SeriesID:         r.SeriesID,
@@ -80,7 +80,7 @@ func issueFromRow(r repository.Issue) Issue {
 		Title:            r.Title.String,
 		CoverDate:        r.CoverDate.String,
 		Status:           r.Status,
-		HasCover:         r.CoverPath.Valid,
+		HasCover:         hasCover,
 	}
 }
 

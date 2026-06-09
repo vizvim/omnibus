@@ -25,7 +25,6 @@ type Gateway interface {
 type Deps struct {
 	Gateway    Gateway
 	Repos      *repository.Repositories
-	DataPath   string
 	AttemptCap int
 	Logger     *slog.Logger
 	// LifeCtx bounds background import goroutines; cancel it on shutdown (PLAT-08).
@@ -38,7 +37,6 @@ type Deps struct {
 type Service struct {
 	gw         Gateway
 	repos      *repository.Repositories
-	dataPath   string
 	attemptCap int
 	logger     *slog.Logger
 	lifeCtx    context.Context
@@ -59,7 +57,6 @@ func New(d Deps) *Service {
 	return &Service{
 		gw:         d.Gateway,
 		repos:      d.Repos,
-		dataPath:   d.DataPath,
 		attemptCap: d.AttemptCap,
 		logger:     d.Logger,
 		lifeCtx:    d.LifeCtx,
@@ -142,7 +139,20 @@ func (s *Service) AddSeries(ctx context.Context, volumeID int64) (Series, error)
 	if vol.Publisher.Name != "" {
 		publisher = vol.Publisher.Name
 	}
-	return seriesFromRow(created, publisher), nil
+	// A freshly-added series has no cover yet — the import goroutine stores it later.
+	return seriesFromRow(created, publisher, false), nil
+}
+
+// coverPresent reports whether a cover blob exists for an entity. Presence checks are
+// best-effort: a failure must not fail the surrounding request, so it logs and treats
+// the cover as absent.
+func (s *Service) coverPresent(ctx context.Context, kind string, id int64) bool {
+	has, err := s.repos.Cover.Exists(ctx, kind, id)
+	if err != nil {
+		s.logger.Warn("cover presence check", slog.String("kind", kind), slog.Int64("id", id), slog.Any("error", err))
+		return false
+	}
+	return has
 }
 
 // ListSeries returns watched series (paged).
@@ -157,7 +167,7 @@ func (s *Service) ListSeries(ctx context.Context, page int32) ([]Series, error) 
 	}
 	out := make([]Series, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, seriesFromRow(r, ""))
+		out = append(out, seriesFromRow(r, "", s.coverPresent(ctx, "series", r.ID)))
 	}
 	return out, nil
 }
@@ -186,14 +196,19 @@ func (s *Service) GetSeries(ctx context.Context, seriesID int64) (View, error) {
 
 	issues := make([]Issue, 0, len(issueRows))
 	for _, r := range issueRows {
-		issues = append(issues, issueFromRow(r))
+		issues = append(issues, issueFromRow(r, s.coverPresent(ctx, "issues", r.ID)))
 	}
 	arcs := make([]StoryArc, 0, len(arcRows))
 	for _, r := range arcRows {
 		arcs = append(arcs, arcFromRow(r))
 	}
 
-	return View{Series: seriesFromRow(ser, publisher), Issues: issues, Publisher: publisher, StoryArcs: arcs}, nil
+	return View{
+		Series:    seriesFromRow(ser, publisher, s.coverPresent(ctx, "series", ser.ID)),
+		Issues:    issues,
+		Publisher: publisher,
+		StoryArcs: arcs,
+	}, nil
 }
 
 // UpdateSeriesSettings updates the watch status (Active/Paused/Ended).
@@ -207,7 +222,7 @@ func (s *Service) UpdateSeriesSettings(ctx context.Context, seriesID int64, stat
 	if err != nil {
 		return Series{}, err
 	}
-	return seriesFromRow(row, ""), nil
+	return seriesFromRow(row, "", s.coverPresent(ctx, "series", row.ID)), nil
 }
 
 func nowISO() string { return time.Now().UTC().Format(time.RFC3339) }

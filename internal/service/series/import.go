@@ -5,8 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
+	"net/http"
 
 	"github.com/vizvim/omnibus/internal/provider/metadata"
 	"github.com/vizvim/omnibus/internal/repository"
@@ -26,9 +25,10 @@ func (s *Service) startImport(ser repository.Series, vol metadata.VolumeDetail) 
 }
 
 // runImport paginates the volume's issues through the gateway, upserts each (idempotent
-// on comicvine_issue_id with a normalized (sort,qual)), downloads covers to /data, and
-// updates have/total counts as issues land (D-06). Re-running fills gaps (D-04). It
-// checks ctx.Err() between pages and writes so shutdown stops it promptly (D-05).
+// on comicvine_issue_id with a normalized (sort,qual)), stores covers in the SQLite
+// covers table, and updates have/total counts as issues land (D-06). Re-running fills
+// gaps (D-04). It checks ctx.Err() between pages and writes so shutdown stops it
+// promptly (D-05).
 func (s *Service) runImport(ctx context.Context, ser repository.Series, vol metadata.VolumeDetail) error {
 	if err := ctx.Err(); err != nil {
 		return errImportCancelled
@@ -36,10 +36,8 @@ func (s *Service) runImport(ctx context.Context, ser repository.Series, vol meta
 
 	// Series cover.
 	if vol.CoverURL != "" {
-		if path, err := s.downloadCover(ctx, "series", ser.ID, vol.CoverURL); err == nil && path != "" {
-			if uerr := s.repos.Series.UpdateCoverPath(ctx, ser.ID, path); uerr != nil {
-				s.logger.Warn("update series cover path", slog.Int64("series_id", ser.ID), slog.Any("error", uerr))
-			}
+		if err := s.downloadCover(ctx, "series", ser.ID, vol.CoverURL); err != nil {
+			s.logger.Warn("store series cover", slog.Int64("series_id", ser.ID), slog.Any("error", err))
 		}
 	}
 
@@ -79,10 +77,8 @@ func (s *Service) runImport(ctx context.Context, ser repository.Series, vol meta
 			imported++
 
 			if iss.CoverURL != "" {
-				if path, derr := s.downloadCover(ctx, "issues", stored.ID, iss.CoverURL); derr == nil && path != "" {
-					if uerr := s.repos.Issue.UpdateCoverPath(ctx, stored.ID, path); uerr != nil {
-						s.logger.Warn("update issue cover path", slog.Int64("issue_id", stored.ID), slog.Any("error", uerr))
-					}
+				if derr := s.downloadCover(ctx, "issues", stored.ID, iss.CoverURL); derr != nil {
+					s.logger.Warn("store issue cover", slog.Int64("issue_id", stored.ID), slog.Any("error", derr))
 				}
 			}
 		}
@@ -104,22 +100,21 @@ func (s *Service) runImport(ctx context.Context, ser repository.Series, vol meta
 	return nil
 }
 
-// downloadCover fetches cover bytes via the gateway (paced + SSRF-guarded) and writes
-// them under <dataPath>/covers/<kind>/<id>.jpg. The filename is derived from the
-// internal integer id, never the raw CV URL string (path-traversal guard, V12).
-func (s *Service) downloadCover(ctx context.Context, kind string, id int64, url string) (string, error) {
+// downloadCover fetches cover bytes via the gateway (paced + SSRF-guarded) and stores
+// them in the SQLite covers table keyed on (kind, id). The content type is detected from
+// the fetched bytes, falling back to image/jpeg when detection yields the generic
+// application/octet-stream (covers are always images).
+func (s *Service) downloadCover(ctx context.Context, kind string, id int64, url string) error {
 	data, err := s.gw.GetCover(ctx, url)
 	if err != nil {
-		return "", err
+		return err
 	}
-	dir := filepath.Join(s.dataPath, "covers", kind)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return "", fmt.Errorf("mkdir cover dir: %w", err)
+	ct := http.DetectContentType(data)
+	if ct == "application/octet-stream" {
+		ct = "image/jpeg"
 	}
-	// id is an integer, so the filename cannot contain traversal sequences.
-	file := filepath.Join(dir, fmt.Sprintf("%d.jpg", id))
-	if err := os.WriteFile(file, data, 0o600); err != nil {
-		return "", fmt.Errorf("write cover: %w", err)
+	if err := s.repos.Cover.Upsert(ctx, kind, id, data, ct); err != nil {
+		return fmt.Errorf("store cover: %w", err)
 	}
-	return file, nil
+	return nil
 }
