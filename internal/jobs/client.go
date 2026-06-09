@@ -46,8 +46,8 @@ func New(ctx context.Context, writeDB *sql.DB, maxWorkers int, logger *slog.Logg
 	if err != nil {
 		return nil, fmt.Errorf("build river migrator: %w", err)
 	}
-	if _, err := migrator.Migrate(ctx, rivermigrate.DirectionUp, nil); err != nil {
-		return nil, fmt.Errorf("apply river migrations: %w", err)
+	if _, migErr := migrator.Migrate(ctx, rivermigrate.DirectionUp, nil); migErr != nil {
+		return nil, fmt.Errorf("apply river migrations: %w", migErr)
 	}
 
 	riverClient, err := river.NewClient(driver, &river.Config{

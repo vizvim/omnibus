@@ -130,7 +130,9 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if err := g.Wait(); err != nil {
 		stopCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
-		_ = riverClient.Stop(stopCtx)
+		if stopErr := riverClient.Stop(stopCtx); stopErr != nil {
+			logger.Error("jobs engine drain", slog.Any("error", stopErr))
+		}
 		_ = database.Close()
 		return err
 	}

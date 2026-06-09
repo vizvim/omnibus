@@ -7,17 +7,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/riverqueue/river"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"
 
 	omnibusv1 "github.com/vizvim/omnibus/gen/go/omnibus/v1"
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
 	"github.com/vizvim/omnibus/internal/db"
+	"github.com/vizvim/omnibus/internal/jobs"
 	"github.com/vizvim/omnibus/internal/provider/metadata"
 	"github.com/vizvim/omnibus/internal/repository"
 	"github.com/vizvim/omnibus/internal/service/series"
@@ -37,13 +38,25 @@ func newClient(t *testing.T) (omnibusv1connect.SeriesServiceClient, *series.Serv
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	gw := metadata.NewGateway(fake, repository.NewMetadataCacheRepository(d), rate.NewLimiter(rate.Inf, 1), logger, time.Hour)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	t.Cleanup(func() { cancel(); wg.Wait() })
-
+	ctx := context.Background()
+	repos := repository.NewRepositories(d)
 	svc := series.New(series.Deps{
-		Gateway: gw, Repos: repository.NewRepositories(d),
-		AttemptCap: 5, Logger: logger, LifeCtx: ctx, WaitGroup: &wg,
+		Gateway: gw, Repos: repos,
+		AttemptCap: 5, Logger: logger,
+	})
+
+	// Wire a real started River jobs client so AddSeries enqueues a durable import job
+	// that the engine runs — exercising the same path app.go uses.
+	workers := river.NewWorkers()
+	river.AddWorker(workers, jobs.NewImportWorker(svc))
+	jobsClient, err := jobs.New(ctx, d.Write, 2, logger, workers)
+	require.NoError(t, err)
+	svc.SetEnqueuer(jobsClient)
+	require.NoError(t, jobsClient.Start(ctx))
+	t.Cleanup(func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = jobsClient.Stop(stopCtx)
 	})
 
 	handler := transport.NewSeriesHandler(svc)
