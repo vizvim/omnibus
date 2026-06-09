@@ -1,0 +1,65 @@
+package config_test
+
+import (
+	"bytes"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/vizvim/omnibus/internal/config"
+	"github.com/vizvim/omnibus/internal/observability"
+)
+
+func TestDefaultsApplied(t *testing.T) {
+	cfg, err := config.Load("")
+	require.NoError(t, err)
+	require.Equal(t, ":8080", cfg.HTTPAddr)
+	require.Equal(t, "/data/omnibus.db", cfg.DBPath)
+	require.Equal(t, "/data", cfg.DataPath)
+}
+
+func TestEnvOverridesFile(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("http_addr: \":9000\"\nlog_level: info\n"), 0o600))
+
+	t.Setenv("OMNIBUS_HTTP_ADDR", ":7777")
+
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+	require.Equal(t, ":7777", cfg.HTTPAddr, "OMNIBUS_ env var overrides the file value")
+	require.Equal(t, "info", cfg.LogLevel, "file value used when no env override")
+}
+
+func TestComicVineKeyFromEnv(t *testing.T) {
+	t.Setenv("OMNIBUS_COMICVINE_API_KEY", "super-secret-key")
+	cfg, err := config.Load("")
+	require.NoError(t, err)
+	require.Equal(t, "super-secret-key", cfg.ComicVineAPIKey)
+}
+
+func TestSecretNeverLogged(t *testing.T) {
+	const secret = "TOPSECRET-cv-key-12345"
+	t.Setenv("OMNIBUS_COMICVINE_API_KEY", secret)
+	cfg, err := config.Load("")
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	// Logging the config (via its LogValue redaction) must never emit the secret.
+	logger.Info("loaded config", slog.Any("config", cfg))
+
+	require.NotContains(t, buf.String(), secret, "ComicVine API key must never appear in logs")
+	require.Contains(t, buf.String(), "REDACTED", "secret should be masked")
+}
+
+func TestNewLoggerProducesValidLogger(t *testing.T) {
+	for _, format := range []string{"json", "text"} {
+		cfg := config.Config{LogLevel: "debug", LogFormat: format}
+		logger := observability.NewLogger(cfg, os.Stderr)
+		require.NotNil(t, logger)
+	}
+}
