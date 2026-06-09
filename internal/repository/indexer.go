@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"math"
 
 	"github.com/vizvim/omnibus/internal/db"
 	"github.com/vizvim/omnibus/internal/repository/sqlc"
@@ -133,7 +134,7 @@ func mapIndexer(in sqlc.Indexer) IndexerRow {
 		APIKey:     in.ApiKey.String,
 		Enabled:    in.Enabled != 0,
 		Categories: in.Categories.String,
-		Priority:   int32(in.Priority),
+		Priority:   indexerInt32(in.Priority),
 		UseForRSS:  in.UseForRss != 0,
 		CreatedAt:  in.CreatedAt,
 		UpdatedAt:  in.UpdatedAt,
@@ -154,4 +155,16 @@ func boolToInt(b bool) int64 {
 		return 1
 	}
 	return 0
+}
+
+// indexerInt32 clamps an int64 priority into int32 range (priorities are small; the
+// clamp keeps gosec G115 satisfied and is defensive).
+func indexerInt32(v int64) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if v < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(v)
 }
