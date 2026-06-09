@@ -46,6 +46,9 @@ const (
 	// SeriesServiceUpdateSeriesSettingsProcedure is the fully-qualified name of the SeriesService's
 	// UpdateSeriesSettings RPC.
 	SeriesServiceUpdateSeriesSettingsProcedure = "/omnibus.v1.SeriesService/UpdateSeriesSettings"
+	// SeriesServiceRefreshSeriesProcedure is the fully-qualified name of the SeriesService's
+	// RefreshSeries RPC.
+	SeriesServiceRefreshSeriesProcedure = "/omnibus.v1.SeriesService/RefreshSeries"
 )
 
 // SeriesServiceClient is a client for the omnibus.v1.SeriesService service.
@@ -60,6 +63,9 @@ type SeriesServiceClient interface {
 	GetSeries(context.Context, *connect.Request[v1.GetSeriesRequest]) (*connect.Response[v1.GetSeriesResponse], error)
 	// UpdateSeriesSettings updates per-series settings (e.g. watch status).
 	UpdateSeriesSettings(context.Context, *connect.Request[v1.UpdateSeriesSettingsRequest]) (*connect.Response[v1.UpdateSeriesSettingsResponse], error)
+	// RefreshSeries enqueues a durable, unique conditional metadata refresh for a
+	// series and returns the current series row (the UI polls GetSeries for the result).
+	RefreshSeries(context.Context, *connect.Request[v1.RefreshSeriesRequest]) (*connect.Response[v1.RefreshSeriesResponse], error)
 }
 
 // NewSeriesServiceClient constructs a client for the omnibus.v1.SeriesService service. By default,
@@ -103,6 +109,12 @@ func NewSeriesServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(seriesServiceMethods.ByName("UpdateSeriesSettings")),
 			connect.WithClientOptions(opts...),
 		),
+		refreshSeries: connect.NewClient[v1.RefreshSeriesRequest, v1.RefreshSeriesResponse](
+			httpClient,
+			baseURL+SeriesServiceRefreshSeriesProcedure,
+			connect.WithSchema(seriesServiceMethods.ByName("RefreshSeries")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -113,6 +125,7 @@ type seriesServiceClient struct {
 	listSeries           *connect.Client[v1.ListSeriesRequest, v1.ListSeriesResponse]
 	getSeries            *connect.Client[v1.GetSeriesRequest, v1.GetSeriesResponse]
 	updateSeriesSettings *connect.Client[v1.UpdateSeriesSettingsRequest, v1.UpdateSeriesSettingsResponse]
+	refreshSeries        *connect.Client[v1.RefreshSeriesRequest, v1.RefreshSeriesResponse]
 }
 
 // SearchComicVine calls omnibus.v1.SeriesService.SearchComicVine.
@@ -140,6 +153,11 @@ func (c *seriesServiceClient) UpdateSeriesSettings(ctx context.Context, req *con
 	return c.updateSeriesSettings.CallUnary(ctx, req)
 }
 
+// RefreshSeries calls omnibus.v1.SeriesService.RefreshSeries.
+func (c *seriesServiceClient) RefreshSeries(ctx context.Context, req *connect.Request[v1.RefreshSeriesRequest]) (*connect.Response[v1.RefreshSeriesResponse], error) {
+	return c.refreshSeries.CallUnary(ctx, req)
+}
+
 // SeriesServiceHandler is an implementation of the omnibus.v1.SeriesService service.
 type SeriesServiceHandler interface {
 	// SearchComicVine searches ComicVine for series candidates.
@@ -152,6 +170,9 @@ type SeriesServiceHandler interface {
 	GetSeries(context.Context, *connect.Request[v1.GetSeriesRequest]) (*connect.Response[v1.GetSeriesResponse], error)
 	// UpdateSeriesSettings updates per-series settings (e.g. watch status).
 	UpdateSeriesSettings(context.Context, *connect.Request[v1.UpdateSeriesSettingsRequest]) (*connect.Response[v1.UpdateSeriesSettingsResponse], error)
+	// RefreshSeries enqueues a durable, unique conditional metadata refresh for a
+	// series and returns the current series row (the UI polls GetSeries for the result).
+	RefreshSeries(context.Context, *connect.Request[v1.RefreshSeriesRequest]) (*connect.Response[v1.RefreshSeriesResponse], error)
 }
 
 // NewSeriesServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -191,6 +212,12 @@ func NewSeriesServiceHandler(svc SeriesServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(seriesServiceMethods.ByName("UpdateSeriesSettings")),
 		connect.WithHandlerOptions(opts...),
 	)
+	seriesServiceRefreshSeriesHandler := connect.NewUnaryHandler(
+		SeriesServiceRefreshSeriesProcedure,
+		svc.RefreshSeries,
+		connect.WithSchema(seriesServiceMethods.ByName("RefreshSeries")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/omnibus.v1.SeriesService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SeriesServiceSearchComicVineProcedure:
@@ -203,6 +230,8 @@ func NewSeriesServiceHandler(svc SeriesServiceHandler, opts ...connect.HandlerOp
 			seriesServiceGetSeriesHandler.ServeHTTP(w, r)
 		case SeriesServiceUpdateSeriesSettingsProcedure:
 			seriesServiceUpdateSeriesSettingsHandler.ServeHTTP(w, r)
+		case SeriesServiceRefreshSeriesProcedure:
+			seriesServiceRefreshSeriesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -230,4 +259,8 @@ func (UnimplementedSeriesServiceHandler) GetSeries(context.Context, *connect.Req
 
 func (UnimplementedSeriesServiceHandler) UpdateSeriesSettings(context.Context, *connect.Request[v1.UpdateSeriesSettingsRequest]) (*connect.Response[v1.UpdateSeriesSettingsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("omnibus.v1.SeriesService.UpdateSeriesSettings is not implemented"))
+}
+
+func (UnimplementedSeriesServiceHandler) RefreshSeries(context.Context, *connect.Request[v1.RefreshSeriesRequest]) (*connect.Response[v1.RefreshSeriesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("omnibus.v1.SeriesService.RefreshSeries is not implemented"))
 }

@@ -35,8 +35,11 @@ type Series struct {
 	CoverUrl          string                 `protobuf:"bytes,7,opt,name=cover_url,json=coverUrl,proto3" json:"cover_url,omitempty"`
 	TotalIssues       int32                  `protobuf:"varint,8,opt,name=total_issues,json=totalIssues,proto3" json:"total_issues,omitempty"`
 	HaveIssues        int32                  `protobuf:"varint,9,opt,name=have_issues,json=haveIssues,proto3" json:"have_issues,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// last_refreshed_at is the ISO-8601 timestamp of the most recent on-demand or
+	// scheduled metadata refresh, empty if the series has never been refreshed.
+	LastRefreshedAt string `protobuf:"bytes,10,opt,name=last_refreshed_at,json=lastRefreshedAt,proto3" json:"last_refreshed_at,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Series) Reset() {
@@ -130,6 +133,13 @@ func (x *Series) GetHaveIssues() int32 {
 		return x.HaveIssues
 	}
 	return 0
+}
+
+func (x *Series) GetLastRefreshedAt() string {
+	if x != nil {
+		return x.LastRefreshedAt
+	}
+	return ""
 }
 
 // Issue is a single issue within a series. issue_number is the raw display form;
@@ -792,12 +802,100 @@ func (x *UpdateSeriesSettingsResponse) GetSeries() *Series {
 	return nil
 }
 
+type RefreshSeriesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SeriesId      int64                  `protobuf:"varint,1,opt,name=series_id,json=seriesId,proto3" json:"series_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshSeriesRequest) Reset() {
+	*x = RefreshSeriesRequest{}
+	mi := &file_omnibus_v1_series_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshSeriesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshSeriesRequest) ProtoMessage() {}
+
+func (x *RefreshSeriesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_omnibus_v1_series_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshSeriesRequest.ProtoReflect.Descriptor instead.
+func (*RefreshSeriesRequest) Descriptor() ([]byte, []int) {
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *RefreshSeriesRequest) GetSeriesId() int64 {
+	if x != nil {
+		return x.SeriesId
+	}
+	return 0
+}
+
+type RefreshSeriesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Series        *Series                `protobuf:"bytes,1,opt,name=series,proto3" json:"series,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshSeriesResponse) Reset() {
+	*x = RefreshSeriesResponse{}
+	mi := &file_omnibus_v1_series_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshSeriesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshSeriesResponse) ProtoMessage() {}
+
+func (x *RefreshSeriesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_omnibus_v1_series_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshSeriesResponse.ProtoReflect.Descriptor instead.
+func (*RefreshSeriesResponse) Descriptor() ([]byte, []int) {
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *RefreshSeriesResponse) GetSeries() *Series {
+	if x != nil {
+		return x.Series
+	}
+	return nil
+}
+
 var File_omnibus_v1_series_proto protoreflect.FileDescriptor
 
 const file_omnibus_v1_series_proto_rawDesc = "" +
 	"\n" +
 	"\x17omnibus/v1/series.proto\x12\n" +
-	"omnibus.v1\x1a\x17omnibus/v1/common.proto\"\x92\x02\n" +
+	"omnibus.v1\x1a\x17omnibus/v1/common.proto\"\xbe\x02\n" +
 	"\x06Series\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12.\n" +
 	"\x13comicvine_volume_id\x18\x02 \x01(\x03R\x11comicvineVolumeId\x12\x12\n" +
@@ -809,7 +907,9 @@ const file_omnibus_v1_series_proto_rawDesc = "" +
 	"\tcover_url\x18\a \x01(\tR\bcoverUrl\x12!\n" +
 	"\ftotal_issues\x18\b \x01(\x05R\vtotalIssues\x12\x1f\n" +
 	"\vhave_issues\x18\t \x01(\x05R\n" +
-	"haveIssues\"\xea\x02\n" +
+	"haveIssues\x12*\n" +
+	"\x11last_refreshed_at\x18\n" +
+	" \x01(\tR\x0flastRefreshedAt\"\xea\x02\n" +
 	"\x05Issue\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1b\n" +
 	"\tseries_id\x18\x02 \x01(\x03R\bseriesId\x12,\n" +
@@ -854,14 +954,19 @@ const file_omnibus_v1_series_proto_rawDesc = "" +
 	"\tseries_id\x18\x01 \x01(\x03R\bseriesId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\"J\n" +
 	"\x1cUpdateSeriesSettingsResponse\x12*\n" +
-	"\x06series\x18\x01 \x01(\v2\x12.omnibus.v1.SeriesR\x06series2\xb7\x03\n" +
+	"\x06series\x18\x01 \x01(\v2\x12.omnibus.v1.SeriesR\x06series\"3\n" +
+	"\x14RefreshSeriesRequest\x12\x1b\n" +
+	"\tseries_id\x18\x01 \x01(\x03R\bseriesId\"C\n" +
+	"\x15RefreshSeriesResponse\x12*\n" +
+	"\x06series\x18\x01 \x01(\v2\x12.omnibus.v1.SeriesR\x06series2\x8d\x04\n" +
 	"\rSeriesService\x12Z\n" +
 	"\x0fSearchComicVine\x12\".omnibus.v1.SearchComicVineRequest\x1a#.omnibus.v1.SearchComicVineResponse\x12H\n" +
 	"\tAddSeries\x12\x1c.omnibus.v1.AddSeriesRequest\x1a\x1d.omnibus.v1.AddSeriesResponse\x12K\n" +
 	"\n" +
 	"ListSeries\x12\x1d.omnibus.v1.ListSeriesRequest\x1a\x1e.omnibus.v1.ListSeriesResponse\x12H\n" +
 	"\tGetSeries\x12\x1c.omnibus.v1.GetSeriesRequest\x1a\x1d.omnibus.v1.GetSeriesResponse\x12i\n" +
-	"\x14UpdateSeriesSettings\x12'.omnibus.v1.UpdateSeriesSettingsRequest\x1a(.omnibus.v1.UpdateSeriesSettingsResponseB7Z5github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1b\x06proto3"
+	"\x14UpdateSeriesSettings\x12'.omnibus.v1.UpdateSeriesSettingsRequest\x1a(.omnibus.v1.UpdateSeriesSettingsResponse\x12T\n" +
+	"\rRefreshSeries\x12 .omnibus.v1.RefreshSeriesRequest\x1a!.omnibus.v1.RefreshSeriesResponseB7Z5github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1b\x06proto3"
 
 var (
 	file_omnibus_v1_series_proto_rawDescOnce sync.Once
@@ -875,7 +980,7 @@ func file_omnibus_v1_series_proto_rawDescGZIP() []byte {
 	return file_omnibus_v1_series_proto_rawDescData
 }
 
-var file_omnibus_v1_series_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_omnibus_v1_series_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_omnibus_v1_series_proto_goTypes = []any{
 	(*Series)(nil),                       // 0: omnibus.v1.Series
 	(*Issue)(nil),                        // 1: omnibus.v1.Issue
@@ -890,10 +995,12 @@ var file_omnibus_v1_series_proto_goTypes = []any{
 	(*GetSeriesResponse)(nil),            // 10: omnibus.v1.GetSeriesResponse
 	(*UpdateSeriesSettingsRequest)(nil),  // 11: omnibus.v1.UpdateSeriesSettingsRequest
 	(*UpdateSeriesSettingsResponse)(nil), // 12: omnibus.v1.UpdateSeriesSettingsResponse
-	(IssueStatus)(0),                     // 13: omnibus.v1.IssueStatus
+	(*RefreshSeriesRequest)(nil),         // 13: omnibus.v1.RefreshSeriesRequest
+	(*RefreshSeriesResponse)(nil),        // 14: omnibus.v1.RefreshSeriesResponse
+	(IssueStatus)(0),                     // 15: omnibus.v1.IssueStatus
 }
 var file_omnibus_v1_series_proto_depIdxs = []int32{
-	13, // 0: omnibus.v1.Issue.status:type_name -> omnibus.v1.IssueStatus
+	15, // 0: omnibus.v1.Issue.status:type_name -> omnibus.v1.IssueStatus
 	0,  // 1: omnibus.v1.SearchComicVineResponse.candidates:type_name -> omnibus.v1.Series
 	0,  // 2: omnibus.v1.AddSeriesResponse.series:type_name -> omnibus.v1.Series
 	0,  // 3: omnibus.v1.ListSeriesResponse.series:type_name -> omnibus.v1.Series
@@ -901,21 +1008,24 @@ var file_omnibus_v1_series_proto_depIdxs = []int32{
 	1,  // 5: omnibus.v1.GetSeriesResponse.issues:type_name -> omnibus.v1.Issue
 	2,  // 6: omnibus.v1.GetSeriesResponse.story_arcs:type_name -> omnibus.v1.StoryArc
 	0,  // 7: omnibus.v1.UpdateSeriesSettingsResponse.series:type_name -> omnibus.v1.Series
-	3,  // 8: omnibus.v1.SeriesService.SearchComicVine:input_type -> omnibus.v1.SearchComicVineRequest
-	5,  // 9: omnibus.v1.SeriesService.AddSeries:input_type -> omnibus.v1.AddSeriesRequest
-	7,  // 10: omnibus.v1.SeriesService.ListSeries:input_type -> omnibus.v1.ListSeriesRequest
-	9,  // 11: omnibus.v1.SeriesService.GetSeries:input_type -> omnibus.v1.GetSeriesRequest
-	11, // 12: omnibus.v1.SeriesService.UpdateSeriesSettings:input_type -> omnibus.v1.UpdateSeriesSettingsRequest
-	4,  // 13: omnibus.v1.SeriesService.SearchComicVine:output_type -> omnibus.v1.SearchComicVineResponse
-	6,  // 14: omnibus.v1.SeriesService.AddSeries:output_type -> omnibus.v1.AddSeriesResponse
-	8,  // 15: omnibus.v1.SeriesService.ListSeries:output_type -> omnibus.v1.ListSeriesResponse
-	10, // 16: omnibus.v1.SeriesService.GetSeries:output_type -> omnibus.v1.GetSeriesResponse
-	12, // 17: omnibus.v1.SeriesService.UpdateSeriesSettings:output_type -> omnibus.v1.UpdateSeriesSettingsResponse
-	13, // [13:18] is the sub-list for method output_type
-	8,  // [8:13] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	0,  // 8: omnibus.v1.RefreshSeriesResponse.series:type_name -> omnibus.v1.Series
+	3,  // 9: omnibus.v1.SeriesService.SearchComicVine:input_type -> omnibus.v1.SearchComicVineRequest
+	5,  // 10: omnibus.v1.SeriesService.AddSeries:input_type -> omnibus.v1.AddSeriesRequest
+	7,  // 11: omnibus.v1.SeriesService.ListSeries:input_type -> omnibus.v1.ListSeriesRequest
+	9,  // 12: omnibus.v1.SeriesService.GetSeries:input_type -> omnibus.v1.GetSeriesRequest
+	11, // 13: omnibus.v1.SeriesService.UpdateSeriesSettings:input_type -> omnibus.v1.UpdateSeriesSettingsRequest
+	13, // 14: omnibus.v1.SeriesService.RefreshSeries:input_type -> omnibus.v1.RefreshSeriesRequest
+	4,  // 15: omnibus.v1.SeriesService.SearchComicVine:output_type -> omnibus.v1.SearchComicVineResponse
+	6,  // 16: omnibus.v1.SeriesService.AddSeries:output_type -> omnibus.v1.AddSeriesResponse
+	8,  // 17: omnibus.v1.SeriesService.ListSeries:output_type -> omnibus.v1.ListSeriesResponse
+	10, // 18: omnibus.v1.SeriesService.GetSeries:output_type -> omnibus.v1.GetSeriesResponse
+	12, // 19: omnibus.v1.SeriesService.UpdateSeriesSettings:output_type -> omnibus.v1.UpdateSeriesSettingsResponse
+	14, // 20: omnibus.v1.SeriesService.RefreshSeries:output_type -> omnibus.v1.RefreshSeriesResponse
+	15, // [15:21] is the sub-list for method output_type
+	9,  // [9:15] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_omnibus_v1_series_proto_init() }
@@ -930,7 +1040,7 @@ func file_omnibus_v1_series_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_omnibus_v1_series_proto_rawDesc), len(file_omnibus_v1_series_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file omnibus/v1/series.proto.
  */
 export const file_omnibus_v1_series: GenFile = /*@__PURE__*/
-  fileDesc("ChdvbW5pYnVzL3YxL3Nlcmllcy5wcm90bxIKb21uaWJ1cy52MSK0AQoGU2VyaWVzEgoKAmlkGAEgASgDEhsKE2NvbWljdmluZV92b2x1bWVfaWQYAiABKAMSDAoEbmFtZRgDIAEoCRISCgpzdGFydF95ZWFyGAQgASgFEhEKCXB1Ymxpc2hlchgFIAEoCRIOCgZzdGF0dXMYBiABKAkSEQoJY292ZXJfdXJsGAcgASgJEhQKDHRvdGFsX2lzc3VlcxgIIAEoBRITCgtoYXZlX2lzc3VlcxgJIAEoBSLyAQoFSXNzdWUSCgoCaWQYASABKAMSEQoJc2VyaWVzX2lkGAIgASgDEhoKEmNvbWljdmluZV9pc3N1ZV9pZBgDIAEoAxIUCgxpc3N1ZV9udW1iZXIYBCABKAkSGQoRaXNzdWVfbnVtYmVyX3NvcnQYBSABKAESHgoWaXNzdWVfbnVtYmVyX3F1YWxpZmllchgGIAEoCRINCgV0aXRsZRgHIAEoCRISCgpjb3Zlcl9kYXRlGAggASgJEicKBnN0YXR1cxgJIAEoDjIXLm9tbmlidXMudjEuSXNzdWVTdGF0dXMSEQoJY292ZXJfdXJsGAogASgJIj4KCFN0b3J5QXJjEgoKAmlkGAEgASgDEhgKEGNvbWljdmluZV9hcmNfaWQYAiABKAMSDAoEbmFtZRgDIAEoCSInChZTZWFyY2hDb21pY1ZpbmVSZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJIkEKF1NlYXJjaENvbWljVmluZVJlc3BvbnNlEiYKCmNhbmRpZGF0ZXMYASADKAsyEi5vbW5pYnVzLnYxLlNlcmllcyIvChBBZGRTZXJpZXNSZXF1ZXN0EhsKE2NvbWljdmluZV92b2x1bWVfaWQYASABKAMiNwoRQWRkU2VyaWVzUmVzcG9uc2USIgoGc2VyaWVzGAEgASgLMhIub21uaWJ1cy52MS5TZXJpZXMiMQoRTGlzdFNlcmllc1JlcXVlc3QSDAoEcGFnZRgBIAEoBRIOCgZmaWx0ZXIYAiABKAkiOAoSTGlzdFNlcmllc1Jlc3BvbnNlEiIKBnNlcmllcxgBIAMoCzISLm9tbmlidXMudjEuU2VyaWVzIiUKEEdldFNlcmllc1JlcXVlc3QSEQoJc2VyaWVzX2lkGAEgASgDIpcBChFHZXRTZXJpZXNSZXNwb25zZRIiCgZzZXJpZXMYASABKAsyEi5vbW5pYnVzLnYxLlNlcmllcxIhCgZpc3N1ZXMYAiADKAsyES5vbW5pYnVzLnYxLklzc3VlEhEKCXB1Ymxpc2hlchgDIAEoCRIoCgpzdG9yeV9hcmNzGAQgAygLMhQub21uaWJ1cy52MS5TdG9yeUFyYyJAChtVcGRhdGVTZXJpZXNTZXR0aW5nc1JlcXVlc3QSEQoJc2VyaWVzX2lkGAEgASgDEg4KBnN0YXR1cxgCIAEoCSJCChxVcGRhdGVTZXJpZXNTZXR0aW5nc1Jlc3BvbnNlEiIKBnNlcmllcxgBIAEoCzISLm9tbmlidXMudjEuU2VyaWVzMrcDCg1TZXJpZXNTZXJ2aWNlEloKD1NlYXJjaENvbWljVmluZRIiLm9tbmlidXMudjEuU2VhcmNoQ29taWNWaW5lUmVxdWVzdBojLm9tbmlidXMudjEuU2VhcmNoQ29taWNWaW5lUmVzcG9uc2USSAoJQWRkU2VyaWVzEhwub21uaWJ1cy52MS5BZGRTZXJpZXNSZXF1ZXN0Gh0ub21uaWJ1cy52MS5BZGRTZXJpZXNSZXNwb25zZRJLCgpMaXN0U2VyaWVzEh0ub21uaWJ1cy52MS5MaXN0U2VyaWVzUmVxdWVzdBoeLm9tbmlidXMudjEuTGlzdFNlcmllc1Jlc3BvbnNlEkgKCUdldFNlcmllcxIcLm9tbmlidXMudjEuR2V0U2VyaWVzUmVxdWVzdBodLm9tbmlidXMudjEuR2V0U2VyaWVzUmVzcG9uc2USaQoUVXBkYXRlU2VyaWVzU2V0dGluZ3MSJy5vbW5pYnVzLnYxLlVwZGF0ZVNlcmllc1NldHRpbmdzUmVxdWVzdBooLm9tbmlidXMudjEuVXBkYXRlU2VyaWVzU2V0dGluZ3NSZXNwb25zZUI3WjVnaXRodWIuY29tL3ZpenZpbS9vbW5pYnVzL2dlbi9nby9vbW5pYnVzL3YxO29tbmlidXN2MWIGcHJvdG8z", [file_omnibus_v1_common]);
+  fileDesc("ChdvbW5pYnVzL3YxL3Nlcmllcy5wcm90bxIKb21uaWJ1cy52MSLPAQoGU2VyaWVzEgoKAmlkGAEgASgDEhsKE2NvbWljdmluZV92b2x1bWVfaWQYAiABKAMSDAoEbmFtZRgDIAEoCRISCgpzdGFydF95ZWFyGAQgASgFEhEKCXB1Ymxpc2hlchgFIAEoCRIOCgZzdGF0dXMYBiABKAkSEQoJY292ZXJfdXJsGAcgASgJEhQKDHRvdGFsX2lzc3VlcxgIIAEoBRITCgtoYXZlX2lzc3VlcxgJIAEoBRIZChFsYXN0X3JlZnJlc2hlZF9hdBgKIAEoCSLyAQoFSXNzdWUSCgoCaWQYASABKAMSEQoJc2VyaWVzX2lkGAIgASgDEhoKEmNvbWljdmluZV9pc3N1ZV9pZBgDIAEoAxIUCgxpc3N1ZV9udW1iZXIYBCABKAkSGQoRaXNzdWVfbnVtYmVyX3NvcnQYBSABKAESHgoWaXNzdWVfbnVtYmVyX3F1YWxpZmllchgGIAEoCRINCgV0aXRsZRgHIAEoCRISCgpjb3Zlcl9kYXRlGAggASgJEicKBnN0YXR1cxgJIAEoDjIXLm9tbmlidXMudjEuSXNzdWVTdGF0dXMSEQoJY292ZXJfdXJsGAogASgJIj4KCFN0b3J5QXJjEgoKAmlkGAEgASgDEhgKEGNvbWljdmluZV9hcmNfaWQYAiABKAMSDAoEbmFtZRgDIAEoCSInChZTZWFyY2hDb21pY1ZpbmVSZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJIkEKF1NlYXJjaENvbWljVmluZVJlc3BvbnNlEiYKCmNhbmRpZGF0ZXMYASADKAsyEi5vbW5pYnVzLnYxLlNlcmllcyIvChBBZGRTZXJpZXNSZXF1ZXN0EhsKE2NvbWljdmluZV92b2x1bWVfaWQYASABKAMiNwoRQWRkU2VyaWVzUmVzcG9uc2USIgoGc2VyaWVzGAEgASgLMhIub21uaWJ1cy52MS5TZXJpZXMiMQoRTGlzdFNlcmllc1JlcXVlc3QSDAoEcGFnZRgBIAEoBRIOCgZmaWx0ZXIYAiABKAkiOAoSTGlzdFNlcmllc1Jlc3BvbnNlEiIKBnNlcmllcxgBIAMoCzISLm9tbmlidXMudjEuU2VyaWVzIiUKEEdldFNlcmllc1JlcXVlc3QSEQoJc2VyaWVzX2lkGAEgASgDIpcBChFHZXRTZXJpZXNSZXNwb25zZRIiCgZzZXJpZXMYASABKAsyEi5vbW5pYnVzLnYxLlNlcmllcxIhCgZpc3N1ZXMYAiADKAsyES5vbW5pYnVzLnYxLklzc3VlEhEKCXB1Ymxpc2hlchgDIAEoCRIoCgpzdG9yeV9hcmNzGAQgAygLMhQub21uaWJ1cy52MS5TdG9yeUFyYyJAChtVcGRhdGVTZXJpZXNTZXR0aW5nc1JlcXVlc3QSEQoJc2VyaWVzX2lkGAEgASgDEg4KBnN0YXR1cxgCIAEoCSJCChxVcGRhdGVTZXJpZXNTZXR0aW5nc1Jlc3BvbnNlEiIKBnNlcmllcxgBIAEoCzISLm9tbmlidXMudjEuU2VyaWVzIikKFFJlZnJlc2hTZXJpZXNSZXF1ZXN0EhEKCXNlcmllc19pZBgBIAEoAyI7ChVSZWZyZXNoU2VyaWVzUmVzcG9uc2USIgoGc2VyaWVzGAEgASgLMhIub21uaWJ1cy52MS5TZXJpZXMyjQQKDVNlcmllc1NlcnZpY2USWgoPU2VhcmNoQ29taWNWaW5lEiIub21uaWJ1cy52MS5TZWFyY2hDb21pY1ZpbmVSZXF1ZXN0GiMub21uaWJ1cy52MS5TZWFyY2hDb21pY1ZpbmVSZXNwb25zZRJICglBZGRTZXJpZXMSHC5vbW5pYnVzLnYxLkFkZFNlcmllc1JlcXVlc3QaHS5vbW5pYnVzLnYxLkFkZFNlcmllc1Jlc3BvbnNlEksKCkxpc3RTZXJpZXMSHS5vbW5pYnVzLnYxLkxpc3RTZXJpZXNSZXF1ZXN0Gh4ub21uaWJ1cy52MS5MaXN0U2VyaWVzUmVzcG9uc2USSAoJR2V0U2VyaWVzEhwub21uaWJ1cy52MS5HZXRTZXJpZXNSZXF1ZXN0Gh0ub21uaWJ1cy52MS5HZXRTZXJpZXNSZXNwb25zZRJpChRVcGRhdGVTZXJpZXNTZXR0aW5ncxInLm9tbmlidXMudjEuVXBkYXRlU2VyaWVzU2V0dGluZ3NSZXF1ZXN0Gigub21uaWJ1cy52MS5VcGRhdGVTZXJpZXNTZXR0aW5nc1Jlc3BvbnNlElQKDVJlZnJlc2hTZXJpZXMSIC5vbW5pYnVzLnYxLlJlZnJlc2hTZXJpZXNSZXF1ZXN0GiEub21uaWJ1cy52MS5SZWZyZXNoU2VyaWVzUmVzcG9uc2VCN1o1Z2l0aHViLmNvbS92aXp2aW0vb21uaWJ1cy9nZW4vZ28vb21uaWJ1cy92MTtvbW5pYnVzdjFiBnByb3RvMw", [file_omnibus_v1_common]);
 
 /**
  * Series is a watched comic volume, pinned to its immutable ComicVine volume id.
@@ -68,6 +68,14 @@ export type Series = Message<"omnibus.v1.Series"> & {
    * @generated from field: int32 have_issues = 9;
    */
   haveIssues: number;
+
+  /**
+   * last_refreshed_at is the ISO-8601 timestamp of the most recent on-demand or
+   * scheduled metadata refresh, empty if the series has never been refreshed.
+   *
+   * @generated from field: string last_refreshed_at = 10;
+   */
+  lastRefreshedAt: string;
 };
 
 /**
@@ -370,6 +378,40 @@ export const UpdateSeriesSettingsResponseSchema: GenMessage<UpdateSeriesSettings
   messageDesc(file_omnibus_v1_series, 12);
 
 /**
+ * @generated from message omnibus.v1.RefreshSeriesRequest
+ */
+export type RefreshSeriesRequest = Message<"omnibus.v1.RefreshSeriesRequest"> & {
+  /**
+   * @generated from field: int64 series_id = 1;
+   */
+  seriesId: bigint;
+};
+
+/**
+ * Describes the message omnibus.v1.RefreshSeriesRequest.
+ * Use `create(RefreshSeriesRequestSchema)` to create a new message.
+ */
+export const RefreshSeriesRequestSchema: GenMessage<RefreshSeriesRequest> = /*@__PURE__*/
+  messageDesc(file_omnibus_v1_series, 13);
+
+/**
+ * @generated from message omnibus.v1.RefreshSeriesResponse
+ */
+export type RefreshSeriesResponse = Message<"omnibus.v1.RefreshSeriesResponse"> & {
+  /**
+   * @generated from field: omnibus.v1.Series series = 1;
+   */
+  series?: Series | undefined;
+};
+
+/**
+ * Describes the message omnibus.v1.RefreshSeriesResponse.
+ * Use `create(RefreshSeriesResponseSchema)` to create a new message.
+ */
+export const RefreshSeriesResponseSchema: GenMessage<RefreshSeriesResponse> = /*@__PURE__*/
+  messageDesc(file_omnibus_v1_series, 14);
+
+/**
  * SeriesService owns series/issue/publisher/arc read+write, covering the
  * search -> add -> import -> view flow.
  *
@@ -425,6 +467,17 @@ export const SeriesService: GenService<{
     methodKind: "unary";
     input: typeof UpdateSeriesSettingsRequestSchema;
     output: typeof UpdateSeriesSettingsResponseSchema;
+  },
+  /**
+   * RefreshSeries enqueues a durable, unique conditional metadata refresh for a
+   * series and returns the current series row (the UI polls GetSeries for the result).
+   *
+   * @generated from rpc omnibus.v1.SeriesService.RefreshSeries
+   */
+  refreshSeries: {
+    methodKind: "unary";
+    input: typeof RefreshSeriesRequestSchema;
+    output: typeof RefreshSeriesResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_omnibus_v1_series, 0);

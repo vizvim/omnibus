@@ -19,6 +19,9 @@ message Series {
   string cover_url = 7;
   int32 total_issues = 8;
   int32 have_issues = 9;
+  // last_refreshed_at is the ISO-8601 timestamp of the most recent on-demand or
+  // scheduled metadata refresh, empty if the series has never been refreshed.
+  string last_refreshed_at = 10;
 }
 
 // Issue is a single issue within a series. issue_number is the raw display form;
@@ -89,6 +92,14 @@ message UpdateSeriesSettingsResponse {
   Series series = 1;
 }
 
+message RefreshSeriesRequest {
+  int64 series_id = 1;
+}
+
+message RefreshSeriesResponse {
+  Series series = 1;
+}
+
 // SeriesService owns series/issue/publisher/arc read+write, covering the
 // search -> add -> import -> view flow.
 service SeriesService {
@@ -102,4 +113,7 @@ service SeriesService {
   rpc GetSeries(GetSeriesRequest) returns (GetSeriesResponse);
   // UpdateSeriesSettings updates per-series settings (e.g. watch status).
   rpc UpdateSeriesSettings(UpdateSeriesSettingsRequest) returns (UpdateSeriesSettingsResponse);
+  // RefreshSeries enqueues a durable, unique conditional metadata refresh for a
+  // series and returns the current series row (the UI polls GetSeries for the result).
+  rpc RefreshSeries(RefreshSeriesRequest) returns (RefreshSeriesResponse);
 }
