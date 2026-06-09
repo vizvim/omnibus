@@ -1,0 +1,57 @@
+version: "3"
+
+tasks:
+  proto-generate:
+    desc: Lint protos and regenerate Go + TS Connect clients via buf v2
+    cmds:
+      - buf lint
+      - buf generate
+
+  sqlc-generate:
+    desc: Generate type-safe Go from SQL (sqlc). No-op until sqlc.yaml exists (lands in 02-02).
+    cmds:
+      - |
+        if [ -f sqlc.yaml ]; then
+          sqlc generate
+        else
+          echo "sqlc.yaml not present yet — skipping sqlc generate"
+        fi
+
+  generate:
+    desc: Run all code generation (proto clients + sqlc query code)
+    cmds:
+      - task: proto-generate
+      - task: sqlc-generate
+
+  build:
+    desc: Build the Go backend and the frontend bundle
+    cmds:
+      - go build ./...
+      - cd frontend && npm run build
+
+  test:go:
+    desc: Run the Go test suite
+    cmds:
+      - go test ./... -count=1
+
+  test:web:
+    desc: Run the frontend (vitest) test suite
+    cmds:
+      - cd frontend && npm run test
+
+  test:
+    desc: Run the full test suite (Go + frontend)
+    cmds:
+      - task: test:go
+      - task: test:web
+
+  lint:
+    desc: Lint Go (golangci-lint) and protos (buf lint)
+    cmds:
+      - golangci-lint run
+      - buf lint
+
+  docker:
+    desc: Build the Docker image (stub — full multi-stage Dockerfile lands in Phase 7 / OPS-03)
+    cmds:
+      - echo "docker target is a Phase 2 stub; multi-stage Dockerfile is delivered in Phase 7 (OPS-03)"

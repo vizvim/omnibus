@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package omnibus.v1;
+
+option go_package = "github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1";
+
+// IssueStatus is the lifecycle state of a single issue (schema.md / ADR 0004).
+// New issues default to ISSUE_STATUS_WANTED; the service layer owns transitions.
+enum IssueStatus {
+  ISSUE_STATUS_UNSPECIFIED = 0;
+  ISSUE_STATUS_WANTED = 1;
+  ISSUE_STATUS_SNATCHED = 2;
+  ISSUE_STATUS_DOWNLOADED = 3;
+  ISSUE_STATUS_ARCHIVED = 4;
+  ISSUE_STATUS_SKIPPED = 5;
+  ISSUE_STATUS_FAILED = 6;
+  ISSUE_STATUS_IGNORED = 7;
+}
+
+// IssueEventType enumerates the per-issue timeline events (OBS-01). Phase 2 only
+// stores series/issues; the enum is defined now so later phases reuse one source.
+enum IssueEventType {
+  ISSUE_EVENT_TYPE_UNSPECIFIED = 0;
+  ISSUE_EVENT_TYPE_SEARCHED = 1;
+  ISSUE_EVENT_TYPE_CANDIDATE_SELECTED = 2;
+  ISSUE_EVENT_TYPE_SNATCHED = 3;
+  ISSUE_EVENT_TYPE_FAILED = 4;
+  ISSUE_EVENT_TYPE_DOWNLOADED = 5;
+  ISSUE_EVENT_TYPE_PROCESSED = 6;
+}

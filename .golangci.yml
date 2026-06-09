@@ -3,6 +3,14 @@ version: "2"
 run:
   tests: true
 
+issues:
+  # gen/ holds buf-generated Go (proto + Connect); internal/repository/sqlc holds
+  # sqlc-generated query code. Both are generated and excluded from lint + coverage
+  # per package-layout.md.
+  exclude-dirs:
+    - gen
+    - internal/repository/sqlc
+
 linters:
   default: none
   enable:

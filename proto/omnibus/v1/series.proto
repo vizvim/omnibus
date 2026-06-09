@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package omnibus.v1;
+
+import "omnibus/v1/common.proto";
+
+option go_package = "github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1";
+
+// Series is a watched comic volume, pinned to its immutable ComicVine volume id
+// (META-06). cover_url is a backend-served URL mapping to the locally stored
+// cover bytes (D-07 / Pitfall 5) — never a hotlinked ComicVine URL.
+message Series {
+  int64 id = 1;
+  int64 comicvine_volume_id = 2;
+  string name = 3;
+  int32 start_year = 4;
+  string publisher = 5;
+  string status = 6; // Active/Paused/Ended
+  string cover_url = 7;
+  int32 total_issues = 8;
+  int32 have_issues = 9;
+}
+
+// Issue is a single issue within a series. issue_number is the raw display form;
+// issue_number_sort + issue_number_qualifier are the normalized sort key (SER-05)
+// so "7" never collides with "7.INH".
+message Issue {
+  int64 id = 1;
+  int64 series_id = 2;
+  int64 comicvine_issue_id = 3;
+  string issue_number = 4;
+  double issue_number_sort = 5;
+  string issue_number_qualifier = 6;
+  string title = 7;
+  string cover_date = 8;
+  IssueStatus status = 9;
+  string cover_url = 10;
+}
+
+// StoryArc is a named arc a series participates in (SER-06).
+message StoryArc {
+  int64 id = 1;
+  int64 comicvine_arc_id = 2;
+  string name = 3;
+}
+
+message SearchComicVineRequest {
+  string query = 1;
+}
+
+message SearchComicVineResponse {
+  repeated Series candidates = 1;
+}
+
+message AddSeriesRequest {
+  int64 comicvine_volume_id = 1;
+}
+
+message AddSeriesResponse {
+  Series series = 1;
+}
+
+message ListSeriesRequest {
+  int32 page = 1;
+  string filter = 2;
+}
+
+message ListSeriesResponse {
+  repeated Series series = 1;
+}
+
+message GetSeriesRequest {
+  int64 series_id = 1;
+}
+
+message GetSeriesResponse {
+  Series series = 1;
+  repeated Issue issues = 2;
+  string publisher = 3;
+  repeated StoryArc story_arcs = 4;
+}
+
+message UpdateSeriesSettingsRequest {
+  int64 series_id = 1;
+  string status = 2; // Active/Paused/Ended
+}
+
+message UpdateSeriesSettingsResponse {
+  Series series = 1;
+}
+
+// SeriesService owns series/issue/publisher/arc read+write (SER-*, META-01/06).
+// Phase 2 implements the search -> add -> import -> view vertical slice.
+service SeriesService {
+  // SearchComicVine searches ComicVine for series candidates (META-01).
+  rpc SearchComicVine(SearchComicVineRequest) returns (SearchComicVineResponse);
+  // AddSeries adds/watches a series by immutable volume id, returning fast (SER-01, D-03).
+  rpc AddSeries(AddSeriesRequest) returns (AddSeriesResponse);
+  // ListSeries lists watched series.
+  rpc ListSeries(ListSeriesRequest) returns (ListSeriesResponse);
+  // GetSeries returns a series with its issues, publisher, and story arcs (SER-03).
+  rpc GetSeries(GetSeriesRequest) returns (GetSeriesResponse);
+  // UpdateSeriesSettings updates per-series settings (e.g. watch status).
+  rpc UpdateSeriesSettings(UpdateSeriesSettingsRequest) returns (UpdateSeriesSettingsResponse);
+}
