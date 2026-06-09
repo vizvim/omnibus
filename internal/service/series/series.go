@@ -40,16 +40,20 @@ type Deps struct {
 	// Enqueuer durably enqueues the import job. It may be nil at construction and set
 	// later via SetEnqueuer to resolve the service<->jobs wiring order.
 	Enqueuer Enqueuer
+	// StalenessThreshold is how old a series' last_refreshed_at must be before the
+	// scheduled sweep refreshes it. Zero falls back to defaultStaleness.
+	StalenessThreshold time.Duration
 }
 
 // Service implements the SeriesService domain logic. It depends only on repository
 // interfaces, the metadata gateway, and the job Enqueuer.
 type Service struct {
-	gw         Gateway
-	repos      *repository.Repositories
-	attemptCap int
-	logger     *slog.Logger
-	enqueuer   Enqueuer
+	gw                 Gateway
+	repos              *repository.Repositories
+	attemptCap         int
+	logger             *slog.Logger
+	enqueuer           Enqueuer
+	stalenessThreshold time.Duration
 }
 
 // View is the assembled GetSeries result, expressed entirely in series-owned domain
@@ -61,14 +65,22 @@ type View struct {
 	StoryArcs []StoryArc
 }
 
+// defaultStaleness is the fallback sweep staleness threshold when Deps leaves it zero.
+const defaultStaleness = 7 * 24 * time.Hour
+
 // New constructs a Service.
 func New(d Deps) *Service {
+	staleness := d.StalenessThreshold
+	if staleness <= 0 {
+		staleness = defaultStaleness
+	}
 	return &Service{
-		gw:         d.Gateway,
-		repos:      d.Repos,
-		attemptCap: d.AttemptCap,
-		logger:     d.Logger,
-		enqueuer:   d.Enqueuer,
+		gw:                 d.Gateway,
+		repos:              d.Repos,
+		attemptCap:         d.AttemptCap,
+		logger:             d.Logger,
+		enqueuer:           d.Enqueuer,
+		stalenessThreshold: staleness,
 	}
 }
 
