@@ -11,6 +11,12 @@ package indexer
 
 import "context"
 
+// Indexer kinds. These are the values stored in indexers.kind and returned by Kind().
+const (
+	NewznabKind   = "newznab"
+	GetComicsKind = "getcomics"
+)
+
 // Candidate is one release returned by an IndexerProvider, normalized across sources.
 // It is the provider-layer struct; the proto Candidate (api-spec) is the transport
 // form, mapped provider -> service -> transport (like metadata.SeriesResult).

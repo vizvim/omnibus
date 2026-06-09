@@ -54,7 +54,7 @@ func NewNewznabProvider(baseURL, apiKey, categories string, opts ...NewznabOptio
 var _ IndexerProvider = (*NewznabProvider)(nil)
 
 // Kind reports the provider type.
-func (p *NewznabProvider) Kind() string { return "newznab" }
+func (p *NewznabProvider) Kind() string { return NewznabKind }
 
 // Host returns the base_url host the gateway keys its per-host limiter on.
 func (p *NewznabProvider) Host() string { return hostOf(p.baseURL) }

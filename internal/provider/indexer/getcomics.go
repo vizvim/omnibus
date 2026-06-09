@@ -49,7 +49,7 @@ func NewGetComicsProvider(baseURL string, opts ...GetComicsOption) *GetComicsPro
 var _ IndexerProvider = (*GetComicsProvider)(nil)
 
 // Kind reports the provider type.
-func (p *GetComicsProvider) Kind() string { return "getcomics" }
+func (p *GetComicsProvider) Kind() string { return GetComicsKind }
 
 // Host returns the base_url host the gateway keys its per-host limiter on.
 func (p *GetComicsProvider) Host() string { return hostOf(p.baseURL) }
