@@ -1,6 +1,10 @@
 -- 0001_init: the full initial schema realized as the first golang-migrate migration.
 -- PRAGMAs (WAL, busy_timeout, foreign_keys) are applied at connection open by
 -- internal/db, not in DDL.
+--
+-- Background jobs are NOT defined here: the River engine (ADR 0006) owns its own
+-- jobs schema via its own migrator. Cover art lives in the covers table (blob in
+-- SQLite), not on cover_path columns.
 
 CREATE TABLE publishers (
   id                     INTEGER PRIMARY KEY,
@@ -19,7 +23,6 @@ CREATE TABLE series (
   description         TEXT,
   status              TEXT NOT NULL DEFAULT 'Active'
                         CHECK (status IN ('Active','Paused','Ended')),
-  cover_path          TEXT,
   total_issues        INTEGER NOT NULL DEFAULT 0,
   have_issues         INTEGER NOT NULL DEFAULT 0,
   settings_json       TEXT,
@@ -43,13 +46,21 @@ CREATE TABLE issues (
                         CHECK (status IN ('Wanted','Snatched','Downloaded','Archived','Skipped','Failed','Ignored')),
   search_attempts     INTEGER NOT NULL DEFAULT 0,
   location            TEXT,
-  cover_path          TEXT,
   created_at          TEXT NOT NULL
 );
 CREATE INDEX idx_issues_series ON issues(series_id);
 CREATE INDEX idx_issues_status ON issues(status);
 CREATE UNIQUE INDEX uq_issues_series_number
   ON issues(series_id, issue_number_sort, COALESCE(issue_number_qual,''));
+
+CREATE TABLE covers (
+  entity_type  TEXT NOT NULL,
+  entity_id    INTEGER NOT NULL,
+  image        BLOB NOT NULL,
+  content_type TEXT NOT NULL,
+  updated_at   TEXT NOT NULL,
+  PRIMARY KEY (entity_type, entity_id)
+);
 
 CREATE TABLE story_arcs (
   id               INTEGER PRIMARY KEY,
@@ -109,30 +120,6 @@ CREATE TABLE metadata_cache (
   payload           TEXT NOT NULL,
   source_updated_at TEXT,
   fetched_at        TEXT NOT NULL
-);
-
-CREATE TABLE jobs (
-  id           INTEGER PRIMARY KEY,
-  kind         TEXT NOT NULL,
-  args_json    TEXT,
-  state        TEXT NOT NULL DEFAULT 'queued'
-                 CHECK (state IN ('queued','running','succeeded','failed','cancelled')),
-  attempts     INTEGER NOT NULL DEFAULT 0,
-  scheduled_at TEXT,
-  started_at   TEXT,
-  finished_at  TEXT,
-  error        TEXT,
-  created_at   TEXT NOT NULL
-);
-CREATE INDEX idx_jobs_state ON jobs(state);
-
-CREATE TABLE job_history (
-  id          INTEGER PRIMARY KEY,
-  job_id      INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
-  kind        TEXT NOT NULL,
-  state       TEXT NOT NULL,
-  detail      TEXT,
-  occurred_at TEXT NOT NULL
 );
 
 CREATE TABLE user_config (
