@@ -21,6 +21,32 @@ func (q *Queries) CountIssuesBySeries(ctx context.Context, seriesID int64) (int6
 	return count, err
 }
 
+const getIssueByID = `-- name: GetIssueByID :one
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, status, search_attempts, location, created_at FROM issues WHERE id = ?
+`
+
+func (q *Queries) GetIssueByID(ctx context.Context, id int64) (Issue, error) {
+	row := q.db.QueryRowContext(ctx, getIssueByID, id)
+	var i Issue
+	err := row.Scan(
+		&i.ID,
+		&i.SeriesID,
+		&i.ComicvineIssueID,
+		&i.IssueNumberRaw,
+		&i.IssueNumberSort,
+		&i.IssueNumberQual,
+		&i.Title,
+		&i.CoverDate,
+		&i.StoreDate,
+		&i.ReleaseDate,
+		&i.Status,
+		&i.SearchAttempts,
+		&i.Location,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listIssuesBySeries = `-- name: ListIssuesBySeries :many
 SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, status, search_attempts, location, created_at FROM issues
 WHERE series_id = ?

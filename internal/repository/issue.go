@@ -30,6 +30,7 @@ type IssueUpsert struct {
 // IssueRepository persists issues, pinned to comicvine_issue_id.
 type IssueRepository interface {
 	Upsert(ctx context.Context, in IssueUpsert) (Issue, error)
+	GetByID(ctx context.Context, id int64) (Issue, error)
 	ListBySeries(ctx context.Context, seriesID int64) ([]Issue, error)
 	CountBySeries(ctx context.Context, seriesID int64) (int64, error)
 	UpdateStatus(ctx context.Context, id int64, status string, searchAttempts int32) error
@@ -59,6 +60,10 @@ func (r *issueRepository) Upsert(ctx context.Context, in IssueUpsert) (Issue, er
 		Status:           in.Status,
 		CreatedAt:        in.CreatedAt,
 	})
+}
+
+func (r *issueRepository) GetByID(ctx context.Context, id int64) (Issue, error) {
+	return r.read.GetIssueByID(ctx, id)
 }
 
 func (r *issueRepository) ListBySeries(ctx context.Context, seriesID int64) ([]Issue, error) {

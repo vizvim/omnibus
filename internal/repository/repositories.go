@@ -13,6 +13,8 @@ type Repositories struct {
 	MetadataCache MetadataCacheRepository
 	UserConfig    UserConfigRepository
 	Indexers      IndexerRepository
+	Downloads     DownloadRepository
+	IssueEvents   IssueEventRepository
 }
 
 // NewRepositories constructs all repositories bound to the read/write pools.
@@ -26,5 +28,7 @@ func NewRepositories(d *db.DB) *Repositories {
 		MetadataCache: NewMetadataCacheRepository(d),
 		UserConfig:    NewUserConfigRepository(d),
 		Indexers:      NewIndexerRepository(d),
+		Downloads:     NewDownloadRepository(d),
+		IssueEvents:   NewIssueEventRepository(d),
 	}
 }

@@ -11,19 +11,27 @@ import (
 type Querier interface {
 	CountIssuesBySeries(ctx context.Context, seriesID int64) (int64, error)
 	CoverExists(ctx context.Context, arg CoverExistsParams) (bool, error)
+	// Idempotent upsert on the existing UNIQUE(provider, release_key, issue_id) index:
+	// a duplicate grab of the same release for the same issue updates in place (T-4-02).
+	CreateDownload(ctx context.Context, arg CreateDownloadParams) (Download, error)
 	CreateIndexer(ctx context.Context, arg CreateIndexerParams) (Indexer, error)
 	DeleteIndexer(ctx context.Context, id int64) error
 	GetCover(ctx context.Context, arg GetCoverParams) (GetCoverRow, error)
+	GetDownloadByID(ctx context.Context, id int64) (Download, error)
 	GetIndexer(ctx context.Context, id int64) (Indexer, error)
+	GetIssueByID(ctx context.Context, id int64) (Issue, error)
 	GetMetadataCache(ctx context.Context, cacheKey string) (MetadataCache, error)
 	GetPublisherByID(ctx context.Context, id int64) (Publisher, error)
 	GetSeriesByID(ctx context.Context, id int64) (Series, error)
 	GetSeriesByVolumeID(ctx context.Context, comicvineVolumeID int64) (Series, error)
 	GetUserConfig(ctx context.Context, key string) (UserConfig, error)
+	InsertIssueEvent(ctx context.Context, arg InsertIssueEventParams) (IssueEvent, error)
 	LinkArcIssue(ctx context.Context, arg LinkArcIssueParams) error
 	ListArcsBySeries(ctx context.Context, seriesID int64) ([]StoryArc, error)
+	ListDownloadsByIssue(ctx context.Context, issueID int64) ([]Download, error)
 	ListEnabledIndexers(ctx context.Context) ([]Indexer, error)
 	ListIndexers(ctx context.Context) ([]Indexer, error)
+	ListIssueEventsByIssue(ctx context.Context, issueID int64) ([]IssueEvent, error)
 	ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Issue, error)
 	ListSeries(ctx context.Context, arg ListSeriesParams) ([]Series, error)
 	// Active series never refreshed (NULL) or last refreshed before the cutoff, oldest

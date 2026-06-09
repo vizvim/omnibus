@@ -25,5 +25,8 @@ ORDER BY issue_number_sort, COALESCE(issue_number_qual, '');
 -- name: CountIssuesBySeries :one
 SELECT count(*) FROM issues WHERE series_id = ?;
 
+-- name: GetIssueByID :one
+SELECT * FROM issues WHERE id = ?;
+
 -- name: UpdateIssueStatus :exec
 UPDATE issues SET status = ?, search_attempts = ? WHERE id = ?;
