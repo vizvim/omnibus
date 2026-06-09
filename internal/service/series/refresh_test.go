@@ -126,6 +126,72 @@ func TestRunRefreshReimportsWhenChanged(t *testing.T) {
 	require.True(t, row.LastRefreshedAt.Valid)
 }
 
+// TestRunSweepEnqueuesOnlyStaleSeries: with two stale Active series seeded and a fake
+// enqueuer, RunSweep enqueues exactly one refresh per stale series and zero when none
+// are stale.
+func TestRunSweepEnqueuesOnlyStaleSeries(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "sweep.db")
+	require.NoError(t, db.Migrate(ctx, path))
+	d, err := db.Open(ctx, path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.Close() })
+
+	repos := repository.NewRepositories(d)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	enq := &fakeEnqueuer{}
+	// Short staleness so "recent" series are excluded and never-refreshed ones included.
+	svc := series.New(series.Deps{
+		Gateway: &stubGateway{}, Repos: repos, AttemptCap: 5, Logger: logger,
+		Enqueuer: enq, StalenessThreshold: time.Hour,
+	})
+
+	// Two stale Active (never refreshed) + one recently refreshed + one Paused.
+	mk := func(volID int64, status, lastRefreshed string) {
+		_, e := repos.Series.Upsert(ctx, repository.SeriesUpsert{
+			ComicvineVolumeID: volID, Name: "S", Status: status,
+			LastRefreshedAt: lastRefreshed, CreatedAt: "2026-01-01T00:00:00Z",
+		})
+		require.NoError(t, e)
+	}
+	mk(1, "Active", "")
+	mk(2, "Active", "")
+	mk(3, "Active", time.Now().UTC().Format(time.RFC3339)) // fresh -> excluded
+	mk(4, "Paused", "")                                    // not Active -> excluded
+
+	require.NoError(t, svc.RunSweep(ctx))
+	require.Equal(t, 2, enq.refreshCount(), "one refresh enqueued per stale Active series")
+}
+
+// TestRunSweepEnqueuesNothingWhenAllFresh: no stale series -> no enqueues.
+func TestRunSweepEnqueuesNothingWhenAllFresh(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "sweep-fresh.db")
+	require.NoError(t, db.Migrate(ctx, path))
+	d, err := db.Open(ctx, path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.Close() })
+
+	repos := repository.NewRepositories(d)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	enq := &fakeEnqueuer{}
+	svc := series.New(series.Deps{
+		Gateway: &stubGateway{}, Repos: repos, AttemptCap: 5, Logger: logger,
+		Enqueuer: enq, StalenessThreshold: 7 * 24 * time.Hour,
+	})
+
+	_, err = repos.Series.Upsert(ctx, repository.SeriesUpsert{
+		ComicvineVolumeID: 1, Name: "Fresh", Status: "Active",
+		LastRefreshedAt: time.Now().UTC().Format(time.RFC3339), CreatedAt: "2026-01-01T00:00:00Z",
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, svc.RunSweep(ctx))
+	require.Zero(t, enq.refreshCount(), "no stale series => no refresh enqueued")
+}
+
 // TestRefreshSeriesEnqueuesFast: RefreshSeries enqueues a refresh job (fake enqueuer)
 // and returns the current series without running the refresh inline.
 func TestRefreshSeriesEnqueuesFast(t *testing.T) {
