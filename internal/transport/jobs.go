@@ -77,7 +77,8 @@ func jobRunStateToProto(s jobsvc.JobRunState) omnibusv1.JobRunState {
 	case jobsvc.StateFailed:
 		return omnibusv1.JobRunState_JOB_RUN_STATE_FAILED
 	case jobsvc.StateCancelled:
-		return omnibusv1.JobRunState_JOB_RUN_STATE_CANCELLED
+		return omnibusv1.JobRunState_JOB_RUN_STATE_CANCELLED //nolint:misspell // generated proto enum value
+
 	default:
 		return omnibusv1.JobRunState_JOB_RUN_STATE_UNSPECIFIED
 	}

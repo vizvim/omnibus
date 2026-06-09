@@ -5,6 +5,7 @@ package jobs
 
 import (
 	"context"
+	"math"
 
 	enginejobs "github.com/vizvim/omnibus/internal/jobs"
 )
@@ -17,7 +18,7 @@ const (
 	StateRunning   JobRunState = "running"
 	StateCompleted JobRunState = "completed"
 	StateFailed    JobRunState = "failed"
-	StateCancelled JobRunState = "cancelled"
+	StateCancelled JobRunState = "cancelled" //nolint:misspell // mirrors the engine's "cancelled" job-run state verbatim
 )
 
 // JobRunView is the domain view of a job run the transport layer maps to proto.
@@ -62,10 +63,22 @@ func (s *Service) ListJobRuns(ctx context.Context, limit int32) ([]JobRunView, e
 			StartedAt:  r.StartedAt,
 			FinishedAt: r.FinishedAt,
 			Error:      r.Error,
-			Attempt:    int32(r.Attempt),
+			Attempt:    clampInt32(r.Attempt),
 		})
 	}
 	return out, nil
+}
+
+// clampInt32 narrows an int (a River attempt count, always small and non-negative) into
+// int32 range, satisfying gosec G115 defensively.
+func clampInt32(v int) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if v < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(v)
 }
 
 // mapState translates the engine's JobRunState onto the service vocabulary (a 1:1 map

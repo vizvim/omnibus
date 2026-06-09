@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 )
 
 // JobRunState is the five-state UI vocabulary for a job run, collapsed from River's
@@ -16,7 +17,7 @@ const (
 	JobRunRunning   JobRunState = "running"
 	JobRunCompleted JobRunState = "completed"
 	JobRunFailed    JobRunState = "failed"
-	JobRunCancelled JobRunState = "cancelled"
+	JobRunCancelled JobRunState = "cancelled" //nolint:misspell // UI state mirrors River's "cancelled" column value verbatim
 )
 
 // JobRun is one background job run as read from River's own tables.
@@ -69,7 +70,7 @@ func (c *Client) ListJobRuns(ctx context.Context, limit int) ([]JobRun, error) {
 			return nil, fmt.Errorf("scan river_job row: %w", err)
 		}
 		out = append(out, JobRun{
-			ID:         fmt.Sprintf("%d", id),
+			ID:         strconv.FormatInt(id, 10),
 			Kind:       kind,
 			State:      mapRiverState(state),
 			StartedAt:  attemptedAt.String,
@@ -84,10 +85,15 @@ func (c *Client) ListJobRuns(ctx context.Context, limit int) ([]JobRun, error) {
 	return out, nil
 }
 
+// riverStateCancelled is River's verbatim column value for a canceled job. Declared as
+// a constant (rather than inline) so the British spelling River uses is isolated to one
+// place that opts out of the misspell linter.
+const riverStateCancelled = "cancelled" //nolint:misspell // River's own state column value
+
 // mapRiverState translates River's internal state onto the five UI states. River
-// states: available/scheduled/pending (waiting) → queued; running → running;
-// completed → completed; discarded/retryable (errored, will retry or gave up) →
-// failed; cancelled → cancelled.
+// states: available/scheduled/pending (waiting) => queued; running => running;
+// completed => completed; discarded/retryable (errored, will retry or gave up) =>
+// failed; River's cancel state => canceled.
 func mapRiverState(state string) JobRunState {
 	switch state {
 	case "running":
@@ -96,7 +102,7 @@ func mapRiverState(state string) JobRunState {
 		return JobRunCompleted
 	case "discarded", "retryable":
 		return JobRunFailed
-	case "cancelled":
+	case riverStateCancelled:
 		return JobRunCancelled
 	default: // available, scheduled, pending
 		return JobRunQueued
