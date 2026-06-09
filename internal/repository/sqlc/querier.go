@@ -27,6 +27,7 @@ type Querier interface {
 	SetUserConfig(ctx context.Context, arg SetUserConfigParams) error
 	UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusParams) error
 	UpdateSeriesCounts(ctx context.Context, arg UpdateSeriesCountsParams) error
+	UpdateSeriesLastRefreshed(ctx context.Context, arg UpdateSeriesLastRefreshedParams) error
 	UpdateSeriesSettings(ctx context.Context, arg UpdateSeriesSettingsParams) (Series, error)
 	// Idempotent on the immutable comicvine_arc_id.
 	UpsertArc(ctx context.Context, arg UpsertArcParams) (StoryArc, error)

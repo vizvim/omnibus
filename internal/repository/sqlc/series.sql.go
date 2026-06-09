@@ -120,6 +120,20 @@ func (q *Queries) UpdateSeriesCounts(ctx context.Context, arg UpdateSeriesCounts
 	return err
 }
 
+const updateSeriesLastRefreshed = `-- name: UpdateSeriesLastRefreshed :exec
+UPDATE series SET last_refreshed_at = ? WHERE id = ?
+`
+
+type UpdateSeriesLastRefreshedParams struct {
+	LastRefreshedAt sql.NullString
+	ID              int64
+}
+
+func (q *Queries) UpdateSeriesLastRefreshed(ctx context.Context, arg UpdateSeriesLastRefreshedParams) error {
+	_, err := q.db.ExecContext(ctx, updateSeriesLastRefreshed, arg.LastRefreshedAt, arg.ID)
+	return err
+}
+
 const updateSeriesSettings = `-- name: UpdateSeriesSettings :one
 UPDATE series SET status = ?, settings_json = ? WHERE id = ?
 RETURNING id, comicvine_volume_id, publisher_id, name, start_year, description, status, total_issues, have_issues, settings_json, last_refreshed_at, created_at

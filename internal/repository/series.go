@@ -40,6 +40,7 @@ type SeriesRepository interface {
 	List(ctx context.Context, limit, offset int32) ([]Series, error)
 	UpdateSettings(ctx context.Context, id int64, status, settingsJSON string) (Series, error)
 	UpdateCounts(ctx context.Context, id int64, total, have int32) error
+	UpdateLastRefreshed(ctx context.Context, id int64, refreshedAt string) error
 }
 
 type seriesRepository struct {
@@ -93,6 +94,13 @@ func (r *seriesRepository) UpdateCounts(ctx context.Context, id int64, total, ha
 		TotalIssues: int64(total),
 		HaveIssues:  int64(have),
 		ID:          id,
+	})
+}
+
+func (r *seriesRepository) UpdateLastRefreshed(ctx context.Context, id int64, refreshedAt string) error {
+	return r.write.UpdateSeriesLastRefreshed(ctx, sqlc.UpdateSeriesLastRefreshedParams{
+		LastRefreshedAt: nullString(refreshedAt),
+		ID:              id,
 	})
 }
 

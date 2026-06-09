@@ -24,3 +24,22 @@ func (ImportArgs) InsertOpts() river.InsertOpts {
 		UniqueOpts: river.UniqueOpts{ByArgs: true},
 	}
 }
+
+// RefreshArgs are the River job arguments for a conditional metadata refresh. Like
+// ImportArgs it is unique by SeriesID so a duplicate refresh enqueue for a series that
+// already has a queued/running refresh collapses into a no-op (D-03).
+type RefreshArgs struct {
+	SeriesID          int64 `json:"series_id"          river:"unique"`
+	ComicvineVolumeID int64 `json:"comicvine_volume_id"`
+}
+
+// Kind uniquely identifies the refresh job type, stable across deploys.
+func (RefreshArgs) Kind() string { return "refresh_series" }
+
+// InsertOpts enforces uniqueness on SeriesID (see RefreshArgs doc).
+func (RefreshArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{
+		Queue:      river.QueueDefault,
+		UniqueOpts: river.UniqueOpts{ByArgs: true},
+	}
+}

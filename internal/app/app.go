@@ -75,6 +75,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewImportWorker(svc))
+	river.AddWorker(workers, jobs.NewRefreshWorker(svc))
 
 	riverClient, err := jobs.New(ctx, database.Write, cfg.RiverWorkers, logger, workers)
 	if err != nil {

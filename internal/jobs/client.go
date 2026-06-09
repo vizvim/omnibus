@@ -95,3 +95,17 @@ func (c *Client) EnqueueImport(ctx context.Context, seriesID, comicvineVolumeID 
 	}
 	return nil
 }
+
+// EnqueueRefresh durably enqueues a conditional refresh job for a series. Duplicate
+// enqueues for the same series collapse via the job's uniqueness opts (see
+// RefreshArgs.InsertOpts) so a double "Refresh now" click does not double-queue.
+func (c *Client) EnqueueRefresh(ctx context.Context, seriesID, comicvineVolumeID int64) error {
+	_, err := c.river.Insert(ctx, RefreshArgs{
+		SeriesID:          seriesID,
+		ComicvineVolumeID: comicvineVolumeID,
+	}, nil)
+	if err != nil {
+		return fmt.Errorf("enqueue refresh for series %d: %w", seriesID, err)
+	}
+	return nil
+}

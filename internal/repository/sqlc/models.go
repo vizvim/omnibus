@@ -74,28 +74,6 @@ type IssueEvent struct {
 	OccurredAt  string
 }
 
-type Job struct {
-	ID          int64
-	Kind        string
-	ArgsJson    sql.NullString
-	State       string
-	Attempts    int64
-	ScheduledAt sql.NullString
-	StartedAt   sql.NullString
-	FinishedAt  sql.NullString
-	Error       sql.NullString
-	CreatedAt   string
-}
-
-type JobHistory struct {
-	ID         int64
-	JobID      sql.NullInt64
-	Kind       string
-	State      string
-	Detail     sql.NullString
-	OccurredAt string
-}
-
 type MetadataCache struct {
 	ID              int64
 	CacheKey        string

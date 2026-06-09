@@ -33,3 +33,6 @@ RETURNING *;
 
 -- name: UpdateSeriesCounts :exec
 UPDATE series SET total_issues = ?, have_issues = ? WHERE id = ?;
+
+-- name: UpdateSeriesLastRefreshed :exec
+UPDATE series SET last_refreshed_at = ? WHERE id = ?;
