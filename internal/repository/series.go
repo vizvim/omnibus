@@ -41,6 +41,7 @@ type SeriesRepository interface {
 	UpdateSettings(ctx context.Context, id int64, status, settingsJSON string) (Series, error)
 	UpdateCounts(ctx context.Context, id int64, total, have int32) error
 	UpdateLastRefreshed(ctx context.Context, id int64, refreshedAt string) error
+	ListStale(ctx context.Context, cutoffISO string, limit int32) ([]Series, error)
 }
 
 type seriesRepository struct {
@@ -101,6 +102,15 @@ func (r *seriesRepository) UpdateLastRefreshed(ctx context.Context, id int64, re
 	return r.write.UpdateSeriesLastRefreshed(ctx, sqlc.UpdateSeriesLastRefreshedParams{
 		LastRefreshedAt: nullString(refreshedAt),
 		ID:              id,
+	})
+}
+
+// ListStale returns Active series never refreshed or last refreshed before cutoffISO,
+// oldest first, bounded by limit. It reads through the read pool.
+func (r *seriesRepository) ListStale(ctx context.Context, cutoffISO string, limit int32) ([]Series, error) {
+	return r.read.ListStaleSeries(ctx, sqlc.ListStaleSeriesParams{
+		LastRefreshedAt: nullString(cutoffISO),
+		Limit:           int64(limit),
 	})
 }
 

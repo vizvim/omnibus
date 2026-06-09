@@ -105,6 +105,58 @@ func (q *Queries) ListSeries(ctx context.Context, arg ListSeriesParams) ([]Serie
 	return items, nil
 }
 
+const listStaleSeries = `-- name: ListStaleSeries :many
+SELECT id, comicvine_volume_id, publisher_id, name, start_year, description, status, total_issues, have_issues, settings_json, last_refreshed_at, created_at FROM series
+WHERE status = 'Active'
+  AND (last_refreshed_at IS NULL OR last_refreshed_at < ?)
+ORDER BY last_refreshed_at IS NOT NULL, last_refreshed_at
+LIMIT ?
+`
+
+type ListStaleSeriesParams struct {
+	LastRefreshedAt sql.NullString
+	Limit           int64
+}
+
+// Active series never refreshed (NULL) or last refreshed before the cutoff, oldest
+// first (NULLs lead). Bounded by LIMIT to keep each sweep tick small. Paused/Ended
+// series are excluded: they are not being watched for freshness.
+func (q *Queries) ListStaleSeries(ctx context.Context, arg ListStaleSeriesParams) ([]Series, error) {
+	rows, err := q.db.QueryContext(ctx, listStaleSeries, arg.LastRefreshedAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Series{}
+	for rows.Next() {
+		var i Series
+		if err := rows.Scan(
+			&i.ID,
+			&i.ComicvineVolumeID,
+			&i.PublisherID,
+			&i.Name,
+			&i.StartYear,
+			&i.Description,
+			&i.Status,
+			&i.TotalIssues,
+			&i.HaveIssues,
+			&i.SettingsJson,
+			&i.LastRefreshedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateSeriesCounts = `-- name: UpdateSeriesCounts :exec
 UPDATE series SET total_issues = ?, have_issues = ? WHERE id = ?
 `
