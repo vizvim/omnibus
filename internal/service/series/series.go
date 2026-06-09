@@ -17,6 +17,9 @@ type Gateway interface {
 	GetVolume(ctx context.Context, volumeID int64) (metadata.VolumeDetail, error)
 	ListIssues(ctx context.Context, volumeID int64, offset int) ([]metadata.IssueDetail, bool, error)
 	GetCover(ctx context.Context, url string) ([]byte, error)
+	// CachedSourceUpdatedAt returns the cached CV date_last_updated marker for a
+	// volume (empty/false if absent) — the conditional-refresh comparison point.
+	CachedSourceUpdatedAt(ctx context.Context, volumeID int64) (string, bool)
 }
 
 // Enqueuer durably enqueues background work for the service. It is satisfied by the
