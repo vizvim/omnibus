@@ -11,7 +11,7 @@ import (
 )
 
 const getSeriesByID = `-- name: GetSeriesByID :one
-SELECT id, comicvine_volume_id, publisher_id, name, start_year, description, status, cover_path, total_issues, have_issues, settings_json, last_refreshed_at, created_at FROM series WHERE id = ?
+SELECT id, comicvine_volume_id, publisher_id, name, start_year, description, status, total_issues, have_issues, settings_json, last_refreshed_at, created_at FROM series WHERE id = ?
 `
 
 func (q *Queries) GetSeriesByID(ctx context.Context, id int64) (Series, error) {
@@ -25,7 +25,6 @@ func (q *Queries) GetSeriesByID(ctx context.Context, id int64) (Series, error) {
 		&i.StartYear,
 		&i.Description,
 		&i.Status,
-		&i.CoverPath,
 		&i.TotalIssues,
 		&i.HaveIssues,
 		&i.SettingsJson,
@@ -36,7 +35,7 @@ func (q *Queries) GetSeriesByID(ctx context.Context, id int64) (Series, error) {
 }
 
 const getSeriesByVolumeID = `-- name: GetSeriesByVolumeID :one
-SELECT id, comicvine_volume_id, publisher_id, name, start_year, description, status, cover_path, total_issues, have_issues, settings_json, last_refreshed_at, created_at FROM series WHERE comicvine_volume_id = ?
+SELECT id, comicvine_volume_id, publisher_id, name, start_year, description, status, total_issues, have_issues, settings_json, last_refreshed_at, created_at FROM series WHERE comicvine_volume_id = ?
 `
 
 func (q *Queries) GetSeriesByVolumeID(ctx context.Context, comicvineVolumeID int64) (Series, error) {
@@ -50,7 +49,6 @@ func (q *Queries) GetSeriesByVolumeID(ctx context.Context, comicvineVolumeID int
 		&i.StartYear,
 		&i.Description,
 		&i.Status,
-		&i.CoverPath,
 		&i.TotalIssues,
 		&i.HaveIssues,
 		&i.SettingsJson,
@@ -61,7 +59,7 @@ func (q *Queries) GetSeriesByVolumeID(ctx context.Context, comicvineVolumeID int
 }
 
 const listSeries = `-- name: ListSeries :many
-SELECT id, comicvine_volume_id, publisher_id, name, start_year, description, status, cover_path, total_issues, have_issues, settings_json, last_refreshed_at, created_at FROM series
+SELECT id, comicvine_volume_id, publisher_id, name, start_year, description, status, total_issues, have_issues, settings_json, last_refreshed_at, created_at FROM series
 ORDER BY name
 LIMIT ? OFFSET ?
 `
@@ -88,7 +86,6 @@ func (q *Queries) ListSeries(ctx context.Context, arg ListSeriesParams) ([]Serie
 			&i.StartYear,
 			&i.Description,
 			&i.Status,
-			&i.CoverPath,
 			&i.TotalIssues,
 			&i.HaveIssues,
 			&i.SettingsJson,
@@ -123,23 +120,9 @@ func (q *Queries) UpdateSeriesCounts(ctx context.Context, arg UpdateSeriesCounts
 	return err
 }
 
-const updateSeriesCoverPath = `-- name: UpdateSeriesCoverPath :exec
-UPDATE series SET cover_path = ? WHERE id = ?
-`
-
-type UpdateSeriesCoverPathParams struct {
-	CoverPath sql.NullString
-	ID        int64
-}
-
-func (q *Queries) UpdateSeriesCoverPath(ctx context.Context, arg UpdateSeriesCoverPathParams) error {
-	_, err := q.db.ExecContext(ctx, updateSeriesCoverPath, arg.CoverPath, arg.ID)
-	return err
-}
-
 const updateSeriesSettings = `-- name: UpdateSeriesSettings :one
 UPDATE series SET status = ?, settings_json = ? WHERE id = ?
-RETURNING id, comicvine_volume_id, publisher_id, name, start_year, description, status, cover_path, total_issues, have_issues, settings_json, last_refreshed_at, created_at
+RETURNING id, comicvine_volume_id, publisher_id, name, start_year, description, status, total_issues, have_issues, settings_json, last_refreshed_at, created_at
 `
 
 type UpdateSeriesSettingsParams struct {
@@ -159,7 +142,6 @@ func (q *Queries) UpdateSeriesSettings(ctx context.Context, arg UpdateSeriesSett
 		&i.StartYear,
 		&i.Description,
 		&i.Status,
-		&i.CoverPath,
 		&i.TotalIssues,
 		&i.HaveIssues,
 		&i.SettingsJson,
@@ -172,20 +154,19 @@ func (q *Queries) UpdateSeriesSettings(ctx context.Context, arg UpdateSeriesSett
 const upsertSeries = `-- name: UpsertSeries :one
 INSERT INTO series (
   comicvine_volume_id, publisher_id, name, start_year, description,
-  status, cover_path, total_issues, have_issues, settings_json,
+  status, total_issues, have_issues, settings_json,
   last_refreshed_at, created_at
 ) VALUES (
-  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 ON CONFLICT(comicvine_volume_id) DO UPDATE SET
   publisher_id      = excluded.publisher_id,
   name              = excluded.name,
   start_year        = excluded.start_year,
   description       = excluded.description,
-  cover_path        = excluded.cover_path,
   settings_json     = excluded.settings_json,
   last_refreshed_at = excluded.last_refreshed_at
-RETURNING id, comicvine_volume_id, publisher_id, name, start_year, description, status, cover_path, total_issues, have_issues, settings_json, last_refreshed_at, created_at
+RETURNING id, comicvine_volume_id, publisher_id, name, start_year, description, status, total_issues, have_issues, settings_json, last_refreshed_at, created_at
 `
 
 type UpsertSeriesParams struct {
@@ -195,7 +176,6 @@ type UpsertSeriesParams struct {
 	StartYear         sql.NullInt64
 	Description       sql.NullString
 	Status            string
-	CoverPath         sql.NullString
 	TotalIssues       int64
 	HaveIssues        int64
 	SettingsJson      sql.NullString
@@ -212,7 +192,6 @@ func (q *Queries) UpsertSeries(ctx context.Context, arg UpsertSeriesParams) (Ser
 		arg.StartYear,
 		arg.Description,
 		arg.Status,
-		arg.CoverPath,
 		arg.TotalIssues,
 		arg.HaveIssues,
 		arg.SettingsJson,
@@ -228,7 +207,6 @@ func (q *Queries) UpsertSeries(ctx context.Context, arg UpsertSeriesParams) (Ser
 		&i.StartYear,
 		&i.Description,
 		&i.Status,
-		&i.CoverPath,
 		&i.TotalIssues,
 		&i.HaveIssues,
 		&i.SettingsJson,

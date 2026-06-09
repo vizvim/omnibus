@@ -14,7 +14,7 @@ import (
 
 // allTables is every table schema.md defines (the full schema shipped in 0001).
 var allTables = []string{
-	"blacklists", "download_history", "downloads", "issue_events", "issues",
+	"blacklists", "covers", "download_history", "downloads", "issue_events", "issues",
 	"job_history", "jobs", "metadata_cache", "publishers", "series",
 	"story_arc_issues", "story_arcs", "user_config",
 }

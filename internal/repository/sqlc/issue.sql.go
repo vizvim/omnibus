@@ -22,7 +22,7 @@ func (q *Queries) CountIssuesBySeries(ctx context.Context, seriesID int64) (int6
 }
 
 const listIssuesBySeries = `-- name: ListIssuesBySeries :many
-SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, status, search_attempts, location, cover_path, created_at FROM issues
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, status, search_attempts, location, created_at FROM issues
 WHERE series_id = ?
 ORDER BY issue_number_sort, COALESCE(issue_number_qual, '')
 `
@@ -50,7 +50,6 @@ func (q *Queries) ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Iss
 			&i.Status,
 			&i.SearchAttempts,
 			&i.Location,
-			&i.CoverPath,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -64,20 +63,6 @@ func (q *Queries) ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Iss
 		return nil, err
 	}
 	return items, nil
-}
-
-const updateIssueCoverPath = `-- name: UpdateIssueCoverPath :exec
-UPDATE issues SET cover_path = ? WHERE id = ?
-`
-
-type UpdateIssueCoverPathParams struct {
-	CoverPath sql.NullString
-	ID        int64
-}
-
-func (q *Queries) UpdateIssueCoverPath(ctx context.Context, arg UpdateIssueCoverPathParams) error {
-	_, err := q.db.ExecContext(ctx, updateIssueCoverPath, arg.CoverPath, arg.ID)
-	return err
 }
 
 const updateIssueStatus = `-- name: UpdateIssueStatus :exec
@@ -99,9 +84,9 @@ const upsertIssue = `-- name: UpsertIssue :one
 INSERT INTO issues (
   series_id, comicvine_issue_id, issue_number_raw, issue_number_sort,
   issue_number_qual, title, cover_date, store_date, release_date,
-  status, cover_path, created_at
+  status, created_at
 ) VALUES (
-  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 ON CONFLICT(comicvine_issue_id) DO UPDATE SET
   issue_number_raw  = excluded.issue_number_raw,
@@ -110,9 +95,8 @@ ON CONFLICT(comicvine_issue_id) DO UPDATE SET
   title             = excluded.title,
   cover_date        = excluded.cover_date,
   store_date        = excluded.store_date,
-  release_date      = excluded.release_date,
-  cover_path        = excluded.cover_path
-RETURNING id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, status, search_attempts, location, cover_path, created_at
+  release_date      = excluded.release_date
+RETURNING id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, status, search_attempts, location, created_at
 `
 
 type UpsertIssueParams struct {
@@ -126,7 +110,6 @@ type UpsertIssueParams struct {
 	StoreDate        sql.NullString
 	ReleaseDate      sql.NullString
 	Status           string
-	CoverPath        sql.NullString
 	CreatedAt        string
 }
 
@@ -143,7 +126,6 @@ func (q *Queries) UpsertIssue(ctx context.Context, arg UpsertIssueParams) (Issue
 		arg.StoreDate,
 		arg.ReleaseDate,
 		arg.Status,
-		arg.CoverPath,
 		arg.CreatedAt,
 	)
 	var i Issue
@@ -161,7 +143,6 @@ func (q *Queries) UpsertIssue(ctx context.Context, arg UpsertIssueParams) (Issue
 		&i.Status,
 		&i.SearchAttempts,
 		&i.Location,
-		&i.CoverPath,
 		&i.CreatedAt,
 	)
 	return i, err

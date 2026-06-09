@@ -3,9 +3,9 @@
 INSERT INTO issues (
   series_id, comicvine_issue_id, issue_number_raw, issue_number_sort,
   issue_number_qual, title, cover_date, store_date, release_date,
-  status, cover_path, created_at
+  status, created_at
 ) VALUES (
-  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 ON CONFLICT(comicvine_issue_id) DO UPDATE SET
   issue_number_raw  = excluded.issue_number_raw,
@@ -14,8 +14,7 @@ ON CONFLICT(comicvine_issue_id) DO UPDATE SET
   title             = excluded.title,
   cover_date        = excluded.cover_date,
   store_date        = excluded.store_date,
-  release_date      = excluded.release_date,
-  cover_path        = excluded.cover_path
+  release_date      = excluded.release_date
 RETURNING *;
 
 -- name: ListIssuesBySeries :many
@@ -28,6 +27,3 @@ SELECT count(*) FROM issues WHERE series_id = ?;
 
 -- name: UpdateIssueStatus :exec
 UPDATE issues SET status = ?, search_attempts = ? WHERE id = ?;
-
--- name: UpdateIssueCoverPath :exec
-UPDATE issues SET cover_path = ? WHERE id = ?;

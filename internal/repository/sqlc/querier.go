@@ -10,6 +10,8 @@ import (
 
 type Querier interface {
 	CountIssuesBySeries(ctx context.Context, seriesID int64) (int64, error)
+	CoverExists(ctx context.Context, arg CoverExistsParams) (bool, error)
+	GetCover(ctx context.Context, arg GetCoverParams) (GetCoverRow, error)
 	GetMetadataCache(ctx context.Context, cacheKey string) (MetadataCache, error)
 	GetPublisherByID(ctx context.Context, id int64) (Publisher, error)
 	GetSeriesByID(ctx context.Context, id int64) (Series, error)
@@ -23,13 +25,13 @@ type Querier interface {
 	// Idempotent on cache_key (UNIQUE); refreshes payload + freshness markers (META-04/05).
 	PutMetadataCache(ctx context.Context, arg PutMetadataCacheParams) error
 	SetUserConfig(ctx context.Context, arg SetUserConfigParams) error
-	UpdateIssueCoverPath(ctx context.Context, arg UpdateIssueCoverPathParams) error
 	UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusParams) error
 	UpdateSeriesCounts(ctx context.Context, arg UpdateSeriesCountsParams) error
-	UpdateSeriesCoverPath(ctx context.Context, arg UpdateSeriesCoverPathParams) error
 	UpdateSeriesSettings(ctx context.Context, arg UpdateSeriesSettingsParams) (Series, error)
 	// Idempotent on the immutable comicvine_arc_id.
 	UpsertArc(ctx context.Context, arg UpsertArcParams) (StoryArc, error)
+	// Idempotent upsert of a cover blob keyed on (entity_type, entity_id).
+	UpsertCover(ctx context.Context, arg UpsertCoverParams) error
 	// Idempotent upsert keyed on the immutable comicvine_issue_id (D-04).
 	UpsertIssue(ctx context.Context, arg UpsertIssueParams) (Issue, error)
 	// Idempotent on name (UNIQUE); records the CV publisher id when known.

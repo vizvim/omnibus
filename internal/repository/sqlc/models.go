@@ -18,6 +18,14 @@ type Blacklist struct {
 	CreatedAt  string
 }
 
+type Cover struct {
+	EntityType  string
+	EntityID    int64
+	Image       []byte
+	ContentType string
+	UpdatedAt   string
+}
+
 type Download struct {
 	ID           int64
 	IssueID      int64
@@ -55,7 +63,6 @@ type Issue struct {
 	Status           string
 	SearchAttempts   int64
 	Location         sql.NullString
-	CoverPath        sql.NullString
 	CreatedAt        string
 }
 
@@ -112,7 +119,6 @@ type Series struct {
 	StartYear         sql.NullInt64
 	Description       sql.NullString
 	Status            string
-	CoverPath         sql.NullString
 	TotalIssues       int64
 	HaveIssues        int64
 	SettingsJson      sql.NullString
