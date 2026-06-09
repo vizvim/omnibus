@@ -1,0 +1,94 @@
+syntax = "proto3";
+
+package omnibus.v1;
+
+import "omnibus/v1/common.proto";
+
+option go_package = "github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1";
+
+// Candidate is one ranked release candidate for an issue. score is the pipeline's
+// weighted score; reason carries the human "why rejected / why below floor" text for
+// transparency (D-04). For acceptable candidates reason is empty.
+message Candidate {
+  string provider = 1;
+  string release_key = 2;
+  string title = 3;
+  int64 size_bytes = 4;
+  double score = 5;
+  string reason = 6;
+}
+
+// IssueEvent is one entry in a per-issue timeline (OBS-01). type reuses the shared
+// IssueEventType enum (common.proto); detail is the payload_json string.
+message IssueEvent {
+  int64 id = 1;
+  int64 issue_id = 2;
+  IssueEventType type = 3;
+  string occurred_at = 4;
+  string detail = 5;
+}
+
+// Download is the record created when a candidate is grabbed (submit + Snatched). Full
+// status tracking lands in Phase 5; this carries the identity + client reference.
+message Download {
+  int64 id = 1;
+  int64 issue_id = 2;
+  string provider = 3;
+  string release_key = 4;
+  string status = 5;
+  string client_ref = 6;
+}
+
+message SearchIssueRequest {
+  int64 issue_id = 1;
+}
+
+message SearchIssueResponse {
+  repeated Candidate candidates = 1;
+  bool acceptable = 2;
+  string floor_reason = 3;
+}
+
+message TriggerAutoSearchRequest {
+  int64 issue_id = 1;
+}
+
+message TriggerAutoSearchResponse {
+  // enqueued reports whether the auto-search job was enqueued. The job workers land in
+  // Plan 06; until then this RPC returns Unimplemented.
+  bool enqueued = 1;
+}
+
+message SelectCandidateRequest {
+  int64 issue_id = 1;
+  string provider = 2;
+  string release_key = 3;
+}
+
+message SelectCandidateResponse {
+  Download download = 1;
+}
+
+message GetIssueTimelineRequest {
+  int64 issue_id = 1;
+}
+
+message GetIssueTimelineResponse {
+  repeated IssueEvent events = 1;
+}
+
+// SearchService owns manual search, candidate selection, auto-search triggering, and the
+// per-issue timeline (SRCH-06, OBS-01). GetIssueTimeline is folded in here for this phase
+// (the only timeline consumer; DownloadService lands in Phase 5).
+service SearchService {
+  // SearchIssue runs the filter/score/floor pipeline for a Wanted issue and records a
+  // searched timeline event. It returns the ranked candidates regardless of acceptability.
+  rpc SearchIssue(SearchIssueRequest) returns (SearchIssueResponse);
+  // TriggerAutoSearch enqueues an auto-search job for an issue (workers land in Plan 06).
+  rpc TriggerAutoSearch(TriggerAutoSearchRequest) returns (TriggerAutoSearchResponse);
+  // SelectCandidate grabs a chosen candidate: writes candidate-selected, then hands off
+  // (submit + Snatched + snatched event). Rejects a release_key not produced for the issue.
+  rpc SelectCandidate(SelectCandidateRequest) returns (SelectCandidateResponse);
+  // GetIssueTimeline returns the per-issue event timeline in occurred_at order.
+  rpc GetIssueTimeline(GetIssueTimelineRequest) returns (GetIssueTimelineResponse);
+}
