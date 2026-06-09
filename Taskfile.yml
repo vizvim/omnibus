@@ -1,6 +1,41 @@
 version: "3"
 
+env:
+  # Local-dev defaults: keep runtime data in ./.dev (not the container's /data),
+  # human-readable logs at debug level. Override any of these in your shell.
+  # Secrets stay env-only: export OMNIBUS_COMICVINE_API_KEY in your shell — it
+  # is inherited here and never written to the Taskfile.
+  OMNIBUS_HTTP_ADDR: ":8080"
+  OMNIBUS_DB_PATH: .dev/omnibus.db
+  OMNIBUS_DATA_PATH: .dev
+  OMNIBUS_LOG_LEVEL: debug
+  OMNIBUS_LOG_FORMAT: text
+
 tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  dev:
+    desc: Run backend + Vite frontend together with sane local defaults (the friendly one)
+    deps:
+      - dev:backend
+      - dev:frontend
+
+  dev:backend:
+    desc: Run the Go server with local-friendly defaults (text logs, ./.dev data dir)
+    cmds:
+      - mkdir -p .dev
+      - go run ./cmd/omnibus
+
+  dev:frontend:
+    desc: Run the Vite dev server (proxies /api + /covers to the backend on :8080)
+    dir: frontend
+    cmds:
+      - npm run dev
+
   proto-generate:
     desc: Lint protos and regenerate Go + TS Connect clients via buf v2
     cmds:
