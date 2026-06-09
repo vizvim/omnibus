@@ -25,6 +25,7 @@ import (
 	"github.com/vizvim/omnibus/internal/config"
 	"github.com/vizvim/omnibus/internal/db"
 	"github.com/vizvim/omnibus/internal/jobs"
+	"github.com/vizvim/omnibus/internal/provider/download"
 	"github.com/vizvim/omnibus/internal/provider/metadata"
 	"github.com/vizvim/omnibus/internal/repository"
 	"github.com/vizvim/omnibus/internal/service/indexer"
@@ -94,6 +95,14 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 
 	// IndexerService owns DB-backed indexer CRUD (ADR 0007 domain segmentation).
 	indexerSvc := indexer.New(indexer.Deps{Repos: repos, Logger: logger})
+
+	// DownloadProviders are constructed here and injected toward the search service
+	// (assembled in Plan 05). SABnzbd comes from config (D-16: SAB is the download
+	// client, not an indexer). An empty SabnzbdURL yields a provider whose Submit fails
+	// loudly (ErrSabnzbdNotConfigured) rather than silently succeeding. No polling loop
+	// is started here — status tracking is Phase 5.
+	downloadProviders := newDownloadProviders(cfg)
+	_ = downloadProviders // wired into the search service in Plan 05
 
 	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, repos.Cover)
 	if err != nil {
@@ -197,6 +206,18 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 		Handler:           h2c.NewHandler(corsHandler, &http2.Server{}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}, nil
+}
+
+// newDownloadProviders constructs the DownloadProviders keyed by Kind, ready to inject
+// into the search service (Plan 05). SABnzbd is built from config (D-16: SAB is the
+// download client, not an indexer); an empty SabnzbdURL yields a provider whose Submit
+// returns ErrSabnzbdNotConfigured so a NZB grab without SAB fails loudly. GetComics DDL
+// needs no secret. No polling is started here (Phase 5).
+func newDownloadProviders(cfg config.Config) map[string]download.DownloadProvider {
+	return map[string]download.DownloadProvider{
+		"sabnzbd":   download.NewSABnzbdProvider(cfg.SabnzbdURL, cfg.SabnzbdAPIKey, cfg.SabnzbdCategory),
+		"getcomics": download.NewGetComicsDDLProvider("https://getcomics.org"),
+	}
 }
 
 // parseRate maps the OMNIBUS_COMICVINE_RATE config (a Go duration like "2s") to the
