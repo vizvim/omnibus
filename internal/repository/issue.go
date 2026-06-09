@@ -24,7 +24,6 @@ type IssueUpsert struct {
 	StoreDate        string
 	ReleaseDate      string
 	Status           string
-	CoverPath        string
 	CreatedAt        string
 }
 
@@ -34,7 +33,6 @@ type IssueRepository interface {
 	ListBySeries(ctx context.Context, seriesID int64) ([]Issue, error)
 	CountBySeries(ctx context.Context, seriesID int64) (int64, error)
 	UpdateStatus(ctx context.Context, id int64, status string, searchAttempts int32) error
-	UpdateCoverPath(ctx context.Context, id int64, coverPath string) error
 }
 
 type issueRepository struct {
@@ -59,7 +57,6 @@ func (r *issueRepository) Upsert(ctx context.Context, in IssueUpsert) (Issue, er
 		StoreDate:        nullString(in.StoreDate),
 		ReleaseDate:      nullString(in.ReleaseDate),
 		Status:           in.Status,
-		CoverPath:        nullString(in.CoverPath),
 		CreatedAt:        in.CreatedAt,
 	})
 }
@@ -77,12 +74,5 @@ func (r *issueRepository) UpdateStatus(ctx context.Context, id int64, status str
 		Status:         status,
 		SearchAttempts: int64(searchAttempts),
 		ID:             id,
-	})
-}
-
-func (r *issueRepository) UpdateCoverPath(ctx context.Context, id int64, coverPath string) error {
-	return r.write.UpdateIssueCoverPath(ctx, sqlc.UpdateIssueCoverPathParams{
-		CoverPath: nullString(coverPath),
-		ID:        id,
 	})
 }

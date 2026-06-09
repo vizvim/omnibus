@@ -7,6 +7,7 @@ import "github.com/vizvim/omnibus/internal/db"
 type Repositories struct {
 	Series        SeriesRepository
 	Issue         IssueRepository
+	Cover         CoverRepository
 	Publisher     PublisherRepository
 	Arc           ArcRepository
 	MetadataCache MetadataCacheRepository
@@ -18,6 +19,7 @@ func NewRepositories(d *db.DB) *Repositories {
 	return &Repositories{
 		Series:        NewSeriesRepository(d),
 		Issue:         NewIssueRepository(d),
+		Cover:         NewCoverRepository(d),
 		Publisher:     NewPublisherRepository(d),
 		Arc:           NewArcRepository(d),
 		MetadataCache: NewMetadataCacheRepository(d),

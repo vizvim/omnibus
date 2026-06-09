@@ -25,7 +25,6 @@ type SeriesUpsert struct {
 	StartYear         *int32
 	Description       string
 	Status            string
-	CoverPath         string
 	TotalIssues       int32
 	HaveIssues        int32
 	SettingsJSON      string
@@ -41,7 +40,6 @@ type SeriesRepository interface {
 	List(ctx context.Context, limit, offset int32) ([]Series, error)
 	UpdateSettings(ctx context.Context, id int64, status, settingsJSON string) (Series, error)
 	UpdateCounts(ctx context.Context, id int64, total, have int32) error
-	UpdateCoverPath(ctx context.Context, id int64, coverPath string) error
 }
 
 type seriesRepository struct {
@@ -62,7 +60,6 @@ func (r *seriesRepository) Upsert(ctx context.Context, in SeriesUpsert) (Series,
 		StartYear:         nullInt32Ptr(in.StartYear),
 		Description:       nullString(in.Description),
 		Status:            in.Status,
-		CoverPath:         nullString(in.CoverPath),
 		TotalIssues:       int64(in.TotalIssues),
 		HaveIssues:        int64(in.HaveIssues),
 		SettingsJson:      nullString(in.SettingsJSON),
@@ -96,13 +93,6 @@ func (r *seriesRepository) UpdateCounts(ctx context.Context, id int64, total, ha
 		TotalIssues: int64(total),
 		HaveIssues:  int64(have),
 		ID:          id,
-	})
-}
-
-func (r *seriesRepository) UpdateCoverPath(ctx context.Context, id int64, coverPath string) error {
-	return r.write.UpdateSeriesCoverPath(ctx, sqlc.UpdateSeriesCoverPathParams{
-		CoverPath: nullString(coverPath),
-		ID:        id,
 	})
 }
 
