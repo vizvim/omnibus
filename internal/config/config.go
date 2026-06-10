@@ -50,6 +50,19 @@ type Config struct {
 	SabnzbdAPIKey string `koanf:"sabnzbd_api_key"`
 	// SabnzbdCategory is the SAB category NZBs are added under (default "comics").
 	SabnzbdCategory string `koanf:"sabnzbd_category"`
+	// AutoSearchIntervalHours is how often the scheduled auto-search sweep runs. Fixed
+	// sensible default (6h) this phase, env-overridable
+	// (OMNIBUS_AUTO_SEARCH_INTERVAL_HOURS), not a user-facing UI knob (D-11).
+	AutoSearchIntervalHours int `koanf:"auto_search_interval_hours"`
+	// AutoSearchBatchSize bounds how many Wanted issues a single auto-search sweep tick
+	// enqueues (D-08). Fixed default (20), env-overridable.
+	AutoSearchBatchSize int `koanf:"auto_search_batch_size"`
+	// SearchAttemptCap is the auto-search attempt cap: an issue at/above it goes cold and
+	// is skipped by auto-search (D-09). Fixed default (10), env-overridable.
+	SearchAttemptCap int `koanf:"search_attempt_cap"`
+	// RSSPollIntervalMinutes is how often each enabled RSS indexer's feed is polled for
+	// auto-grab (D-15). Fixed default (30m), env-overridable.
+	RSSPollIntervalMinutes int `koanf:"rss_poll_interval_minutes"`
 }
 
 // Load reads configuration. If filePath is non-empty it is parsed as YAML first;
@@ -59,17 +72,21 @@ func Load(filePath string) (Config, error) {
 	k := koanf.New(".")
 
 	defaults := map[string]any{
-		"http_addr":                ":8080",
-		"db_path":                  "/data/omnibus.db",
-		"data_path":                "/data",
-		"log_level":                "info",
-		"log_format":               "json",
-		"river_workers":            2,
-		"refresh_interval_hours":   6,
-		"staleness_threshold_days": 7,
-		"sabnzbd_url":              "",
-		"sabnzbd_api_key":          "",
-		"sabnzbd_category":         "comics",
+		"http_addr":                  ":8080",
+		"db_path":                    "/data/omnibus.db",
+		"data_path":                  "/data",
+		"log_level":                  "info",
+		"log_format":                 "json",
+		"river_workers":              2,
+		"refresh_interval_hours":     6,
+		"staleness_threshold_days":   7,
+		"sabnzbd_url":                "",
+		"sabnzbd_api_key":            "",
+		"sabnzbd_category":           "comics",
+		"auto_search_interval_hours": 6,
+		"auto_search_batch_size":     20,
+		"search_attempt_cap":         10,
+		"rss_poll_interval_minutes":  30,
 	}
 	if err := k.Load(confmap.Provider(defaults, "."), nil); err != nil {
 		return Config{}, fmt.Errorf("load defaults: %w", err)

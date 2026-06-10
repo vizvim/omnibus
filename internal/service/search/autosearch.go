@@ -2,24 +2,38 @@ package search
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 )
 
-// SearchEnqueuer enqueues a one-off auto-search job per issue. It is satisfied by the
+// errNoEnqueuer is returned when the auto-search sweep runs before SetEnqueuer wired the
+// jobs client (a misconfiguration — the sweep cannot fan out without it).
+var errNoEnqueuer = errors.New("auto-search sweep: enqueuer not configured")
+
+// Enqueuer enqueues a one-off auto-search job per issue. It is satisfied by the
 // jobs client (*jobs.Client.EnqueueSearchIssue). Declaring it here keeps the search
 // service free of any import of internal/jobs (inverted dependency, mirroring the
 // series<->jobs seam).
-type SearchEnqueuer interface {
+type Enqueuer interface {
 	EnqueueSearchIssue(ctx context.Context, issueID int64) error
 }
+
+// SetEnqueuer wires the job enqueuer after construction. This resolves the service<->jobs
+// construction cycle: the jobs client references the service (as the AutoSearchRunner)
+// and the service needs the client (as its Enqueuer), so the service is built first
+// with a nil enqueuer and the client is injected here — mirroring series.Service.
+func (s *Service) SetEnqueuer(e Enqueuer) { s.enqueuer = e }
 
 // RunAutoSearchSweep is the scheduled auto-search tick (the body the River periodic
 // AutoSearchSweep job invokes). It loads a bounded batch of eligible Wanted issues
 // (fewest-attempts-first, capped — D-08) and enqueues one one-off SearchIssue job per
-// issue via the enqueuer. It does NOT search inline: River's bounded worker pool absorbs
-// the fan-out (D-10). Leftover eligible issues roll to the next tick.
-func (s *Service) RunAutoSearchSweep(ctx context.Context, enqueuer SearchEnqueuer) error {
+// issue via the enqueuer it holds. It does NOT search inline: River's bounded worker pool
+// absorbs the fan-out (D-10). Leftover eligible issues roll to the next tick.
+func (s *Service) RunAutoSearchSweep(ctx context.Context) error {
+	if s.enqueuer == nil {
+		return errNoEnqueuer
+	}
 	cap32 := clampInt32(int64(s.attemptCap))
 	batch32 := clampInt32(int64(s.autoSearchBatch))
 	issues, err := s.repos.Issue.ListWantedForAutoSearch(ctx, cap32, batch32)
@@ -29,7 +43,7 @@ func (s *Service) RunAutoSearchSweep(ctx context.Context, enqueuer SearchEnqueue
 
 	enqueued := 0
 	for _, iss := range issues {
-		if err := enqueuer.EnqueueSearchIssue(ctx, iss.ID); err != nil {
+		if err := s.enqueuer.EnqueueSearchIssue(ctx, iss.ID); err != nil {
 			s.logger.Warn("auto-search enqueue failed",
 				slog.Int64("issue_id", iss.ID), slog.Any("error", err))
 			continue

@@ -51,7 +51,8 @@ func TestAutoSearchSweepEnqueuesCappedBatchFewestFirst(t *testing.T) {
 	seedWanted(t, repos, seriesID, 9003, "9", 9.0, "2026-01-03T00:00:00Z", 9) // cold (>= cap 5)
 
 	enq := &fakeEnqueuer{}
-	require.NoError(t, svc.RunAutoSearchSweep(ctx, enq))
+	svc.SetEnqueuer(enq)
+	require.NoError(t, svc.RunAutoSearchSweep(ctx))
 
 	// Cold issue excluded; fewest-attempts-first ordering.
 	require.Equal(t, []int64{firstIssue, mid}, enq.enqueued)

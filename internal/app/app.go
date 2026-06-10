@@ -79,40 +79,50 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		StalenessThreshold: time.Duration(cfg.StalenessThresholdDays) * 24 * time.Hour,
 	})
 
-	workers := river.NewWorkers()
-	river.AddWorker(workers, jobs.NewImportWorker(svc))
-	river.AddWorker(workers, jobs.NewRefreshWorker(svc))
-	river.AddWorker(workers, jobs.NewSweepWorker(svc))
-
-	sweepInterval := time.Duration(cfg.RefreshIntervalHours) * time.Hour
-	riverClient, err := jobs.New(ctx, database.Write, database.Read, cfg.RiverWorkers, sweepInterval, logger, workers)
-	if err != nil {
-		_ = database.Close()
-		return fmt.Errorf("build jobs client: %w", err)
-	}
-	svc.SetEnqueuer(riverClient)
-
-	// JobService reads run history from River's tables (via the jobs client).
-	jobSvc := jobsservice.New(riverClient)
-
-	// IndexerService owns DB-backed indexer CRUD (ADR 0007 domain segmentation).
-	indexerSvc := indexer.New(indexer.Deps{Repos: repos, Logger: logger})
-
 	// DownloadProviders: SABnzbd comes from config (D-16: SAB is the download client,
 	// not an indexer). An empty SabnzbdURL yields a provider whose Submit fails loudly
 	// (ErrSabnzbdNotConfigured). No polling loop is started here — tracking is Phase 5.
 	downloadProviders := newDownloadProviders(cfg)
 
 	// SearchService converges the indexer gateway (Plan 02), the filter/score pipeline
-	// (Plan 03), and the grab handoff (Plan 04) behind manual-search RPCs.
+	// (Plan 03), and the grab handoff (Plan 04) behind manual-search RPCs, and owns the
+	// auto-search/RSS job bodies (Plan 06). Built before the jobs client so it can be the
+	// AutoSearchRunner/RSSPollRunner; the client is injected back as its enqueuer below.
 	indexerGateway := indexerprovider.NewGateway(logger, 0)
 	searchSvc := search.New(search.Deps{
 		Gateway:           indexerGateway,
 		Repos:             repos,
 		DownloadProviders: downloadProviders,
 		Logger:            logger,
-		AttemptCap:        attemptCap,
+		AttemptCap:        cfg.SearchAttemptCap,
+		AutoSearchBatch:   cfg.AutoSearchBatchSize,
 	})
+
+	workers := river.NewWorkers()
+	river.AddWorker(workers, jobs.NewImportWorker(svc))
+	river.AddWorker(workers, jobs.NewRefreshWorker(svc))
+	river.AddWorker(workers, jobs.NewSweepWorker(svc))
+	river.AddWorker(workers, jobs.NewAutoSearchSweepWorker(searchSvc))
+	river.AddWorker(workers, jobs.NewSearchIssueWorker(searchSvc))
+	river.AddWorker(workers, jobs.NewRSSPollWorker(searchSvc))
+
+	sweepInterval := time.Duration(cfg.RefreshIntervalHours) * time.Hour
+	autoSearchInterval := time.Duration(cfg.AutoSearchIntervalHours) * time.Hour
+	rssPollInterval := time.Duration(cfg.RSSPollIntervalMinutes) * time.Minute
+	riverClient, err := jobs.New(ctx, database.Write, database.Read, cfg.RiverWorkers, sweepInterval, autoSearchInterval, rssPollInterval, logger, workers)
+	if err != nil {
+		_ = database.Close()
+		return fmt.Errorf("build jobs client: %w", err)
+	}
+	// Resolve the service<->jobs cycle: both services receive the client as their enqueuer.
+	svc.SetEnqueuer(riverClient)
+	searchSvc.SetEnqueuer(riverClient)
+
+	// JobService reads run history from River's tables (via the jobs client).
+	jobSvc := jobsservice.New(riverClient)
+
+	// IndexerService owns DB-backed indexer CRUD (ADR 0007 domain segmentation).
+	indexerSvc := indexer.New(indexer.Deps{Repos: repos, Logger: logger})
 
 	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, searchSvc, repos.Cover)
 	if err != nil {

@@ -19,6 +19,11 @@ func TestDefaultsApplied(t *testing.T) {
 	require.Equal(t, ":8080", cfg.HTTPAddr)
 	require.Equal(t, "/data/omnibus.db", cfg.DBPath)
 	require.Equal(t, "/data", cfg.DataPath)
+	// Auto-search / RSS cadence defaults (fixed code defaults, D-11).
+	require.Equal(t, 6, cfg.AutoSearchIntervalHours)
+	require.Equal(t, 20, cfg.AutoSearchBatchSize)
+	require.Equal(t, 10, cfg.SearchAttemptCap)
+	require.Equal(t, 30, cfg.RSSPollIntervalMinutes)
 }
 
 func TestEnvOverridesFile(t *testing.T) {

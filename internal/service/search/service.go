@@ -57,6 +57,7 @@ type Service struct {
 	floor           float64
 	attemptCap      int
 	autoSearchBatch int
+	enqueuer        Enqueuer
 }
 
 // defaultAutoSearchBatch bounds an auto-search sweep tick when AutoSearchBatch is unset.

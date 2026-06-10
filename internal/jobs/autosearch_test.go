@@ -20,16 +20,16 @@ type recordingSearchRunner struct {
 	mu      sync.Mutex
 	issues  []int64
 	called  chan struct{}
-	sweepFn func(ctx context.Context, enq jobs.SearchEnqueuer) error
+	sweepFn func(ctx context.Context) error
 }
 
 func newRecordingSearchRunner() *recordingSearchRunner {
 	return &recordingSearchRunner{called: make(chan struct{}, 8)}
 }
 
-func (r *recordingSearchRunner) RunAutoSearchSweep(ctx context.Context, enq jobs.SearchEnqueuer) error {
+func (r *recordingSearchRunner) RunAutoSearchSweep(ctx context.Context) error {
 	if r.sweepFn != nil {
-		return r.sweepFn(ctx, enq)
+		return r.sweepFn(ctx)
 	}
 	return nil
 }
@@ -123,10 +123,6 @@ func TestAutoSearchSweepFansOutViaEnqueuer(t *testing.T) {
 	t.Cleanup(func() { _ = d.Close() })
 
 	runner := newRecordingSearchRunner()
-	// The sweep enqueues a per-issue search for issue 9 via the passed enqueuer.
-	runner.sweepFn = func(ctx context.Context, enq jobs.SearchEnqueuer) error {
-		return enq.EnqueueSearchIssue(ctx, 9)
-	}
 
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewSearchIssueWorker(runner))
@@ -140,8 +136,11 @@ func TestAutoSearchSweepFansOutViaEnqueuer(t *testing.T) {
 		_ = c.Stop(sc)
 	})
 
-	// Drive the sweep directly through the worker's enqueuer seam.
-	require.NoError(t, runner.RunAutoSearchSweep(ctx, c))
+	// The sweep fans out a per-issue search for issue 9 via the jobs client as enqueuer.
+	runner.sweepFn = func(ctx context.Context) error {
+		return c.EnqueueSearchIssue(ctx, 9)
+	}
+	require.NoError(t, runner.RunAutoSearchSweep(ctx))
 
 	select {
 	case <-runner.called:
