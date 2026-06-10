@@ -29,6 +29,7 @@ import (
 	indexerprovider "github.com/vizvim/omnibus/internal/provider/indexer"
 	"github.com/vizvim/omnibus/internal/provider/metadata"
 	"github.com/vizvim/omnibus/internal/repository"
+	"github.com/vizvim/omnibus/internal/service/downloadclient"
 	"github.com/vizvim/omnibus/internal/service/indexer"
 	jobsservice "github.com/vizvim/omnibus/internal/service/jobs"
 	"github.com/vizvim/omnibus/internal/service/search"
@@ -124,7 +125,11 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// IndexerService owns DB-backed indexer CRUD (ADR 0007 domain segmentation).
 	indexerSvc := indexer.New(indexer.Deps{Repos: repos, Logger: logger})
 
-	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, searchSvc, repos.Cover)
+	// DownloadClientService owns the singleton DB-backed SABnzbd config (ADR 0007),
+	// editable at runtime (supersedes D-16).
+	downloadClientSvc := downloadclient.New(downloadclient.Deps{Repos: repos, Logger: logger})
+
+	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, searchSvc, repos.Cover)
 	if err != nil {
 		_ = database.Close()
 		return err
@@ -183,7 +188,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 // newServer builds the h2c-wrapped HTTP server hosting the SeriesService + JobService
 // Connect handlers (with slog + otel interceptors) and the cover handler serving blobs
 // from SQLite, with CORS scoped to the Vite dev origin.
-func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, indexerSvc *indexer.Service, searchSvc *search.Service, covers transport.CoverStore) (*http.Server, error) {
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, indexerSvc *indexer.Service, downloadClientSvc *downloadclient.Service, searchSvc *search.Service, covers transport.CoverStore) (*http.Server, error) {
 	interceptors, err := transport.NewInterceptors(logger)
 	if err != nil {
 		return nil, fmt.Errorf("build interceptors: %w", err)
@@ -204,6 +209,10 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 	indexerHandler := transport.NewIndexerHandler(indexerSvc)
 	indexerPath, indexerH := omnibusv1connect.NewIndexerServiceHandler(indexerHandler, connect.WithInterceptors(interceptors...))
 	mux.Handle("/api"+indexerPath, http.StripPrefix("/api", indexerH))
+
+	downloadClientHandler := transport.NewDownloadClientHandler(downloadClientSvc)
+	downloadClientPath, downloadClientH := omnibusv1connect.NewDownloadClientServiceHandler(downloadClientHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+downloadClientPath, http.StripPrefix("/api", downloadClientH))
 
 	searchHandler := transport.NewSearchHandler(searchSvc)
 	searchPath, searchH := omnibusv1connect.NewSearchServiceHandler(searchHandler, connect.WithInterceptors(interceptors...))
