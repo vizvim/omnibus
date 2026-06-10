@@ -8,6 +8,7 @@ import {
 import { EmptyState } from "../components/EmptyState";
 import {
   getDownloadClientConfig,
+  testDownloadClientConfig,
   updateDownloadClientConfig,
 } from "../gen/omnibus/v1/download_client-DownloadClientService_connectquery";
 
@@ -19,12 +20,16 @@ const SAVE_ERROR = "Couldn't save the download client. Check the URL and API key
 export function Settings() {
   const config = useQuery(getDownloadClientConfig, {}, { retry: false });
   const [editing, setEditing] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | undefined>();
 
   const update = useMutation(updateDownloadClientConfig, {
     onSuccess: () => {
       setEditing(false);
       void config.refetch();
     },
+  });
+  const test = useMutation(testDownloadClientConfig, {
+    onSuccess: (res) => setTestResult({ ok: res.ok, detail: res.detail }),
   });
 
   function submitEdit(values: DownloadClientFormValues) {
@@ -54,13 +59,23 @@ export function Settings() {
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Download Client</h2>
           {!editing ? (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
-            >
-              Edit
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => test.mutate({})}
+                disabled={test.isPending}
+                className="rounded bg-slate-100 px-4 py-2 text-sm font-semibold"
+              >
+                Test connection
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Edit
+              </button>
+            </div>
           ) : null}
         </div>
 
@@ -92,6 +107,13 @@ export function Settings() {
             <span className="text-sm text-slate-600">
               Category: <span>{current?.category || "comics"}</span>
             </span>
+            {testResult ? (
+              testResult.ok ? (
+                <span className="text-sm font-semibold text-green-700">✓ Connected</span>
+              ) : (
+                <span className="text-sm font-semibold text-red-600">✗ {testResult.detail}</span>
+              )
+            ) : null}
           </div>
         )}
       </section>

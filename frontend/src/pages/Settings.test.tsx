@@ -41,4 +41,32 @@ describe("settings page", () => {
     const apiKey = screen.getByLabelText(/api key/i);
     expect(apiKey).toHaveAttribute("type", "password");
   });
+
+  it("shows a connected indicator when the Test connection probe succeeds", async () => {
+    const transport = makeDownloadClientTransport({
+      getDownloadClientConfig: () => ({ config: sampleConfig }),
+      testDownloadClientConfig: () => ({ ok: true, detail: "connected" }),
+    });
+    renderWithProviders(<App initialRoute="settings" />, transport);
+
+    expect(await screen.findByText("http://sab.test")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /test connection/i }));
+
+    expect(await screen.findByText(/connected/i)).toBeInTheDocument();
+  });
+
+  it("shows the failure detail when the Test connection probe fails", async () => {
+    const transport = makeDownloadClientTransport({
+      getDownloadClientConfig: () => ({ config: sampleConfig }),
+      testDownloadClientConfig: () => ({ ok: false, detail: "not configured" }),
+    });
+    renderWithProviders(<App initialRoute="settings" />, transport);
+
+    expect(await screen.findByText("http://sab.test")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /test connection/i }));
+
+    expect(await screen.findByText(/not configured/i)).toBeInTheDocument();
+  });
 });
