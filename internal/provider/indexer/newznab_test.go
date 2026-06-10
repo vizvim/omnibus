@@ -109,6 +109,44 @@ func TestNewznabSchemeLessBaseURLBuildsValidRequest(t *testing.T) {
 	require.Len(t, cands, 3)
 }
 
+// TestNewznabAPIErrorBodyIsError reproduces the false-positive: a newznab indexer
+// returns HTTP 200 with a well-formed <error/> body for application failures (bad
+// API key). The provider must surface a non-nil error echoing the server's own
+// description, not silently return zero candidates.
+func TestNewznabAPIErrorBodyIsError(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(`<error code="100" description="Incorrect user credentials"/>`))
+	}))
+	t.Cleanup(srv.Close)
+	p := indexer.NewNewznabProvider(srv.URL, "bad-key", "", indexer.WithNewznabHTTPClient(srv.Client()))
+
+	cands, err := p.Search(context.Background(), "Saga")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Incorrect user credentials")
+	require.Contains(t, err.Error(), "100")
+	require.Empty(t, cands)
+}
+
+// TestNewznabAPIErrorNoDescriptionIsError covers the edge case where the server
+// omits the description attribute (<error code="900"/>) — the code alone must
+// still surface as an error.
+func TestNewznabAPIErrorNoDescriptionIsError(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(`<error code="900"/>`))
+	}))
+	t.Cleanup(srv.Close)
+	p := indexer.NewNewznabProvider(srv.URL, "k", "", indexer.WithNewznabHTTPClient(srv.Client()))
+
+	cands, err := p.Search(context.Background(), "x")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "newznab error 900")
+	require.Empty(t, cands)
+}
+
 func TestNewznabNon200IsError(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

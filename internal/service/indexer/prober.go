@@ -89,7 +89,47 @@ func (p *httpProber) probeNewznab(ctx context.Context, row repository.IndexerRow
 	if !isWellFormedXML(body) {
 		return TestResult{OK: false, Detail: "unexpected response"}
 	}
+	// A newznab indexer returns HTTP 200 with a well-formed <error code=".."
+	// description=".."/> body for application-level failures (bad API key,
+	// suspended, API disabled). Surface the server's own detail instead of
+	// reporting a false-positive "connected".
+	if detail, isErr := parseNewznabError(body); isErr {
+		return TestResult{OK: false, Detail: detail}
+	}
 	return TestResult{OK: true, Detail: "connected"}
+}
+
+// newznabError models a top-level <error code=".." description=".."/> response.
+type newznabError struct {
+	Code        string `xml:"code,attr"`
+	Description string `xml:"description,attr"`
+}
+
+// parseNewznabError reports a detail message when body is a newznab API error
+// document, echoing the server-supplied code/description verbatim (never a
+// hardcoded code→message mapping). isErr is false when body is not an <error>
+// doc — a clean <caps>/<rss> document has neither attr, so both fields stay
+// empty. This is a deliberate unexported copy of the provider/indexer helper:
+// service/indexer keeps its newznab probe logic self-contained (mirroring its
+// local normalizeBaseURL) rather than taking a package dependency on
+// provider/indexer for ~10 lines.
+func parseNewznabError(body []byte) (detail string, isErr bool) {
+	var e newznabError
+	if err := xml.Unmarshal(body, &e); err != nil {
+		return "", false
+	}
+	// xml.Unmarshal only populates these when the ROOT element is <error>.
+	if e.Code == "" && e.Description == "" {
+		return "", false
+	}
+	switch {
+	case e.Code != "" && e.Description != "":
+		return fmt.Sprintf("newznab error %s: %s", e.Code, e.Description), true
+	case e.Description != "":
+		return "newznab error: " + e.Description, true
+	default:
+		return "newznab error " + e.Code, true
+	}
 }
 
 // probeGetComics requests the site root; a 2xx means the scraper target is reachable.

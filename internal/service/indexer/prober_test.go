@@ -33,6 +33,43 @@ func TestHTTPProberNewznab200IsConnected(t *testing.T) {
 	require.Contains(t, gotQuery, "apikey=k", "the probe must carry the api_key")
 }
 
+// TestHTTPProberNewznab200APIErrorIsFailure reproduces the Test-button false
+// positive: a newznab indexer returns HTTP 200 with a well-formed <error/> body
+// for a bad API key. The probe must report OK:false with the server's own
+// description, not a false "connected".
+func TestHTTPProberNewznab200APIErrorIsFailure(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(`<error code="100" description="Incorrect user credentials"/>`))
+	}))
+	t.Cleanup(srv.Close)
+
+	p := indexer.NewHTTPProber(indexer.WithProberHTTPClient(srv.Client()))
+	res := p.Probe(context.Background(), repository.IndexerRow{
+		Kind: indexer.KindNewznab, BaseURL: srv.URL, APIKey: "bad-key",
+	})
+	require.False(t, res.OK)
+	require.Contains(t, res.Detail, "Incorrect user credentials")
+	require.Contains(t, res.Detail, "100")
+}
+
+// TestHTTPProberNewznab200APIErrorNoDescription covers the edge case of an
+// <error code="900"/> body with no description — the code alone still fails.
+func TestHTTPProberNewznab200APIErrorNoDescription(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(`<error code="900"/>`))
+	}))
+	t.Cleanup(srv.Close)
+
+	p := indexer.NewHTTPProber(indexer.WithProberHTTPClient(srv.Client()))
+	res := p.Probe(context.Background(), repository.IndexerRow{Kind: indexer.KindNewznab, BaseURL: srv.URL})
+	require.False(t, res.OK)
+	require.Contains(t, res.Detail, "newznab error 900")
+}
+
 func TestHTTPProberNewznab401IsUnauthorized(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

@@ -69,6 +69,37 @@ func (p *NewznabProvider) Feed(ctx context.Context) ([]Candidate, error) {
 	return p.fetch(ctx, "")
 }
 
+// newznabError models a top-level <error code=".." description=".."/> response. A
+// newznab indexer returns HTTP 200 with this body for application-level failures
+// (bad API key, suspended account, API disabled, rate-limited, etc).
+type newznabError struct {
+	Code        string `xml:"code,attr"`
+	Description string `xml:"description,attr"`
+}
+
+// parseNewznabError reports a detail message when body is a newznab API error
+// document. It echoes the server-supplied code/description verbatim — never a
+// hardcoded code→message mapping. isErr is false when body is not an <error> doc
+// (a clean <rss>/<caps> document has neither attr, so both fields stay empty).
+func parseNewznabError(body []byte) (detail string, isErr bool) {
+	var e newznabError
+	if err := xml.Unmarshal(body, &e); err != nil {
+		return "", false
+	}
+	// xml.Unmarshal only populates these when the ROOT element is <error>.
+	if e.Code == "" && e.Description == "" {
+		return "", false
+	}
+	switch {
+	case e.Code != "" && e.Description != "":
+		return fmt.Sprintf("newznab error %s: %s", e.Code, e.Description), true
+	case e.Description != "":
+		return "newznab error: " + e.Description, true
+	default:
+		return "newznab error " + e.Code, true
+	}
+}
+
 // newznabRSS models the subset of the Newznab RSS/XML response we consume.
 type newznabRSS struct {
 	Channel struct {
@@ -122,6 +153,10 @@ func (p *NewznabProvider) fetch(ctx context.Context, query string) ([]Candidate,
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read newznab body: %w", err)
+	}
+
+	if detail, isErr := parseNewznabError(body); isErr {
+		return nil, fmt.Errorf("%s", detail)
 	}
 
 	var rss newznabRSS
