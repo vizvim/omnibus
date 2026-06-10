@@ -39,6 +39,15 @@ type Download struct {
 	UpdatedAt    string
 }
 
+type DownloadClientConfig struct {
+	ID        int64
+	Url       string
+	ApiKey    sql.NullString
+	Category  string
+	CreatedAt string
+	UpdatedAt string
+}
+
 type DownloadHistory struct {
 	ID         int64
 	IssueID    int64
