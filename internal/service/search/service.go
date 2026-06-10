@@ -34,6 +34,9 @@ type Deps struct {
 	DownloadProviders map[string]download.DownloadProvider
 	Logger            *slog.Logger
 	AttemptCap        int
+	// AutoSearchBatch bounds how many Wanted issues one auto-search sweep tick enqueues
+	// (D-08). Zero falls back to defaultAutoSearchBatch.
+	AutoSearchBatch int
 	// Pipeline opts; zero values fall back to the package defaults.
 	FilterOpts FilterOpts
 	ScoreOpts  ScoreOpts
@@ -46,13 +49,18 @@ type Deps struct {
 // Grabber). It depends only on repository interfaces + the gateway + download providers.
 type Service struct {
 	*Grabber
-	gateway    IndexerGateway
-	repos      *repository.Repositories
-	logger     *slog.Logger
-	filterOpts FilterOpts
-	scoreOpts  ScoreOpts
-	floor      float64
+	gateway         IndexerGateway
+	repos           *repository.Repositories
+	logger          *slog.Logger
+	filterOpts      FilterOpts
+	scoreOpts       ScoreOpts
+	floor           float64
+	attemptCap      int
+	autoSearchBatch int
 }
+
+// defaultAutoSearchBatch bounds an auto-search sweep tick when AutoSearchBatch is unset.
+const defaultAutoSearchBatch = 20
 
 // New constructs a search Service.
 func New(d Deps) *Service {
@@ -72,6 +80,10 @@ func New(d Deps) *Service {
 	if floor == 0 {
 		floor = DefaultAcceptanceFloor
 	}
+	batch := d.AutoSearchBatch
+	if batch <= 0 {
+		batch = defaultAutoSearchBatch
+	}
 	grabber := NewGrabber(GrabDeps{
 		Providers:  d.DownloadProviders,
 		Repos:      d.Repos,
@@ -79,13 +91,15 @@ func New(d Deps) *Service {
 		AttemptCap: d.AttemptCap,
 	})
 	return &Service{
-		Grabber:    grabber,
-		gateway:    d.Gateway,
-		repos:      d.Repos,
-		logger:     logger,
-		filterOpts: fopts,
-		scoreOpts:  sopts,
-		floor:      floor,
+		Grabber:         grabber,
+		gateway:         d.Gateway,
+		repos:           d.Repos,
+		logger:          logger,
+		filterOpts:      fopts,
+		scoreOpts:       sopts,
+		floor:           floor,
+		attemptCap:      d.AttemptCap,
+		autoSearchBatch: batch,
 	}
 }
 
