@@ -26,10 +26,12 @@ import (
 	"github.com/vizvim/omnibus/internal/db"
 	"github.com/vizvim/omnibus/internal/jobs"
 	"github.com/vizvim/omnibus/internal/provider/download"
+	indexerprovider "github.com/vizvim/omnibus/internal/provider/indexer"
 	"github.com/vizvim/omnibus/internal/provider/metadata"
 	"github.com/vizvim/omnibus/internal/repository"
 	"github.com/vizvim/omnibus/internal/service/indexer"
 	jobsservice "github.com/vizvim/omnibus/internal/service/jobs"
+	"github.com/vizvim/omnibus/internal/service/search"
 	"github.com/vizvim/omnibus/internal/service/series"
 	"github.com/vizvim/omnibus/internal/transport"
 )
@@ -96,15 +98,23 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// IndexerService owns DB-backed indexer CRUD (ADR 0007 domain segmentation).
 	indexerSvc := indexer.New(indexer.Deps{Repos: repos, Logger: logger})
 
-	// DownloadProviders are constructed here and injected toward the search service
-	// (assembled in Plan 05). SABnzbd comes from config (D-16: SAB is the download
-	// client, not an indexer). An empty SabnzbdURL yields a provider whose Submit fails
-	// loudly (ErrSabnzbdNotConfigured) rather than silently succeeding. No polling loop
-	// is started here — status tracking is Phase 5.
+	// DownloadProviders: SABnzbd comes from config (D-16: SAB is the download client,
+	// not an indexer). An empty SabnzbdURL yields a provider whose Submit fails loudly
+	// (ErrSabnzbdNotConfigured). No polling loop is started here — tracking is Phase 5.
 	downloadProviders := newDownloadProviders(cfg)
-	_ = downloadProviders // wired into the search service in Plan 05
 
-	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, repos.Cover)
+	// SearchService converges the indexer gateway (Plan 02), the filter/score pipeline
+	// (Plan 03), and the grab handoff (Plan 04) behind manual-search RPCs.
+	indexerGateway := indexerprovider.NewGateway(logger, 0)
+	searchSvc := search.New(search.Deps{
+		Gateway:           indexerGateway,
+		Repos:             repos,
+		DownloadProviders: downloadProviders,
+		Logger:            logger,
+		AttemptCap:        attemptCap,
+	})
+
+	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, searchSvc, repos.Cover)
 	if err != nil {
 		_ = database.Close()
 		return err
@@ -163,7 +173,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 // newServer builds the h2c-wrapped HTTP server hosting the SeriesService + JobService
 // Connect handlers (with slog + otel interceptors) and the cover handler serving blobs
 // from SQLite, with CORS scoped to the Vite dev origin.
-func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, indexerSvc *indexer.Service, covers transport.CoverStore) (*http.Server, error) {
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, indexerSvc *indexer.Service, searchSvc *search.Service, covers transport.CoverStore) (*http.Server, error) {
 	interceptors, err := transport.NewInterceptors(logger)
 	if err != nil {
 		return nil, fmt.Errorf("build interceptors: %w", err)
@@ -184,6 +194,10 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 	indexerHandler := transport.NewIndexerHandler(indexerSvc)
 	indexerPath, indexerH := omnibusv1connect.NewIndexerServiceHandler(indexerHandler, connect.WithInterceptors(interceptors...))
 	mux.Handle("/api"+indexerPath, http.StripPrefix("/api", indexerH))
+
+	searchHandler := transport.NewSearchHandler(searchSvc)
+	searchPath, searchH := omnibusv1connect.NewSearchServiceHandler(searchHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+searchPath, http.StripPrefix("/api", searchH))
 
 	mux.Handle("/covers/", transport.NewCoverHandler(covers))
 
