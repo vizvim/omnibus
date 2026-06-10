@@ -37,7 +37,7 @@ func NewGetComicsProvider(baseURL string, opts ...GetComicsOption) *GetComicsPro
 		baseURL = defaultGetComicsBaseURL
 	}
 	p := &GetComicsProvider{
-		baseURL: strings.TrimRight(baseURL, "/"),
+		baseURL: normalizeBaseURL(baseURL),
 		client:  http.DefaultClient,
 	}
 	for _, o := range opts {

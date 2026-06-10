@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -84,6 +85,28 @@ func TestNewznabFeedOmitsQuery(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, cands, 3)
 	require.NotContains(t, *lastQuery, "q=")
+}
+
+// TestNewznabSchemeLessBaseURLBuildsValidRequest reproduces the production failure:
+// an indexer saved as a scheme-less "host:port" must still build + send a valid request
+// (it previously broke http.NewRequestWithContext with "first path segment in URL cannot
+// contain colon"). The provider normalizes the base URL by prefixing http://.
+func TestNewznabSchemeLessBaseURLBuildsValidRequest(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write(fixtureBytes(t, "newznab_search.xml"))
+	}))
+	t.Cleanup(srv.Close)
+
+	// Strip the http:// scheme to mimic a base URL saved as bare host:port.
+	schemeless := strings.TrimPrefix(srv.URL, "http://")
+	require.NotContains(t, schemeless, "://")
+
+	p := indexer.NewNewznabProvider(schemeless, "k", "7030", indexer.WithNewznabHTTPClient(srv.Client()))
+	cands, err := p.Search(context.Background(), "Saga")
+	require.NoError(t, err, "scheme-less host:port must build a valid request, not a parse error")
+	require.Len(t, cands, 3)
 }
 
 func TestNewznabNon200IsError(t *testing.T) {

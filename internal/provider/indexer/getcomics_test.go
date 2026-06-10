@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -59,6 +60,25 @@ func TestGetComicsMissingSizeYieldsZero(t *testing.T) {
 	require.Equal(t, int64(0), third.SizeBytes)
 	require.True(t, third.IsPack)
 	require.Equal(t, "https://getcomics.org/comic/batman-vol-1/", third.ReleaseKey)
+}
+
+// TestGetComicsSchemeLessBaseURLBuildsValidRequest mirrors the newznab case: a
+// scheme-less "host:port" base URL must still build a valid request after normalization.
+func TestGetComicsSchemeLessBaseURLBuildsValidRequest(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write(fixtureBytes(t, "getcomics_results.html"))
+	}))
+	t.Cleanup(srv.Close)
+
+	schemeless := strings.TrimPrefix(srv.URL, "http://")
+	require.NotContains(t, schemeless, "://")
+
+	p := indexer.NewGetComicsProvider(schemeless, indexer.WithGetComicsHTTPClient(srv.Client()))
+	cands, err := p.Search(context.Background(), "Saga")
+	require.NoError(t, err, "scheme-less host:port must build a valid request, not a parse error")
+	require.Len(t, cands, 3)
 }
 
 func TestGetComicsNon200IsError(t *testing.T) {

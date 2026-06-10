@@ -144,6 +144,11 @@ func (s *Service) normalize(in Input) (repository.IndexerUpsert, error) {
 	if in.Name == "" || in.BaseURL == "" {
 		return repository.IndexerUpsert{}, ErrMissingField
 	}
+	// Normalize AFTER the empty check so a blank URL stays an ErrMissingField rather than
+	// being turned into "http://". A scheme-less host:port gains an http:// prefix and any
+	// trailing slash is trimmed, so the DB + UI hold a well-formed URL that builds a valid
+	// request.
+	in.BaseURL = normalizeBaseURL(in.BaseURL)
 	if in.Kind == KindNewznab && in.Categories == "" {
 		in.Categories = defaultNewznabCategories
 	}
@@ -161,4 +166,20 @@ func (s *Service) normalize(in Input) (repository.IndexerUpsert, error) {
 
 func (s *Service) nowISO() string {
 	return s.now().UTC().Format(time.RFC3339)
+}
+
+// normalizeBaseURL canonicalizes a stored indexer base URL using the SAME rule as the
+// provider layer (kept dependency-free here so the service does not import the provider
+// package): trim whitespace; an empty value stays empty; a scheme-less value gains an
+// "http://" prefix (a bare host:port otherwise breaks http.NewRequest); a value that
+// already has a scheme is untouched; trailing slashes are trimmed.
+func normalizeBaseURL(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return ""
+	}
+	if !strings.Contains(s, "://") {
+		s = "http://" + s
+	}
+	return strings.TrimRight(s, "/")
 }

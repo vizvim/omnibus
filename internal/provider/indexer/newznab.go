@@ -40,7 +40,7 @@ func NewNewznabProvider(baseURL, apiKey, categories string, opts ...NewznabOptio
 		categories = defaultNewznabCategories
 	}
 	p := &NewznabProvider{
-		baseURL:    strings.TrimRight(baseURL, "/"),
+		baseURL:    normalizeBaseURL(baseURL),
 		apiKey:     apiKey,
 		categories: categories,
 		client:     http.DefaultClient,
