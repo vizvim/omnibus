@@ -47,6 +47,17 @@ func (q *Queries) GetIssueByID(ctx context.Context, id int64) (Issue, error) {
 	return i, err
 }
 
+const incrementSearchAttempts = `-- name: IncrementSearchAttempts :exec
+UPDATE issues SET search_attempts = search_attempts + 1 WHERE id = ?
+`
+
+// Records a no-result auto-search attempt; the growing count spaces retries and
+// eventually crosses the cap so the issue goes cold (D-09).
+func (q *Queries) IncrementSearchAttempts(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, incrementSearchAttempts, id)
+	return err
+}
+
 const listIssuesBySeries = `-- name: ListIssuesBySeries :many
 SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, status, search_attempts, location, created_at FROM issues
 WHERE series_id = ?
@@ -55,6 +66,104 @@ ORDER BY issue_number_sort, COALESCE(issue_number_qual, '')
 
 func (q *Queries) ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Issue, error) {
 	rows, err := q.db.QueryContext(ctx, listIssuesBySeries, seriesID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Issue{}
+	for rows.Next() {
+		var i Issue
+		if err := rows.Scan(
+			&i.ID,
+			&i.SeriesID,
+			&i.ComicvineIssueID,
+			&i.IssueNumberRaw,
+			&i.IssueNumberSort,
+			&i.IssueNumberQual,
+			&i.Title,
+			&i.CoverDate,
+			&i.StoreDate,
+			&i.ReleaseDate,
+			&i.Status,
+			&i.SearchAttempts,
+			&i.Location,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWantedForAutoSearch = `-- name: ListWantedForAutoSearch :many
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, status, search_attempts, location, created_at FROM issues
+WHERE status = 'Wanted' AND search_attempts < ?
+ORDER BY search_attempts ASC, created_at ASC
+LIMIT ?
+`
+
+type ListWantedForAutoSearchParams struct {
+	SearchAttempts int64
+	Limit          int64
+}
+
+// Bounded batch of Wanted issues eligible for auto-search: fewest search_attempts
+// first (then oldest), excluding issues that have reached the attempt cap (cold).
+// The cap is passed as the upper bound (D-08/D-09).
+func (q *Queries) ListWantedForAutoSearch(ctx context.Context, arg ListWantedForAutoSearchParams) ([]Issue, error) {
+	rows, err := q.db.QueryContext(ctx, listWantedForAutoSearch, arg.SearchAttempts, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Issue{}
+	for rows.Next() {
+		var i Issue
+		if err := rows.Scan(
+			&i.ID,
+			&i.SeriesID,
+			&i.ComicvineIssueID,
+			&i.IssueNumberRaw,
+			&i.IssueNumberSort,
+			&i.IssueNumberQual,
+			&i.Title,
+			&i.CoverDate,
+			&i.StoreDate,
+			&i.ReleaseDate,
+			&i.Status,
+			&i.SearchAttempts,
+			&i.Location,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWantedForMatch = `-- name: ListWantedForMatch :many
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, status, search_attempts, location, created_at FROM issues
+WHERE status = 'Wanted'
+ORDER BY series_id, issue_number_sort
+`
+
+// All currently-Wanted issues with their normalized sort/qual, for RSS feed matching.
+func (q *Queries) ListWantedForMatch(ctx context.Context) ([]Issue, error) {
+	rows, err := q.db.QueryContext(ctx, listWantedForMatch)
 	if err != nil {
 		return nil, err
 	}

@@ -25,6 +25,9 @@ type Querier interface {
 	GetSeriesByID(ctx context.Context, id int64) (Series, error)
 	GetSeriesByVolumeID(ctx context.Context, comicvineVolumeID int64) (Series, error)
 	GetUserConfig(ctx context.Context, key string) (UserConfig, error)
+	// Records a no-result auto-search attempt; the growing count spaces retries and
+	// eventually crosses the cap so the issue goes cold (D-09).
+	IncrementSearchAttempts(ctx context.Context, id int64) error
 	InsertIssueEvent(ctx context.Context, arg InsertIssueEventParams) (IssueEvent, error)
 	LinkArcIssue(ctx context.Context, arg LinkArcIssueParams) error
 	ListArcsBySeries(ctx context.Context, seriesID int64) ([]StoryArc, error)
@@ -39,6 +42,12 @@ type Querier interface {
 	// series are excluded: they are not being watched for freshness.
 	ListStaleSeries(ctx context.Context, arg ListStaleSeriesParams) ([]Series, error)
 	ListUserConfig(ctx context.Context) ([]UserConfig, error)
+	// Bounded batch of Wanted issues eligible for auto-search: fewest search_attempts
+	// first (then oldest), excluding issues that have reached the attempt cap (cold).
+	// The cap is passed as the upper bound (D-08/D-09).
+	ListWantedForAutoSearch(ctx context.Context, arg ListWantedForAutoSearchParams) ([]Issue, error)
+	// All currently-Wanted issues with their normalized sort/qual, for RSS feed matching.
+	ListWantedForMatch(ctx context.Context) ([]Issue, error)
 	// Idempotent on cache_key (UNIQUE); refreshes payload + freshness markers.
 	PutMetadataCache(ctx context.Context, arg PutMetadataCacheParams) error
 	SetUserConfig(ctx context.Context, arg SetUserConfigParams) error

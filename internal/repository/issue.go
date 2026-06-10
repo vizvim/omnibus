@@ -34,6 +34,14 @@ type IssueRepository interface {
 	ListBySeries(ctx context.Context, seriesID int64) ([]Issue, error)
 	CountBySeries(ctx context.Context, seriesID int64) (int64, error)
 	UpdateStatus(ctx context.Context, id int64, status string, searchAttempts int32) error
+	// ListWantedForAutoSearch returns a bounded batch of Wanted issues eligible for
+	// auto-search (fewest search_attempts first, then oldest), excluding issues at or
+	// above the attempt cap (cold). batch bounds the result (D-08/D-09).
+	ListWantedForAutoSearch(ctx context.Context, attemptCap, batch int32) ([]Issue, error)
+	// IncrementSearchAttempts records a no-result auto-search attempt (D-09 backoff).
+	IncrementSearchAttempts(ctx context.Context, id int64) error
+	// ListWantedForMatch returns all currently-Wanted issues for RSS feed matching.
+	ListWantedForMatch(ctx context.Context) ([]Issue, error)
 }
 
 type issueRepository struct {
@@ -80,4 +88,19 @@ func (r *issueRepository) UpdateStatus(ctx context.Context, id int64, status str
 		SearchAttempts: int64(searchAttempts),
 		ID:             id,
 	})
+}
+
+func (r *issueRepository) ListWantedForAutoSearch(ctx context.Context, attemptCap, batch int32) ([]Issue, error) {
+	return r.read.ListWantedForAutoSearch(ctx, sqlc.ListWantedForAutoSearchParams{
+		SearchAttempts: int64(attemptCap),
+		Limit:          int64(batch),
+	})
+}
+
+func (r *issueRepository) IncrementSearchAttempts(ctx context.Context, id int64) error {
+	return r.write.IncrementSearchAttempts(ctx, id)
+}
+
+func (r *issueRepository) ListWantedForMatch(ctx context.Context) ([]Issue, error) {
+	return r.read.ListWantedForMatch(ctx)
 }

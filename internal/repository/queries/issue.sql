@@ -30,3 +30,23 @@ SELECT * FROM issues WHERE id = ?;
 
 -- name: UpdateIssueStatus :exec
 UPDATE issues SET status = ?, search_attempts = ? WHERE id = ?;
+
+-- name: ListWantedForAutoSearch :many
+-- Bounded batch of Wanted issues eligible for auto-search: fewest search_attempts
+-- first (then oldest), excluding issues that have reached the attempt cap (cold).
+-- The cap is passed as the upper bound (D-08/D-09).
+SELECT * FROM issues
+WHERE status = 'Wanted' AND search_attempts < ?
+ORDER BY search_attempts ASC, created_at ASC
+LIMIT ?;
+
+-- name: IncrementSearchAttempts :exec
+-- Records a no-result auto-search attempt; the growing count spaces retries and
+-- eventually crosses the cap so the issue goes cold (D-09).
+UPDATE issues SET search_attempts = search_attempts + 1 WHERE id = ?;
+
+-- name: ListWantedForMatch :many
+-- All currently-Wanted issues with their normalized sort/qual, for RSS feed matching.
+SELECT * FROM issues
+WHERE status = 'Wanted'
+ORDER BY series_id, issue_number_sort;
