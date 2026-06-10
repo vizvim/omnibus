@@ -1,0 +1,88 @@
+package indexer_test
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/vizvim/omnibus/internal/repository"
+	"github.com/vizvim/omnibus/internal/service/indexer"
+)
+
+func TestHTTPProberNewznab200IsConnected(t *testing.T) {
+	t.Parallel()
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(`<caps></caps>`))
+	}))
+	t.Cleanup(srv.Close)
+
+	p := indexer.NewHTTPProber(indexer.WithProberHTTPClient(srv.Client()))
+	res := p.Probe(context.Background(), repository.IndexerRow{
+		Kind: indexer.KindNewznab, BaseURL: srv.URL, APIKey: "k",
+	})
+	require.True(t, res.OK)
+	require.Equal(t, "connected", res.Detail)
+	require.Contains(t, gotQuery, "t=caps", "newznab probe must use the lightweight caps query")
+	require.Contains(t, gotQuery, "apikey=k", "the probe must carry the api_key")
+}
+
+func TestHTTPProberNewznab401IsUnauthorized(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(srv.Close)
+
+	p := indexer.NewHTTPProber(indexer.WithProberHTTPClient(srv.Client()))
+	res := p.Probe(context.Background(), repository.IndexerRow{Kind: indexer.KindNewznab, BaseURL: srv.URL})
+	require.False(t, res.OK)
+	require.Contains(t, strings.ToLower(res.Detail), "unauthorized")
+}
+
+func TestHTTPProberGetComics200IsConnected(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html></html>`))
+	}))
+	t.Cleanup(srv.Close)
+
+	p := indexer.NewHTTPProber(indexer.WithProberHTTPClient(srv.Client()))
+	res := p.Probe(context.Background(), repository.IndexerRow{Kind: indexer.KindGetComics, BaseURL: srv.URL})
+	require.True(t, res.OK)
+	require.Equal(t, "connected", res.Detail)
+}
+
+func TestHTTPProberSchemeLessBaseURLProbes(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(`<caps></caps>`))
+	}))
+	t.Cleanup(srv.Close)
+
+	schemeless := strings.TrimPrefix(srv.URL, "http://")
+	p := indexer.NewHTTPProber(indexer.WithProberHTTPClient(srv.Client()))
+	res := p.Probe(context.Background(), repository.IndexerRow{Kind: indexer.KindNewznab, BaseURL: schemeless})
+	require.True(t, res.OK, "a scheme-less stored URL must still probe successfully")
+}
+
+func TestHTTPProberUnreachableHostIsConcise(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	deadURL := srv.URL
+	srv.Close() // close immediately so the address refuses connections
+
+	p := indexer.NewHTTPProber(indexer.WithProberHTTPClient(http.DefaultClient))
+	res := p.Probe(context.Background(), repository.IndexerRow{Kind: indexer.KindNewznab, BaseURL: deadURL})
+	require.False(t, res.OK)
+	require.NotEmpty(t, res.Detail)
+	require.NotContains(t, res.Detail, deadURL, "the detail must not leak the raw upstream error/url")
+}

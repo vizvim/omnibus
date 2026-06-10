@@ -164,18 +164,72 @@ func TestUpdateNormalizesSchemeLessBaseURL(t *testing.T) {
 	require.Equal(t, "http://192.168.69:5076", row.BaseURL)
 }
 
-func TestTestReturnsNotImplementedStub(t *testing.T) {
+// fakeProber records the row it was handed and returns a canned result.
+type fakeProber struct {
+	result   indexer.TestResult
+	gotRow   repository.IndexerRow
+	gotCalls int
+}
+
+func (f *fakeProber) Probe(_ context.Context, row repository.IndexerRow) indexer.TestResult {
+	f.gotCalls++
+	f.gotRow = row
+	return f.result
+}
+
+func newServiceWithProber(t *testing.T, prober indexer.IndexerProber) (*indexer.Service, *repository.Repositories) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "svc.db")
+	require.NoError(t, db.Migrate(context.Background(), path))
+	d, err := db.Open(context.Background(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.Close() })
+	repos := repository.NewRepositories(d)
+	return indexer.New(indexer.Deps{Repos: repos, Prober: prober}), repos
+}
+
+func TestTestForwardsProberResultAndPassesAPIKey(t *testing.T) {
 	t.Parallel()
-	svc, _ := newService(t)
+	fake := &fakeProber{result: indexer.TestResult{OK: true, Detail: "connected"}}
+	svc, _ := newServiceWithProber(t, fake)
 	ctx := context.Background()
 
 	created, err := svc.Create(ctx, indexer.Input{
-		Name: "gc", Kind: indexer.KindGetComics, BaseURL: "http://gc.test", Enabled: true,
+		Name: "nzb", Kind: indexer.KindNewznab, BaseURL: "http://nzb.test", APIKey: "secret-key", Enabled: true,
 	})
 	require.NoError(t, err)
 
 	res, err := svc.Test(ctx, created.ID)
 	require.NoError(t, err)
+	require.True(t, res.OK)
+	require.Equal(t, "connected", res.Detail)
+	require.Equal(t, 1, fake.gotCalls)
+	require.Equal(t, "secret-key", fake.gotRow.APIKey, "the probe must receive the stored api_key")
+}
+
+func TestTestForwardsProberFailureWithoutError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeProber{result: indexer.TestResult{OK: false, Detail: "unauthorized (check API key)"}}
+	svc, _ := newServiceWithProber(t, fake)
+	ctx := context.Background()
+
+	created, err := svc.Create(ctx, indexer.Input{
+		Name: "nzb", Kind: indexer.KindNewznab, BaseURL: "http://nzb.test", Enabled: true,
+	})
+	require.NoError(t, err)
+
+	res, err := svc.Test(ctx, created.ID)
+	require.NoError(t, err, "a failing probe is a normal result, not an error")
 	require.False(t, res.OK)
-	require.Equal(t, "not implemented", res.Detail)
+	require.Equal(t, "unauthorized (check API key)", res.Detail)
+}
+
+func TestTestMissingIDReturnsError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeProber{result: indexer.TestResult{OK: true}}
+	svc, _ := newServiceWithProber(t, fake)
+
+	_, err := svc.Test(context.Background(), 9999)
+	require.Error(t, err, "a load failure is a genuine internal fault, not a probe ok=false")
+	require.Equal(t, 0, fake.gotCalls, "the prober must not run when the row cannot be loaded")
 }

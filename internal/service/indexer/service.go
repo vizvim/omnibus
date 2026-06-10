@@ -38,6 +38,9 @@ type Deps struct {
 	// Now is an injectable clock for deterministic timestamps in tests. Zero falls
 	// back to time.Now.
 	Now func() time.Time
+	// Prober runs the real connectivity probe in Test. Zero falls back to a default
+	// HTTP prober (short timeout). Tests inject a fake.
+	Prober IndexerProber
 }
 
 // Service implements IndexerService domain logic over IndexerRepository.
@@ -45,6 +48,7 @@ type Service struct {
 	repo   repository.IndexerRepository
 	logger *slog.Logger
 	now    func() time.Time
+	prober IndexerProber
 }
 
 // New constructs a Service.
@@ -57,7 +61,11 @@ func New(d Deps) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{repo: d.Repos.Indexers, logger: logger, now: now}
+	prober := d.Prober
+	if prober == nil {
+		prober = NewHTTPProber()
+	}
+	return &Service{repo: d.Repos.Indexers, logger: logger, now: now, prober: prober}
 }
 
 // List returns all indexers with the api_key masked.
@@ -122,13 +130,16 @@ type TestResult struct {
 	Detail string
 }
 
-// Test probes an indexer's connectivity. The probe provider lands in Plan 02; until
-// then this returns a clear "not implemented" result rather than faking success.
+// Test probes an indexer's connectivity via the injected IndexerProber. Loading the row
+// (which carries the api_key the probe needs) is a genuine internal fault when it fails —
+// that returns a Go error. A reachable-but-failing probe is NOT an error: it is a normal
+// TestResult{OK:false, Detail}.
 func (s *Service) Test(ctx context.Context, id int64) (TestResult, error) {
-	if _, err := s.repo.Get(ctx, id); err != nil {
+	row, err := s.repo.Get(ctx, id)
+	if err != nil {
 		return TestResult{}, fmt.Errorf("load indexer for test: %w", err)
 	}
-	return TestResult{OK: false, Detail: "not implemented"}, nil
+	return s.prober.Probe(ctx, row), nil
 }
 
 // normalize validates the input and applies defaults (newznab category fallback).
