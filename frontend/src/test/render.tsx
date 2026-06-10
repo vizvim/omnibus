@@ -6,6 +6,7 @@ import type { ReactElement, ReactNode } from "react";
 
 import { IndexerService } from "../gen/omnibus/v1/indexers_pb";
 import { JobService } from "../gen/omnibus/v1/jobs_pb";
+import { SearchService } from "../gen/omnibus/v1/search_pb";
 import { SeriesService } from "../gen/omnibus/v1/series_pb";
 
 // SeriesServiceImpl is a partial stub of the SeriesService RPCs for component tests.
@@ -42,6 +43,17 @@ export function makeIndexerTransport(
 ): Transport {
   return createRouterTransport(({ service }) => {
     service(IndexerService, impl as never);
+  });
+}
+
+// makeSearchTransport builds an in-memory Connect transport serving SearchService
+// method stubs (searchIssue/selectCandidate/getIssueTimeline) for the Phase 4
+// search/candidate/timeline component tests.
+export function makeSearchTransport(
+  impl: Record<string, (req: never) => unknown>,
+): Transport {
+  return createRouterTransport(({ service }) => {
+    service(SearchService, impl as never);
   });
 }
 
