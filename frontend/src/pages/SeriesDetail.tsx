@@ -1,6 +1,9 @@
 import { useMutation, useQuery } from "@connectrpc/connect-query";
+import { useState } from "react";
 
+import { CandidateList } from "../components/CandidateList";
 import { EmptyState } from "../components/EmptyState";
+import { IssueTimeline } from "../components/IssueTimeline";
 import { IssueTile } from "../components/IssueTile";
 import { SyncingBadge } from "../components/SyncingBadge";
 import {
@@ -13,6 +16,11 @@ import { relativeTime } from "../lib/time";
 // importing (have < total) it polls GetSeries on an interval so issues + covers appear
 // as they land, then stops polling once caught up (D-06).
 export function SeriesDetail({ seriesId }: { seriesId: bigint }) {
+  // The selected issue exposes the per-issue Candidates + Timeline panels. searchActive
+  // gates the SearchIssue query so it only runs after the user clicks "Search".
+  const [selectedIssueId, setSelectedIssueId] = useState<bigint | null>(null);
+  const [searchActive, setSearchActive] = useState(false);
+
   const detail = useQuery(
     getSeries,
     { seriesId },
@@ -102,10 +110,50 @@ export function SeriesDetail({ seriesId }: { seriesId: bigint }) {
         <h2 className="text-xl font-semibold">Issues</h2>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
           {issues.map((issue) => (
-            <IssueTile key={issue.id.toString()} issue={issue} />
+            <button
+              key={issue.id.toString()}
+              type="button"
+              onClick={() => {
+                setSelectedIssueId(issue.id);
+                setSearchActive(false);
+              }}
+              aria-pressed={selectedIssueId === issue.id}
+              className={`rounded text-left ${
+                selectedIssueId === issue.id ? "ring-2 ring-blue-600" : ""
+              }`}
+            >
+              <IssueTile issue={issue} />
+            </button>
           ))}
         </div>
       </section>
+
+      {selectedIssueId !== null ? (
+        <section className="flex flex-col gap-6">
+          <section className="flex flex-col gap-4">
+            <div className="flex items-center gap-4">
+              <h2 className="text-xl font-semibold">Candidates</h2>
+              <button
+                type="button"
+                onClick={() => setSearchActive(true)}
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Search
+              </button>
+            </div>
+            <CandidateList
+              issueId={selectedIssueId}
+              enabled={searchActive}
+              onGrabbed={() => void detail.refetch()}
+            />
+          </section>
+
+          <section className="flex flex-col gap-4">
+            <h2 className="text-xl font-semibold">Timeline</h2>
+            <IssueTimeline issueId={selectedIssueId} />
+          </section>
+        </section>
+      ) : null}
     </div>
   );
 }
