@@ -49,7 +49,7 @@ func newService(t *testing.T) (*series.Service, *repository.Repositories) {
 
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewImportWorker(svc))
-	client, err := jobs.New(ctx, d.Write, d.Read, 2, 0, logger, workers)
+	client, err := jobs.New(ctx, d.Write, d.Read, 2, 0, 0, 0, logger, workers)
 	require.NoError(t, err)
 	svc.SetEnqueuer(client)
 	require.NoError(t, client.Start(ctx))
@@ -68,6 +68,7 @@ type fakeEnqueuer struct {
 	mu        sync.Mutex
 	calls     [][2]int64
 	refreshes [][2]int64
+	searches  []int64
 }
 
 func (f *fakeEnqueuer) EnqueueImport(_ context.Context, seriesID, comicvineVolumeID int64) error {
@@ -81,6 +82,13 @@ func (f *fakeEnqueuer) EnqueueRefresh(_ context.Context, seriesID, comicvineVolu
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.refreshes = append(f.refreshes, [2]int64{seriesID, comicvineVolumeID})
+	return nil
+}
+
+func (f *fakeEnqueuer) EnqueueSearchIssue(_ context.Context, issueID int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.searches = append(f.searches, issueID)
 	return nil
 }
 

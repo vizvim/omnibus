@@ -63,6 +63,16 @@ func (s *Service) runImport(ctx context.Context, ser repository.Series, vol meta
 			}
 			imported++
 
+			// Immediate enqueue on Wanted (D-10): an issue stored in the Wanted state gets
+			// a one-off auto-search job. Re-imports of already-grabbed issues keep their
+			// non-Wanted status (the upsert does not reset status), so only genuinely-Wanted
+			// issues enqueue; duplicates collapse via the job's per-issue uniqueness.
+			if s.enqueuer != nil && stored.Status == string(StatusWanted) {
+				if eerr := s.enqueuer.EnqueueSearchIssue(ctx, stored.ID); eerr != nil {
+					s.logger.Warn("enqueue auto-search", slog.Int64("issue_id", stored.ID), slog.Any("error", eerr))
+				}
+			}
+
 			if iss.CoverURL != "" {
 				if derr := s.downloadCover(ctx, "issues", stored.ID, iss.CoverURL); derr != nil {
 					s.logger.Warn("store issue cover", slog.Int64("issue_id", stored.ID), slog.Any("error", derr))

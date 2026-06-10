@@ -29,6 +29,10 @@ type Gateway interface {
 type Enqueuer interface {
 	EnqueueImport(ctx context.Context, seriesID, comicvineVolumeID int64) error
 	EnqueueRefresh(ctx context.Context, seriesID, comicvineVolumeID int64) error
+	// EnqueueSearchIssue enqueues a one-off auto-search when an issue becomes Wanted
+	// (D-10). Duplicate enqueues collapse via the job's per-issue uniqueness, so calling
+	// it on every imported Wanted issue is idempotent and bounded by River's worker pool.
+	EnqueueSearchIssue(ctx context.Context, issueID int64) error
 }
 
 // Deps are the Service's injected collaborators.

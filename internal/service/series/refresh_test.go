@@ -126,6 +126,44 @@ func TestRunRefreshReimportsWhenChanged(t *testing.T) {
 	require.True(t, row.LastRefreshedAt.Valid)
 }
 
+// TestImportEnqueuesSearchForWantedIssues: a re-import (changed refresh) enqueues a
+// one-off auto-search for each newly-Wanted issue (D-10 immediate enqueue).
+func TestImportEnqueuesSearchForWantedIssues(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	gw := &stubGateway{
+		volume:          metadata.VolumeDetail{ComicvineVolumeID: 4050, Name: "Daredevil", CountOfIssues: 2, DateLastUpdated: "2026-02-02 00:00:00"},
+		cachedMarker:    "2026-01-01 00:00:00",
+		hasCachedMarker: true,
+		issues: []metadata.IssueDetail{
+			{ComicvineIssueID: 1, IssueNumber: "1", Title: "One"},
+			{ComicvineIssueID: 2, IssueNumber: "2", Title: "Two"},
+		},
+	}
+
+	path := filepath.Join(t.TempDir(), "enqueue-search.db")
+	require.NoError(t, db.Migrate(ctx, path))
+	d, err := db.Open(ctx, path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.Close() })
+
+	repos := repository.NewRepositories(d)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	enq := &fakeEnqueuer{}
+	svc := series.New(series.Deps{Gateway: gw, Repos: repos, AttemptCap: 5, Logger: logger, Enqueuer: enq})
+
+	created, err := repos.Series.Upsert(ctx, repository.SeriesUpsert{
+		ComicvineVolumeID: 4050, Name: "Daredevil", Status: "Active", CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, svc.RunRefresh(ctx, created.ID, 4050))
+
+	enq.mu.Lock()
+	defer enq.mu.Unlock()
+	require.Len(t, enq.searches, 2, "one auto-search enqueued per newly-Wanted issue (D-10)")
+}
+
 // TestRunSweepEnqueuesOnlyStaleSeries: with two stale Active series seeded and a fake
 // enqueuer, RunSweep enqueues exactly one refresh per stale series and zero when none
 // are stale.
