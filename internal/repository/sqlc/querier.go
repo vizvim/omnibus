@@ -18,6 +18,7 @@ type Querier interface {
 	DeleteIndexer(ctx context.Context, id int64) error
 	GetCover(ctx context.Context, arg GetCoverParams) (GetCoverRow, error)
 	GetDownloadByID(ctx context.Context, id int64) (Download, error)
+	GetDownloadClientConfig(ctx context.Context) (DownloadClientConfig, error)
 	GetIndexer(ctx context.Context, id int64) (Indexer, error)
 	GetIssueByID(ctx context.Context, id int64) (Issue, error)
 	GetMetadataCache(ctx context.Context, cacheKey string) (MetadataCache, error)
@@ -60,6 +61,7 @@ type Querier interface {
 	UpsertArc(ctx context.Context, arg UpsertArcParams) (StoryArc, error)
 	// Idempotent upsert of a cover blob keyed on (entity_type, entity_id).
 	UpsertCover(ctx context.Context, arg UpsertCoverParams) error
+	UpsertDownloadClientConfig(ctx context.Context, arg UpsertDownloadClientConfigParams) (DownloadClientConfig, error)
 	// Idempotent upsert keyed on the immutable comicvine_issue_id.
 	UpsertIssue(ctx context.Context, arg UpsertIssueParams) (Issue, error)
 	// Idempotent on name (UNIQUE); records the CV publisher id when known.
