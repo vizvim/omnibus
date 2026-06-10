@@ -9,8 +9,11 @@ import {
   createIndexer,
   deleteIndexer,
   listIndexers,
+  testIndexer,
   updateIndexer,
 } from "../gen/omnibus/v1/indexers-IndexerService_connectquery";
+
+type TestOutcome = { ok: boolean; detail: string };
 
 const SAVE_ERROR = "Couldn't save the indexer. Check the URL and API key, then try again.";
 
@@ -21,6 +24,10 @@ export function Indexers() {
   const list = useQuery(listIndexers, {}, { retry: false });
   const [formMode, setFormMode] = useState<"closed" | "add" | { edit: Indexer }>("closed");
   const [pendingDelete, setPendingDelete] = useState<Indexer | undefined>(undefined);
+  // Per-row connectivity-probe outcome, keyed by indexer id. The in-flight id is captured
+  // before mutate so onSuccess can attribute the result to the right row.
+  const [testResults, setTestResults] = useState<Record<string, TestOutcome>>({});
+  const [testingId, setTestingId] = useState<string | undefined>(undefined);
 
   const refetch = () => void list.refetch();
 
@@ -42,6 +49,19 @@ export function Indexers() {
       refetch();
     },
   });
+  const test = useMutation(testIndexer, {
+    onSuccess: (res, vars) => {
+      const id = (vars?.id ?? testingId ?? "").toString();
+      if (id) {
+        setTestResults((prev) => ({ ...prev, [id]: { ok: res.ok, detail: res.detail } }));
+      }
+    },
+  });
+
+  function runTest(target: Indexer) {
+    setTestingId(target.id.toString());
+    test.mutate({ id: target.id });
+  }
 
   function submitAdd(values: IndexerFormValues) {
     create.mutate({
@@ -167,8 +187,25 @@ export function Indexers() {
                 <span className="text-sm text-slate-600">
                   {idx.kind} · {idx.baseUrl}
                 </span>
+                {testResults[idx.id.toString()] ? (
+                  testResults[idx.id.toString()].ok ? (
+                    <span className="text-sm font-semibold text-green-700">✓ Connected</span>
+                  ) : (
+                    <span className="text-sm font-semibold text-red-600">
+                      ✗ {testResults[idx.id.toString()].detail}
+                    </span>
+                  )
+                ) : null}
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => runTest(idx)}
+                  disabled={test.isPending && testingId === idx.id.toString()}
+                  className="rounded bg-slate-100 px-3 py-1.5 text-sm font-semibold"
+                >
+                  Test
+                </button>
                 <button
                   type="button"
                   onClick={() => toggleEnabled(idx)}
