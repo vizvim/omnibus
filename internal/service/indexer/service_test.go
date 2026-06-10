@@ -107,6 +107,28 @@ func TestUpdateReplacesAPIKeyWhenProvided(t *testing.T) {
 	require.Equal(t, "new", row.APIKey)
 }
 
+func TestListAndDelete(t *testing.T) {
+	t.Parallel()
+	svc, _ := newService(t)
+	ctx := context.Background()
+
+	created, err := svc.Create(ctx, indexer.Input{
+		Name: "nzb", Kind: indexer.KindNewznab, BaseURL: "http://nzb.test", Enabled: true,
+	})
+	require.NoError(t, err)
+
+	list, err := svc.List(ctx)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	require.Equal(t, "nzb", list[0].Name)
+
+	require.NoError(t, svc.Delete(ctx, created.ID))
+
+	list, err = svc.List(ctx)
+	require.NoError(t, err)
+	require.Empty(t, list)
+}
+
 func TestCreateNormalizesSchemeLessBaseURL(t *testing.T) {
 	t.Parallel()
 	svc, repos := newService(t)

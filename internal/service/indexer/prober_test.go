@@ -74,6 +74,53 @@ func TestHTTPProberSchemeLessBaseURLProbes(t *testing.T) {
 	require.True(t, res.OK, "a scheme-less stored URL must still probe successfully")
 }
 
+func TestHTTPProberGetComicsNon200IsStatus(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(srv.Close)
+
+	p := indexer.NewHTTPProber(indexer.WithProberHTTPClient(srv.Client()))
+	res := p.Probe(context.Background(), repository.IndexerRow{Kind: indexer.KindGetComics, BaseURL: srv.URL})
+	require.False(t, res.OK)
+	require.Contains(t, res.Detail, "status 503")
+}
+
+func TestHTTPProberNewznabNon2xxIsStatus(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+
+	p := indexer.NewHTTPProber(indexer.WithProberHTTPClient(srv.Client()))
+	res := p.Probe(context.Background(), repository.IndexerRow{Kind: indexer.KindNewznab, BaseURL: srv.URL})
+	require.False(t, res.OK)
+	require.Contains(t, res.Detail, "status 500")
+}
+
+func TestHTTPProberNewznab200NonXMLIsUnexpected(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`<html><body>login</body>`)) // not well-formed caps XML
+	}))
+	t.Cleanup(srv.Close)
+
+	p := indexer.NewHTTPProber(indexer.WithProberHTTPClient(srv.Client()))
+	res := p.Probe(context.Background(), repository.IndexerRow{Kind: indexer.KindNewznab, BaseURL: srv.URL})
+	require.False(t, res.OK)
+	require.Equal(t, "unexpected response", res.Detail)
+}
+
+func TestHTTPProberUnknownKind(t *testing.T) {
+	t.Parallel()
+	p := indexer.NewHTTPProber()
+	res := p.Probe(context.Background(), repository.IndexerRow{Kind: "mystery", BaseURL: "http://x.test"})
+	require.False(t, res.OK)
+	require.Equal(t, "unknown indexer kind", res.Detail)
+}
+
 func TestHTTPProberUnreachableHostIsConcise(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
