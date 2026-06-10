@@ -15,9 +15,11 @@ import (
 )
 
 // fakeGateway returns canned candidates regardless of the providers passed, so service
-// tests need no network.
+// tests need no network. Search() returns candidates; Feed() returns feed (falling back
+// to candidates when feed is nil) so search and RSS paths can be driven independently.
 type fakeGateway struct {
 	candidates []indexer.Candidate
+	feed       []indexer.Candidate
 	err        error
 }
 
@@ -26,6 +28,9 @@ func (f *fakeGateway) Search(_ context.Context, _ []indexer.IndexerProvider, _ s
 }
 
 func (f *fakeGateway) Feed(_ context.Context, _ []indexer.IndexerProvider) ([]indexer.Candidate, error) {
+	if f.feed != nil {
+		return f.feed, f.err
+	}
 	return f.candidates, f.err
 }
 
