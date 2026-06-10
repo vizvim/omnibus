@@ -80,10 +80,17 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		StalenessThreshold: time.Duration(cfg.StalenessThresholdDays) * 24 * time.Hour,
 	})
 
-	// DownloadProviders: SABnzbd comes from config (D-16: SAB is the download client,
-	// not an indexer). An empty SabnzbdURL yields a provider whose Submit fails loudly
-	// (ErrSabnzbdNotConfigured). No polling loop is started here — tracking is Phase 5.
-	downloadProviders := newDownloadProviders(cfg)
+	// DownloadProviders: SABnzbd config is now DB-backed and runtime-editable via
+	// DownloadClientService (supersedes D-16). On first boot, seed the DB row from
+	// OMNIBUS_SABNZBD_* so existing deployments keep working; thereafter the DB is the
+	// source of truth and the provider resolves config from it on each Submit. An empty
+	// resolved URL yields a Submit that fails loudly (ErrSabnzbdNotConfigured). No polling
+	// loop is started here — tracking is Phase 5.
+	if seedErr := seedSabnzbdConfig(ctx, repos, cfg, logger); seedErr != nil {
+		_ = database.Close()
+		return fmt.Errorf("seed download client config: %w", seedErr)
+	}
+	downloadProviders := newDownloadProviders(repos)
 
 	// SearchService converges the indexer gateway (Plan 02), the filter/score pipeline
 	// (Plan 03), and the grab handoff (Plan 04) behind manual-search RPCs, and owns the
@@ -242,15 +249,61 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 }
 
 // newDownloadProviders constructs the DownloadProviders keyed by Kind, ready to inject
-// into the search service (Plan 05). SABnzbd is built from config (D-16: SAB is the
-// download client, not an indexer); an empty SabnzbdURL yields a provider whose Submit
-// returns ErrSabnzbdNotConfigured so a NZB grab without SAB fails loudly. GetComics DDL
+// into the search service. SABnzbd config is now DB-backed and runtime-editable
+// (supersedes D-16): the provider resolves URL/API key/category from
+// repos.DownloadClient on each Submit, so an empty stored URL yields a Submit that
+// returns ErrSabnzbdNotConfigured (a NZB grab without SAB fails loudly). GetComics DDL
 // needs no secret. No polling is started here (Phase 5).
-func newDownloadProviders(cfg config.Config) map[string]download.DownloadProvider {
+func newDownloadProviders(repos *repository.Repositories) map[string]download.DownloadProvider {
+	resolver := func(ctx context.Context) (download.SABnzbdConfig, error) {
+		row, err := repos.DownloadClient.Get(ctx)
+		if err != nil {
+			if errors.Is(err, repository.ErrNoDownloadClientConfig) {
+				// No row yet: an empty config makes Submit fail loudly.
+				return download.SABnzbdConfig{}, nil
+			}
+			return download.SABnzbdConfig{}, err
+		}
+		return download.SABnzbdConfig{
+			BaseURL:  row.URL,
+			APIKey:   row.APIKey,
+			Category: row.Category,
+		}, nil
+	}
 	return map[string]download.DownloadProvider{
-		"sabnzbd":   download.NewSABnzbdProvider(cfg.SabnzbdURL, cfg.SabnzbdAPIKey, cfg.SabnzbdCategory),
+		"sabnzbd":   download.NewSABnzbdProviderWithResolver(resolver),
 		"getcomics": download.NewGetComicsDDLProvider("https://getcomics.org"),
 	}
+}
+
+// seedSabnzbdConfig seeds the singleton download_client_config row from OMNIBUS_SABNZBD_*
+// on first boot so existing deployments keep working after SAB config moved into the DB
+// (supersedes D-16). It only seeds when the DB row is empty/absent AND cfg.SabnzbdURL is
+// non-empty — it never overwrites a user-set DB row.
+func seedSabnzbdConfig(ctx context.Context, repos *repository.Repositories, cfg config.Config, logger *slog.Logger) error {
+	row, err := repos.DownloadClient.Get(ctx)
+	if err != nil && !errors.Is(err, repository.ErrNoDownloadClientConfig) {
+		return err
+	}
+	if row.URL != "" {
+		// DB already has a user-set config; never overwrite it.
+		return nil
+	}
+	if cfg.SabnzbdURL == "" {
+		// Nothing to seed from.
+		return nil
+	}
+	nowISO := time.Now().UTC().Format(time.RFC3339)
+	if _, err := repos.DownloadClient.Upsert(ctx, repository.DownloadClientConfigUpsert{
+		URL:      cfg.SabnzbdURL,
+		APIKey:   cfg.SabnzbdAPIKey,
+		Category: cfg.SabnzbdCategory,
+	}, nowISO); err != nil {
+		return err
+	}
+	logger.Info("seeded download client config from OMNIBUS_SABNZBD_* on first boot",
+		slog.String("sabnzbd_url", cfg.SabnzbdURL))
+	return nil
 }
 
 // parseRate maps the OMNIBUS_COMICVINE_RATE config (a Go duration like "2s") to the
