@@ -9,7 +9,12 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
+
+// sabProbeTimeout bounds a connectivity probe so a hung/slow SABnzbd host cannot stall the
+// handler or the UI indefinitely (T-uzn-02).
+const sabProbeTimeout = 8 * time.Second
 
 // ErrSabnzbdNotConfigured is returned by a SAB provider whose resolved base URL is empty —
 // a NZB grab without SABnzbd configured must fail loudly, not silently succeed.
@@ -135,4 +140,80 @@ func (p *SABnzbdProvider) Submit(ctx context.Context, req GrabRequest) (string, 
 		return "", errors.New("sabnzbd addurl returned no nzo_id")
 	}
 	return parsed.NzoIDs[0], nil
+}
+
+// Test runs a lightweight connectivity probe against SABnzbd (mode=version). It NEVER
+// returns a Go error — every outcome maps to (ok, detail) so the caller can surface it as
+// a normal response, not an RPC error. An empty resolved URL yields (false,"not
+// configured"); a short timeout bounds a hung host.
+func (p *SABnzbdProvider) Test(ctx context.Context) (ok bool, detail string) {
+	cfg, err := p.resolver(ctx)
+	if err != nil {
+		return false, "config error"
+	}
+	baseURL := strings.TrimRight(cfg.BaseURL, "/")
+	if baseURL == "" {
+		return false, "not configured"
+	}
+
+	q := url.Values{}
+	q.Set("mode", "version")
+	q.Set("output", "json")
+	q.Set("apikey", cfg.APIKey)
+	endpoint := baseURL + "/api?" + q.Encode()
+
+	probeCtx, cancel := context.WithTimeout(ctx, sabProbeTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, endpoint, http.NoBody)
+	if err != nil {
+		return false, "invalid url"
+	}
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return false, sabDialDetail(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return false, "unauthorized (check API key)"
+	case resp.StatusCode < 200 || resp.StatusCode >= 300:
+		return false, fmt.Sprintf("status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, "unexpected response"
+	}
+	// SAB returns an {"error": "API Key Incorrect"} JSON body with a 200 status on a bad
+	// key, so inspect the parsed payload as well as the status code.
+	var parsed struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return false, "unexpected response"
+	}
+	if parsed.Error != "" {
+		if strings.Contains(strings.ToLower(parsed.Error), "api key") {
+			return false, "unauthorized (check API key)"
+		}
+		return false, "sabnzbd error"
+	}
+	return true, "connected"
+}
+
+// sabDialDetail maps a transport error to a concise, non-leaky detail string (T-uzn-01).
+func sabDialDetail(err error) string {
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "context deadline exceeded"), strings.Contains(msg, "Client.Timeout"), strings.Contains(msg, "timeout"):
+		return "timeout"
+	case strings.Contains(msg, "connection refused"):
+		return "connection refused"
+	case strings.Contains(msg, "no such host"):
+		return "host not found"
+	default:
+		return "unreachable"
+	}
 }

@@ -16,6 +16,7 @@ import (
 type DownloadClientServicer interface {
 	Get(ctx context.Context) (downloadclient.Config, error)
 	Update(ctx context.Context, in downloadclient.Input) (downloadclient.Config, error)
+	Test(ctx context.Context) (downloadclient.TestResult, error)
 }
 
 // DownloadClientHandler implements the generated DownloadClientServiceHandler over the
@@ -60,6 +61,19 @@ func (h *DownloadClientHandler) UpdateDownloadClientConfig(
 		return nil, downloadClientServiceError(err)
 	}
 	return connect.NewResponse(&omnibusv1.UpdateDownloadClientConfigResponse{Config: configToProto(cfg)}), nil
+}
+
+// TestDownloadClientConfig handles the connectivity-probe RPC. A failed probe (ok=false)
+// is a normal response, NOT a connect error — only a genuine internal fault returns
+// CodeInternal.
+func (h *DownloadClientHandler) TestDownloadClientConfig(
+	ctx context.Context, _ *connect.Request[omnibusv1.TestDownloadClientConfigRequest],
+) (*connect.Response[omnibusv1.TestDownloadClientConfigResponse], error) {
+	res, err := h.svc.Test(ctx)
+	if err != nil {
+		return nil, downloadClientServiceError(err)
+	}
+	return connect.NewResponse(&omnibusv1.TestDownloadClientConfigResponse{Ok: res.OK, Detail: res.Detail}), nil
 }
 
 // configToProto maps the masked domain Config to its proto view. The proto config message

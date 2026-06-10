@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file omnibus/v1/download_client.proto.
  */
 export const file_omnibus_v1_download_client: GenFile = /*@__PURE__*/
-  fileDesc("CiBvbW5pYnVzL3YxL2Rvd25sb2FkX2NsaWVudC5wcm90bxIKb21uaWJ1cy52MSJJChREb3dubG9hZENsaWVudENvbmZpZxILCgN1cmwYASABKAkSEAoIY2F0ZWdvcnkYAiABKAkSEgoKY29uZmlndXJlZBgDIAEoCCIgCh5HZXREb3dubG9hZENsaWVudENvbmZpZ1JlcXVlc3QiUwofR2V0RG93bmxvYWRDbGllbnRDb25maWdSZXNwb25zZRIwCgZjb25maWcYASABKAsyIC5vbW5pYnVzLnYxLkRvd25sb2FkQ2xpZW50Q29uZmlnIlMKIVVwZGF0ZURvd25sb2FkQ2xpZW50Q29uZmlnUmVxdWVzdBILCgN1cmwYASABKAkSDwoHYXBpX2tleRgCIAEoCRIQCghjYXRlZ29yeRgDIAEoCSJWCiJVcGRhdGVEb3dubG9hZENsaWVudENvbmZpZ1Jlc3BvbnNlEjAKBmNvbmZpZxgBIAEoCzIgLm9tbmlidXMudjEuRG93bmxvYWRDbGllbnRDb25maWcyiAIKFURvd25sb2FkQ2xpZW50U2VydmljZRJyChdHZXREb3dubG9hZENsaWVudENvbmZpZxIqLm9tbmlidXMudjEuR2V0RG93bmxvYWRDbGllbnRDb25maWdSZXF1ZXN0Gisub21uaWJ1cy52MS5HZXREb3dubG9hZENsaWVudENvbmZpZ1Jlc3BvbnNlEnsKGlVwZGF0ZURvd25sb2FkQ2xpZW50Q29uZmlnEi0ub21uaWJ1cy52MS5VcGRhdGVEb3dubG9hZENsaWVudENvbmZpZ1JlcXVlc3QaLi5vbW5pYnVzLnYxLlVwZGF0ZURvd25sb2FkQ2xpZW50Q29uZmlnUmVzcG9uc2VCN1o1Z2l0aHViLmNvbS92aXp2aW0vb21uaWJ1cy9nZW4vZ28vb21uaWJ1cy92MTtvbW5pYnVzdjFiBnByb3RvMw");
+  fileDesc("CiBvbW5pYnVzL3YxL2Rvd25sb2FkX2NsaWVudC5wcm90bxIKb21uaWJ1cy52MSJJChREb3dubG9hZENsaWVudENvbmZpZxILCgN1cmwYASABKAkSEAoIY2F0ZWdvcnkYAiABKAkSEgoKY29uZmlndXJlZBgDIAEoCCIgCh5HZXREb3dubG9hZENsaWVudENvbmZpZ1JlcXVlc3QiUwofR2V0RG93bmxvYWRDbGllbnRDb25maWdSZXNwb25zZRIwCgZjb25maWcYASABKAsyIC5vbW5pYnVzLnYxLkRvd25sb2FkQ2xpZW50Q29uZmlnIlMKIVVwZGF0ZURvd25sb2FkQ2xpZW50Q29uZmlnUmVxdWVzdBILCgN1cmwYASABKAkSDwoHYXBpX2tleRgCIAEoCRIQCghjYXRlZ29yeRgDIAEoCSJWCiJVcGRhdGVEb3dubG9hZENsaWVudENvbmZpZ1Jlc3BvbnNlEjAKBmNvbmZpZxgBIAEoCzIgLm9tbmlidXMudjEuRG93bmxvYWRDbGllbnRDb25maWciIQofVGVzdERvd25sb2FkQ2xpZW50Q29uZmlnUmVxdWVzdCI+CiBUZXN0RG93bmxvYWRDbGllbnRDb25maWdSZXNwb25zZRIKCgJvaxgBIAEoCBIOCgZkZXRhaWwYAiABKAky/wIKFURvd25sb2FkQ2xpZW50U2VydmljZRJyChdHZXREb3dubG9hZENsaWVudENvbmZpZxIqLm9tbmlidXMudjEuR2V0RG93bmxvYWRDbGllbnRDb25maWdSZXF1ZXN0Gisub21uaWJ1cy52MS5HZXREb3dubG9hZENsaWVudENvbmZpZ1Jlc3BvbnNlEnsKGlVwZGF0ZURvd25sb2FkQ2xpZW50Q29uZmlnEi0ub21uaWJ1cy52MS5VcGRhdGVEb3dubG9hZENsaWVudENvbmZpZ1JlcXVlc3QaLi5vbW5pYnVzLnYxLlVwZGF0ZURvd25sb2FkQ2xpZW50Q29uZmlnUmVzcG9uc2USdQoYVGVzdERvd25sb2FkQ2xpZW50Q29uZmlnEisub21uaWJ1cy52MS5UZXN0RG93bmxvYWRDbGllbnRDb25maWdSZXF1ZXN0Giwub21uaWJ1cy52MS5UZXN0RG93bmxvYWRDbGllbnRDb25maWdSZXNwb25zZUI3WjVnaXRodWIuY29tL3ZpenZpbS9vbW5pYnVzL2dlbi9nby9vbW5pYnVzL3YxO29tbmlidXN2MWIGcHJvdG8z");
 
 /**
  * DownloadClientConfig is the masked, DB-backed SABnzbd download-client configuration
@@ -125,6 +125,45 @@ export const UpdateDownloadClientConfigResponseSchema: GenMessage<UpdateDownload
   messageDesc(file_omnibus_v1_download_client, 4);
 
 /**
+ * @generated from message omnibus.v1.TestDownloadClientConfigRequest
+ */
+export type TestDownloadClientConfigRequest = Message<"omnibus.v1.TestDownloadClientConfigRequest"> & {
+};
+
+/**
+ * Describes the message omnibus.v1.TestDownloadClientConfigRequest.
+ * Use `create(TestDownloadClientConfigRequestSchema)` to create a new message.
+ */
+export const TestDownloadClientConfigRequestSchema: GenMessage<TestDownloadClientConfigRequest> = /*@__PURE__*/
+  messageDesc(file_omnibus_v1_download_client, 5);
+
+/**
+ * TestDownloadClientConfigResponse carries the connectivity-probe outcome. A failed probe
+ * is a normal response (ok=false + a concise detail), never an RPC error. The api_key is
+ * never echoed (T-uzn-01): detail is concise status text only.
+ *
+ * @generated from message omnibus.v1.TestDownloadClientConfigResponse
+ */
+export type TestDownloadClientConfigResponse = Message<"omnibus.v1.TestDownloadClientConfigResponse"> & {
+  /**
+   * @generated from field: bool ok = 1;
+   */
+  ok: boolean;
+
+  /**
+   * @generated from field: string detail = 2;
+   */
+  detail: string;
+};
+
+/**
+ * Describes the message omnibus.v1.TestDownloadClientConfigResponse.
+ * Use `create(TestDownloadClientConfigResponseSchema)` to create a new message.
+ */
+export const TestDownloadClientConfigResponseSchema: GenMessage<TestDownloadClientConfigResponse> = /*@__PURE__*/
+  messageDesc(file_omnibus_v1_download_client, 6);
+
+/**
  * DownloadClientService owns the singleton DB-backed SABnzbd download-client config
  * (supersedes D-16: SAB config now persists in the DB and is editable at runtime). It is
  * a domain-segmented service (ADR 0007), separate from IndexerService.
@@ -151,6 +190,17 @@ export const DownloadClientService: GenService<{
     methodKind: "unary";
     input: typeof UpdateDownloadClientConfigRequestSchema;
     output: typeof UpdateDownloadClientConfigResponseSchema;
+  },
+  /**
+   * TestDownloadClientConfig runs a real connectivity probe against the configured SABnzbd
+   * client. A failed probe returns ok=false + detail, never an RPC error.
+   *
+   * @generated from rpc omnibus.v1.DownloadClientService.TestDownloadClientConfig
+   */
+  testDownloadClientConfig: {
+    methodKind: "unary";
+    input: typeof TestDownloadClientConfigRequestSchema;
+    output: typeof TestDownloadClientConfigResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_omnibus_v1_download_client, 0);

@@ -271,6 +271,97 @@ func (x *UpdateDownloadClientConfigResponse) GetConfig() *DownloadClientConfig {
 	return nil
 }
 
+type TestDownloadClientConfigRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestDownloadClientConfigRequest) Reset() {
+	*x = TestDownloadClientConfigRequest{}
+	mi := &file_omnibus_v1_download_client_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestDownloadClientConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestDownloadClientConfigRequest) ProtoMessage() {}
+
+func (x *TestDownloadClientConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_omnibus_v1_download_client_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestDownloadClientConfigRequest.ProtoReflect.Descriptor instead.
+func (*TestDownloadClientConfigRequest) Descriptor() ([]byte, []int) {
+	return file_omnibus_v1_download_client_proto_rawDescGZIP(), []int{5}
+}
+
+// TestDownloadClientConfigResponse carries the connectivity-probe outcome. A failed probe
+// is a normal response (ok=false + a concise detail), never an RPC error. The api_key is
+// never echoed (T-uzn-01): detail is concise status text only.
+type TestDownloadClientConfigResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Detail        string                 `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestDownloadClientConfigResponse) Reset() {
+	*x = TestDownloadClientConfigResponse{}
+	mi := &file_omnibus_v1_download_client_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestDownloadClientConfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestDownloadClientConfigResponse) ProtoMessage() {}
+
+func (x *TestDownloadClientConfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_omnibus_v1_download_client_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestDownloadClientConfigResponse.ProtoReflect.Descriptor instead.
+func (*TestDownloadClientConfigResponse) Descriptor() ([]byte, []int) {
+	return file_omnibus_v1_download_client_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *TestDownloadClientConfigResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *TestDownloadClientConfigResponse) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
 var File_omnibus_v1_download_client_proto protoreflect.FileDescriptor
 
 const file_omnibus_v1_download_client_proto_rawDesc = "" +
@@ -291,10 +382,15 @@ const file_omnibus_v1_download_client_proto_rawDesc = "" +
 	"\aapi_key\x18\x02 \x01(\tR\x06apiKey\x12\x1a\n" +
 	"\bcategory\x18\x03 \x01(\tR\bcategory\"^\n" +
 	"\"UpdateDownloadClientConfigResponse\x128\n" +
-	"\x06config\x18\x01 \x01(\v2 .omnibus.v1.DownloadClientConfigR\x06config2\x88\x02\n" +
+	"\x06config\x18\x01 \x01(\v2 .omnibus.v1.DownloadClientConfigR\x06config\"!\n" +
+	"\x1fTestDownloadClientConfigRequest\"J\n" +
+	" TestDownloadClientConfigResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x16\n" +
+	"\x06detail\x18\x02 \x01(\tR\x06detail2\xff\x02\n" +
 	"\x15DownloadClientService\x12r\n" +
 	"\x17GetDownloadClientConfig\x12*.omnibus.v1.GetDownloadClientConfigRequest\x1a+.omnibus.v1.GetDownloadClientConfigResponse\x12{\n" +
-	"\x1aUpdateDownloadClientConfig\x12-.omnibus.v1.UpdateDownloadClientConfigRequest\x1a..omnibus.v1.UpdateDownloadClientConfigResponseB7Z5github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1b\x06proto3"
+	"\x1aUpdateDownloadClientConfig\x12-.omnibus.v1.UpdateDownloadClientConfigRequest\x1a..omnibus.v1.UpdateDownloadClientConfigResponse\x12u\n" +
+	"\x18TestDownloadClientConfig\x12+.omnibus.v1.TestDownloadClientConfigRequest\x1a,.omnibus.v1.TestDownloadClientConfigResponseB7Z5github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1b\x06proto3"
 
 var (
 	file_omnibus_v1_download_client_proto_rawDescOnce sync.Once
@@ -308,23 +404,27 @@ func file_omnibus_v1_download_client_proto_rawDescGZIP() []byte {
 	return file_omnibus_v1_download_client_proto_rawDescData
 }
 
-var file_omnibus_v1_download_client_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_omnibus_v1_download_client_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_omnibus_v1_download_client_proto_goTypes = []any{
 	(*DownloadClientConfig)(nil),               // 0: omnibus.v1.DownloadClientConfig
 	(*GetDownloadClientConfigRequest)(nil),     // 1: omnibus.v1.GetDownloadClientConfigRequest
 	(*GetDownloadClientConfigResponse)(nil),    // 2: omnibus.v1.GetDownloadClientConfigResponse
 	(*UpdateDownloadClientConfigRequest)(nil),  // 3: omnibus.v1.UpdateDownloadClientConfigRequest
 	(*UpdateDownloadClientConfigResponse)(nil), // 4: omnibus.v1.UpdateDownloadClientConfigResponse
+	(*TestDownloadClientConfigRequest)(nil),    // 5: omnibus.v1.TestDownloadClientConfigRequest
+	(*TestDownloadClientConfigResponse)(nil),   // 6: omnibus.v1.TestDownloadClientConfigResponse
 }
 var file_omnibus_v1_download_client_proto_depIdxs = []int32{
 	0, // 0: omnibus.v1.GetDownloadClientConfigResponse.config:type_name -> omnibus.v1.DownloadClientConfig
 	0, // 1: omnibus.v1.UpdateDownloadClientConfigResponse.config:type_name -> omnibus.v1.DownloadClientConfig
 	1, // 2: omnibus.v1.DownloadClientService.GetDownloadClientConfig:input_type -> omnibus.v1.GetDownloadClientConfigRequest
 	3, // 3: omnibus.v1.DownloadClientService.UpdateDownloadClientConfig:input_type -> omnibus.v1.UpdateDownloadClientConfigRequest
-	2, // 4: omnibus.v1.DownloadClientService.GetDownloadClientConfig:output_type -> omnibus.v1.GetDownloadClientConfigResponse
-	4, // 5: omnibus.v1.DownloadClientService.UpdateDownloadClientConfig:output_type -> omnibus.v1.UpdateDownloadClientConfigResponse
-	4, // [4:6] is the sub-list for method output_type
-	2, // [2:4] is the sub-list for method input_type
+	5, // 4: omnibus.v1.DownloadClientService.TestDownloadClientConfig:input_type -> omnibus.v1.TestDownloadClientConfigRequest
+	2, // 5: omnibus.v1.DownloadClientService.GetDownloadClientConfig:output_type -> omnibus.v1.GetDownloadClientConfigResponse
+	4, // 6: omnibus.v1.DownloadClientService.UpdateDownloadClientConfig:output_type -> omnibus.v1.UpdateDownloadClientConfigResponse
+	6, // 7: omnibus.v1.DownloadClientService.TestDownloadClientConfig:output_type -> omnibus.v1.TestDownloadClientConfigResponse
+	5, // [5:8] is the sub-list for method output_type
+	2, // [2:5] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
 	2, // [2:2] is the sub-list for extension extendee
 	0, // [0:2] is the sub-list for field type_name
@@ -341,7 +441,7 @@ func file_omnibus_v1_download_client_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_omnibus_v1_download_client_proto_rawDesc), len(file_omnibus_v1_download_client_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

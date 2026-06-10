@@ -17,3 +17,11 @@ export const getDownloadClientConfig = DownloadClientService.method.getDownloadC
  * @generated from rpc omnibus.v1.DownloadClientService.UpdateDownloadClientConfig
  */
 export const updateDownloadClientConfig = DownloadClientService.method.updateDownloadClientConfig;
+
+/**
+ * TestDownloadClientConfig runs a real connectivity probe against the configured SABnzbd
+ * client. A failed probe returns ok=false + detail, never an RPC error.
+ *
+ * @generated from rpc omnibus.v1.DownloadClientService.TestDownloadClientConfig
+ */
+export const testDownloadClientConfig = DownloadClientService.method.testDownloadClientConfig;

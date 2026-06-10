@@ -56,6 +56,71 @@ func TestSABnzbdNotConfiguredFailsLoudly(t *testing.T) {
 	require.ErrorIs(t, err, download.ErrSabnzbdNotConfigured)
 }
 
+func TestSABnzbdTestConnectedOnVersion200(t *testing.T) {
+	t.Parallel()
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"4.1.0"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	p := download.NewSABnzbdProvider(srv.URL, "sab-key", "comics", download.WithSABnzbdHTTPClient(srv.Client()))
+	ok, detail := p.Test(context.Background())
+	require.True(t, ok)
+	require.Equal(t, "connected", detail)
+	require.Contains(t, gotQuery, "mode=version", "the probe must use the lightweight version endpoint")
+}
+
+func TestSABnzbdTest401IsUnauthorized(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(srv.Close)
+
+	p := download.NewSABnzbdProvider(srv.URL, "bad", "", download.WithSABnzbdHTTPClient(srv.Client()))
+	ok, detail := p.Test(context.Background())
+	require.False(t, ok)
+	require.Contains(t, detail, "unauthorized")
+}
+
+func TestSABnzbdTestBadKeyJSONErrorIsUnauthorized(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// SAB returns a 200 with an {"error": ...} body on a bad key.
+		_, _ = w.Write([]byte(`{"error":"API Key Incorrect"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	p := download.NewSABnzbdProvider(srv.URL, "bad", "", download.WithSABnzbdHTTPClient(srv.Client()))
+	ok, detail := p.Test(context.Background())
+	require.False(t, ok)
+	require.Contains(t, detail, "unauthorized")
+}
+
+func TestSABnzbdTestEmptyURLIsNotConfigured(t *testing.T) {
+	t.Parallel()
+	p := download.NewSABnzbdProvider("", "", "")
+	ok, detail := p.Test(context.Background())
+	require.False(t, ok)
+	require.Equal(t, "not configured", detail)
+}
+
+func TestSABnzbdTestUnreachableIsConcise(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	deadURL := srv.URL
+	srv.Close() // refuse connections
+
+	p := download.NewSABnzbdProvider(deadURL, "k", "")
+	ok, detail := p.Test(context.Background())
+	require.False(t, ok)
+	require.NotEmpty(t, detail)
+	require.NotContains(t, detail, deadURL, "detail must not leak the raw upstream error/url")
+}
+
 func TestGetComicsDDLSubmitReturnsPostURL(t *testing.T) {
 	t.Parallel()
 	p := download.NewGetComicsDDLProvider("https://getcomics.org")

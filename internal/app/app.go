@@ -90,7 +90,10 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		_ = database.Close()
 		return fmt.Errorf("seed download client config: %w", seedErr)
 	}
-	downloadProviders := newDownloadProviders(repos)
+	// Build the SABnzbd provider once from a DB-backed resolver so the same instance fronts
+	// both NZB submits (search service) and the connectivity probe (download client Test).
+	sabProvider := download.NewSABnzbdProviderWithResolver(sabnzbdResolver(repos))
+	downloadProviders := newDownloadProviders(sabProvider)
 
 	// SearchService converges the indexer gateway (Plan 02), the filter/score pipeline
 	// (Plan 03), and the grab handoff (Plan 04) behind manual-search RPCs, and owns the
@@ -133,8 +136,9 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	indexerSvc := indexer.New(indexer.Deps{Repos: repos, Logger: logger})
 
 	// DownloadClientService owns the singleton DB-backed SABnzbd config (ADR 0007),
-	// editable at runtime (supersedes D-16).
-	downloadClientSvc := downloadclient.New(downloadclient.Deps{Repos: repos, Logger: logger})
+	// editable at runtime (supersedes D-16). The same SAB provider is injected as the
+	// connectivity prober so Test probes the live, DB-resolved config.
+	downloadClientSvc := downloadclient.New(downloadclient.Deps{Repos: repos, Logger: logger, Prober: sabProvider})
 
 	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, searchSvc, repos.Cover)
 	if err != nil {
@@ -248,14 +252,12 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 	}, nil
 }
 
-// newDownloadProviders constructs the DownloadProviders keyed by Kind, ready to inject
-// into the search service. SABnzbd config is now DB-backed and runtime-editable
-// (supersedes D-16): the provider resolves URL/API key/category from
-// repos.DownloadClient on each Submit, so an empty stored URL yields a Submit that
-// returns ErrSabnzbdNotConfigured (a NZB grab without SAB fails loudly). GetComics DDL
-// needs no secret. No polling is started here (Phase 5).
-func newDownloadProviders(repos *repository.Repositories) map[string]download.DownloadProvider {
-	resolver := func(ctx context.Context) (download.SABnzbdConfig, error) {
+// sabnzbdResolver builds the DB-backed SABnzbd config resolver. SABnzbd config is now
+// DB-backed and runtime-editable (supersedes D-16): URL/API key/category are resolved from
+// repos.DownloadClient on each Submit/probe, so an empty stored URL yields a Submit that
+// returns ErrSabnzbdNotConfigured (and a Test that reports "not configured").
+func sabnzbdResolver(repos *repository.Repositories) download.SABnzbdConfigResolver {
+	return func(ctx context.Context) (download.SABnzbdConfig, error) {
 		row, err := repos.DownloadClient.Get(ctx)
 		if err != nil {
 			if errors.Is(err, repository.ErrNoDownloadClientConfig) {
@@ -270,8 +272,15 @@ func newDownloadProviders(repos *repository.Repositories) map[string]download.Do
 			Category: row.Category,
 		}, nil
 	}
+}
+
+// newDownloadProviders constructs the DownloadProviders keyed by Kind, ready to inject
+// into the search service. The SABnzbd provider is passed in (so the same instance also
+// fronts the connectivity probe). GetComics DDL needs no secret. No polling is started
+// here (Phase 5).
+func newDownloadProviders(sab download.DownloadProvider) map[string]download.DownloadProvider {
 	return map[string]download.DownloadProvider{
-		"sabnzbd":   download.NewSABnzbdProviderWithResolver(resolver),
+		"sabnzbd":   sab,
 		"getcomics": download.NewGetComicsDDLProvider("https://getcomics.org"),
 	}
 }

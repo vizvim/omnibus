@@ -21,6 +21,19 @@ const defaultCategory = "comics"
 // ErrMissingField is returned when a required field (url) is blank.
 var ErrMissingField = errors.New("download client url is required")
 
+// SABProber runs a connectivity probe against the configured download client. It NEVER
+// returns a Go error — every outcome maps to (ok, detail). *download.SABnzbdProvider
+// satisfies it.
+type SABProber interface {
+	Test(ctx context.Context) (ok bool, detail string)
+}
+
+// TestResult is the outcome of a connectivity probe, mirroring indexer.TestResult.
+type TestResult struct {
+	OK     bool
+	Detail string
+}
+
 // Deps are the Service's injected collaborators.
 type Deps struct {
 	Repos  *repository.Repositories
@@ -28,6 +41,9 @@ type Deps struct {
 	// Now is an injectable clock for deterministic timestamps in tests. Zero falls back
 	// to time.Now.
 	Now func() time.Time
+	// Prober runs the real SABnzbd connectivity probe in Test. May be nil (Test then
+	// reports the probe is unavailable rather than panicking).
+	Prober SABProber
 }
 
 // Service implements DownloadClientService domain logic over DownloadClientRepository.
@@ -35,6 +51,7 @@ type Service struct {
 	repo   repository.DownloadClientRepository
 	logger *slog.Logger
 	now    func() time.Time
+	prober SABProber
 }
 
 // New constructs a Service.
@@ -47,7 +64,18 @@ func New(d Deps) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{repo: d.Repos.DownloadClient, logger: logger, now: now}
+	return &Service{repo: d.Repos.DownloadClient, logger: logger, now: now, prober: d.Prober}
+}
+
+// Test probes the configured download client's connectivity via the injected prober. A nil
+// prober yields a clear ok=false result rather than a panic. A failing probe is a normal
+// TestResult, never a Go error.
+func (s *Service) Test(ctx context.Context) (TestResult, error) {
+	if s.prober == nil {
+		return TestResult{OK: false, Detail: "download client probe not available"}, nil
+	}
+	ok, detail := s.prober.Test(ctx)
+	return TestResult{OK: ok, Detail: detail}, nil
 }
 
 // Get returns the masked config. An absent/empty row is treated as a zero config

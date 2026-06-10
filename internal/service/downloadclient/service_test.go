@@ -86,6 +86,62 @@ func TestUpdateReplacesAPIKeyWhenProvided(t *testing.T) {
 	require.Equal(t, "new", row.APIKey)
 }
 
+// fakeProber returns a canned probe result and records the call count.
+type fakeProber struct {
+	ok       bool
+	detail   string
+	gotCalls int
+}
+
+func (f *fakeProber) Test(context.Context) (bool, string) {
+	f.gotCalls++
+	return f.ok, f.detail
+}
+
+func newServiceWithProber(t *testing.T, prober downloadclient.SABProber) *downloadclient.Service {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "svc.db")
+	require.NoError(t, db.Migrate(context.Background(), path))
+	d, err := db.Open(context.Background(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.Close() })
+	repos := repository.NewRepositories(d)
+	return downloadclient.New(downloadclient.Deps{Repos: repos, Prober: prober})
+}
+
+func TestTestForwardsProberResult(t *testing.T) {
+	t.Parallel()
+	fake := &fakeProber{ok: true, detail: "connected"}
+	svc := newServiceWithProber(t, fake)
+
+	res, err := svc.Test(context.Background())
+	require.NoError(t, err)
+	require.True(t, res.OK)
+	require.Equal(t, "connected", res.Detail)
+	require.Equal(t, 1, fake.gotCalls)
+}
+
+func TestTestForwardsProberFailureWithoutError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeProber{ok: false, detail: "not configured"}
+	svc := newServiceWithProber(t, fake)
+
+	res, err := svc.Test(context.Background())
+	require.NoError(t, err, "a failing probe is a normal result, not an error")
+	require.False(t, res.OK)
+	require.Equal(t, "not configured", res.Detail)
+}
+
+func TestTestNilProberIsUnavailable(t *testing.T) {
+	t.Parallel()
+	svc, _ := newService(t) // built with no prober
+
+	res, err := svc.Test(context.Background())
+	require.NoError(t, err)
+	require.False(t, res.OK)
+	require.NotEmpty(t, res.Detail)
+}
+
 func TestGetEmptyRowIsNotConfigured(t *testing.T) {
 	t.Parallel()
 	svc, _ := newService(t)

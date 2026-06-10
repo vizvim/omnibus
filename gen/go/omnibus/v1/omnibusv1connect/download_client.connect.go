@@ -39,6 +39,9 @@ const (
 	// DownloadClientServiceUpdateDownloadClientConfigProcedure is the fully-qualified name of the
 	// DownloadClientService's UpdateDownloadClientConfig RPC.
 	DownloadClientServiceUpdateDownloadClientConfigProcedure = "/omnibus.v1.DownloadClientService/UpdateDownloadClientConfig"
+	// DownloadClientServiceTestDownloadClientConfigProcedure is the fully-qualified name of the
+	// DownloadClientService's TestDownloadClientConfig RPC.
+	DownloadClientServiceTestDownloadClientConfigProcedure = "/omnibus.v1.DownloadClientService/TestDownloadClientConfig"
 )
 
 // DownloadClientServiceClient is a client for the omnibus.v1.DownloadClientService service.
@@ -47,6 +50,9 @@ type DownloadClientServiceClient interface {
 	GetDownloadClientConfig(context.Context, *connect.Request[v1.GetDownloadClientConfigRequest]) (*connect.Response[v1.GetDownloadClientConfigResponse], error)
 	// UpdateDownloadClientConfig edits the config; an empty api_key leaves the stored key unchanged.
 	UpdateDownloadClientConfig(context.Context, *connect.Request[v1.UpdateDownloadClientConfigRequest]) (*connect.Response[v1.UpdateDownloadClientConfigResponse], error)
+	// TestDownloadClientConfig runs a real connectivity probe against the configured SABnzbd
+	// client. A failed probe returns ok=false + detail, never an RPC error.
+	TestDownloadClientConfig(context.Context, *connect.Request[v1.TestDownloadClientConfigRequest]) (*connect.Response[v1.TestDownloadClientConfigResponse], error)
 }
 
 // NewDownloadClientServiceClient constructs a client for the omnibus.v1.DownloadClientService
@@ -72,6 +78,12 @@ func NewDownloadClientServiceClient(httpClient connect.HTTPClient, baseURL strin
 			connect.WithSchema(downloadClientServiceMethods.ByName("UpdateDownloadClientConfig")),
 			connect.WithClientOptions(opts...),
 		),
+		testDownloadClientConfig: connect.NewClient[v1.TestDownloadClientConfigRequest, v1.TestDownloadClientConfigResponse](
+			httpClient,
+			baseURL+DownloadClientServiceTestDownloadClientConfigProcedure,
+			connect.WithSchema(downloadClientServiceMethods.ByName("TestDownloadClientConfig")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -79,6 +91,7 @@ func NewDownloadClientServiceClient(httpClient connect.HTTPClient, baseURL strin
 type downloadClientServiceClient struct {
 	getDownloadClientConfig    *connect.Client[v1.GetDownloadClientConfigRequest, v1.GetDownloadClientConfigResponse]
 	updateDownloadClientConfig *connect.Client[v1.UpdateDownloadClientConfigRequest, v1.UpdateDownloadClientConfigResponse]
+	testDownloadClientConfig   *connect.Client[v1.TestDownloadClientConfigRequest, v1.TestDownloadClientConfigResponse]
 }
 
 // GetDownloadClientConfig calls omnibus.v1.DownloadClientService.GetDownloadClientConfig.
@@ -91,6 +104,11 @@ func (c *downloadClientServiceClient) UpdateDownloadClientConfig(ctx context.Con
 	return c.updateDownloadClientConfig.CallUnary(ctx, req)
 }
 
+// TestDownloadClientConfig calls omnibus.v1.DownloadClientService.TestDownloadClientConfig.
+func (c *downloadClientServiceClient) TestDownloadClientConfig(ctx context.Context, req *connect.Request[v1.TestDownloadClientConfigRequest]) (*connect.Response[v1.TestDownloadClientConfigResponse], error) {
+	return c.testDownloadClientConfig.CallUnary(ctx, req)
+}
+
 // DownloadClientServiceHandler is an implementation of the omnibus.v1.DownloadClientService
 // service.
 type DownloadClientServiceHandler interface {
@@ -98,6 +116,9 @@ type DownloadClientServiceHandler interface {
 	GetDownloadClientConfig(context.Context, *connect.Request[v1.GetDownloadClientConfigRequest]) (*connect.Response[v1.GetDownloadClientConfigResponse], error)
 	// UpdateDownloadClientConfig edits the config; an empty api_key leaves the stored key unchanged.
 	UpdateDownloadClientConfig(context.Context, *connect.Request[v1.UpdateDownloadClientConfigRequest]) (*connect.Response[v1.UpdateDownloadClientConfigResponse], error)
+	// TestDownloadClientConfig runs a real connectivity probe against the configured SABnzbd
+	// client. A failed probe returns ok=false + detail, never an RPC error.
+	TestDownloadClientConfig(context.Context, *connect.Request[v1.TestDownloadClientConfigRequest]) (*connect.Response[v1.TestDownloadClientConfigResponse], error)
 }
 
 // NewDownloadClientServiceHandler builds an HTTP handler from the service implementation. It
@@ -119,12 +140,20 @@ func NewDownloadClientServiceHandler(svc DownloadClientServiceHandler, opts ...c
 		connect.WithSchema(downloadClientServiceMethods.ByName("UpdateDownloadClientConfig")),
 		connect.WithHandlerOptions(opts...),
 	)
+	downloadClientServiceTestDownloadClientConfigHandler := connect.NewUnaryHandler(
+		DownloadClientServiceTestDownloadClientConfigProcedure,
+		svc.TestDownloadClientConfig,
+		connect.WithSchema(downloadClientServiceMethods.ByName("TestDownloadClientConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/omnibus.v1.DownloadClientService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DownloadClientServiceGetDownloadClientConfigProcedure:
 			downloadClientServiceGetDownloadClientConfigHandler.ServeHTTP(w, r)
 		case DownloadClientServiceUpdateDownloadClientConfigProcedure:
 			downloadClientServiceUpdateDownloadClientConfigHandler.ServeHTTP(w, r)
+		case DownloadClientServiceTestDownloadClientConfigProcedure:
+			downloadClientServiceTestDownloadClientConfigHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -140,4 +169,8 @@ func (UnimplementedDownloadClientServiceHandler) GetDownloadClientConfig(context
 
 func (UnimplementedDownloadClientServiceHandler) UpdateDownloadClientConfig(context.Context, *connect.Request[v1.UpdateDownloadClientConfigRequest]) (*connect.Response[v1.UpdateDownloadClientConfigResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("omnibus.v1.DownloadClientService.UpdateDownloadClientConfig is not implemented"))
+}
+
+func (UnimplementedDownloadClientServiceHandler) TestDownloadClientConfig(context.Context, *connect.Request[v1.TestDownloadClientConfigRequest]) (*connect.Response[v1.TestDownloadClientConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("omnibus.v1.DownloadClientService.TestDownloadClientConfig is not implemented"))
 }
