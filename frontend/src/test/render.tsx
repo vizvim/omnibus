@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderResult } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 
+import { DownloadClientService } from "../gen/omnibus/v1/download_client_pb";
 import { IndexerService } from "../gen/omnibus/v1/indexers_pb";
 import { JobService } from "../gen/omnibus/v1/jobs_pb";
 import { SearchService } from "../gen/omnibus/v1/search_pb";
@@ -43,6 +44,17 @@ export function makeIndexerTransport(
 ): Transport {
   return createRouterTransport(({ service }) => {
     service(IndexerService, impl as never);
+  });
+}
+
+// makeDownloadClientTransport builds an in-memory Connect transport serving
+// DownloadClientService method stubs (getDownloadClientConfig/updateDownloadClientConfig)
+// for the Settings-page component tests.
+export function makeDownloadClientTransport(
+  impl: Record<string, (req: never) => unknown>,
+): Transport {
+  return createRouterTransport(({ service }) => {
+    service(DownloadClientService, impl as never);
   });
 }
 
