@@ -100,7 +100,12 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// Build the SABnzbd provider once from a DB-backed resolver so the same instance fronts
 	// both NZB submits (search service) and the connectivity probe (download client Test).
 	sabProvider := download.NewSABnzbdProviderWithResolver(sabnzbdResolver(repos))
-	downloadProviders := newDownloadProviders(sabProvider)
+	// The GetComics DDL provider streams into <data_path>/incomplete on Fetch (D-03). Built
+	// once so the same instance fronts both the provider map (Submit + post-process remove,
+	// a no-op for DDL) and the tracking service's DDLFetchers map (the DDLFetch job's Fetch).
+	ddlProvider := download.NewGetComicsDDLProvider("https://getcomics.org",
+		download.WithDDLDataPath(cfg.DataPath))
+	downloadProviders := newDownloadProviders(sabProvider, ddlProvider)
 
 	// SearchService converges the indexer gateway (Plan 02), the filter/score pipeline
 	// (Plan 03), and the grab handoff (Plan 04) behind manual-search RPCs, and owns the
@@ -123,7 +128,10 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	trackingSvc := tracking.New(tracking.Deps{
 		Repos:    repos,
 		Trackers: map[string]download.Tracker{"sabnzbd": sabProvider},
-		Logger:   logger,
+		// GetComics DDL has no poll-based Tracker; instead the DDLFetch job (RunDDLFetch)
+		// streams via this fetcher then feeds the Completed->post-process path (D-03).
+		DDLFetchers: map[string]tracking.DDLFetcher{"getcomics": ddlProvider},
+		Logger:      logger,
 	})
 
 	// RenameConfigService owns the DB-backed, runtime-editable renaming config (D-09), the
@@ -155,6 +163,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	river.AddWorker(workers, jobs.NewDownloadPollWorker(trackingSvc))
 	river.AddWorker(workers, jobs.NewReplacementWorker(searchSvc))
 	river.AddWorker(workers, jobs.NewPostProcessWorker(postProcessSvc))
+	river.AddWorker(workers, jobs.NewDDLFetchWorker(trackingSvc))
 
 	sweepInterval := time.Duration(cfg.RefreshIntervalHours) * time.Hour
 	autoSearchInterval := time.Duration(cfg.AutoSearchIntervalHours) * time.Hour
@@ -327,10 +336,10 @@ func sabnzbdResolver(repos *repository.Repositories) download.SABnzbdConfigResol
 // into the search service. The SABnzbd provider is passed in (so the same instance also
 // fronts the connectivity probe). GetComics DDL needs no secret. No polling is started
 // here (Phase 5).
-func newDownloadProviders(sab download.DownloadProvider) map[string]download.DownloadProvider {
+func newDownloadProviders(sab, ddl download.DownloadProvider) map[string]download.DownloadProvider {
 	return map[string]download.DownloadProvider{
 		"sabnzbd":   sab,
-		"getcomics": download.NewGetComicsDDLProvider("https://getcomics.org"),
+		"getcomics": ddl,
 	}
 }
 

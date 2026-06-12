@@ -173,13 +173,31 @@ func (s *Service) SelectCandidate(ctx context.Context, issueID int64, provider, 
 	}
 
 	// candidate-selected event (D-04 timeline) before the grab handoff.
-	if err := s.writeEvent(ctx, issueID, "candidate-selected", map[string]string{
+	if werr := s.writeEvent(ctx, issueID, "candidate-selected", map[string]string{
 		"provider": provider, "release_key": releaseKey, "title": cand.Title,
-	}); err != nil {
-		return DownloadResult{}, err
+	}); werr != nil {
+		return DownloadResult{}, werr
 	}
 
-	return s.Grab(ctx, issueID, downloadKindFor(provider), releaseKey, cand)
+	downloadKind := downloadKindFor(provider)
+	res, gerr := s.Grab(ctx, issueID, downloadKind, releaseKey, cand)
+	if gerr != nil {
+		return DownloadResult{}, gerr
+	}
+
+	// A GetComics DDL grab has no download-client poll loop (SAB's CDH model does not apply):
+	// enqueue the serialized DDLFetch job (D-03) to resolve a mirror + stream the file, then
+	// feed it into the same Completed->post-process path as a SAB download. SAB grabs are
+	// tracked by the periodic poll loop instead, so no DDL fetch is enqueued for them.
+	if downloadKind == "getcomics" && s.enqueuer != nil {
+		if eerr := s.enqueuer.EnqueueDDLFetch(ctx, res.DownloadID); eerr != nil {
+			// Non-fatal: the grab succeeded; a failed enqueue is logged and the download row
+			// remains Queued for a later reactive enqueue. Surfacing it would falsely fail the grab.
+			s.logger.Warn("enqueue ddl fetch failed (non-fatal)",
+				slog.Int64("download_id", res.DownloadID), slog.Any("error", eerr))
+		}
+	}
+	return res, nil
 }
 
 // GetTimeline returns the per-issue events in occurred_at order (OBS-01).

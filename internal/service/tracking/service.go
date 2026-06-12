@@ -8,6 +8,7 @@ package tracking
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -36,13 +37,26 @@ type Enqueuer interface {
 	EnqueueReplacementSearch(ctx context.Context, issueID int64) error
 }
 
+// DDLFetcher resolves a working mirror from a GetComics post page (the download's clientRef)
+// and streams the file to an intermediate dir, returning the local path. The
+// download.GetComicsDDLProvider satisfies it via Fetch. Declaring the narrow interface here
+// keeps tracking free of a hard dependency on the concrete provider type. progress, when
+// non-nil, is called with (bytesWritten, totalBytes) as the stream flows.
+type DDLFetcher interface {
+	Fetch(ctx context.Context, clientRef string, progress func(done, total int64)) (string, error)
+}
+
 // Deps are the tracking Service's injected collaborators.
 type Deps struct {
 	Repos *repository.Repositories
 	// Trackers maps a provider kind ("sabnzbd"/"getcomics") to its Tracker. Only kinds with
 	// a Tracker are polled; others are skipped (GetComics DDL tracking lands later).
 	Trackers map[string]download.Tracker
-	Logger   *slog.Logger
+	// DDLFetchers maps a provider kind ("getcomics") to its DDLFetcher. The DDLFetch job
+	// (RunDDLFetch) resolves+streams via the matching fetcher, then feeds the file into the
+	// SAME Completed->post-process path as a SAB download (D-03).
+	DDLFetchers map[string]DDLFetcher
+	Logger      *slog.Logger
 	// StallWindow overrides defaultStallWindow when > 0 (test seam).
 	StallWindow time.Duration
 	// Now is an injectable clock for deterministic timestamps in tests.
@@ -54,6 +68,7 @@ type Deps struct {
 type Service struct {
 	repos       *repository.Repositories
 	trackers    map[string]download.Tracker
+	ddlFetchers map[string]DDLFetcher
 	logger      *slog.Logger
 	stallWindow time.Duration
 	now         func() time.Time
@@ -77,6 +92,7 @@ func New(d Deps) *Service {
 	return &Service{
 		repos:       d.Repos,
 		trackers:    d.Trackers,
+		ddlFetchers: d.DDLFetchers,
 		logger:      logger,
 		stallWindow: stall,
 		now:         now,
@@ -127,6 +143,79 @@ func (s *Service) RunDownloadPoll(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// RunDDLFetch resolves+streams a GetComics direct download and feeds it into the shared
+// completion path (D-03), or routes mirror exhaustion into the shared failure path (D-04). It
+// is the DDLFetchRunner the serialized "ddl" River job delegates to. The download row is
+// loaded fresh; a row already in a terminal state (Completed/Failed/Blacklisted) is a safe
+// no-op (idempotent re-run), mirroring the poll loop's terminal-state handling.
+func (s *Service) RunDDLFetch(ctx context.Context, downloadID int64) error {
+	row, err := s.repos.Downloads.Get(ctx, downloadID)
+	if err != nil {
+		return fmt.Errorf("load download %d: %w", downloadID, err)
+	}
+
+	// Idempotency guard: only an in-flight (Queued/Downloading) download is fetchable. A
+	// re-enqueue of an already-terminal row is a no-op (the unique-by-args opts make this rare).
+	switch series.DownloadStatus(row.Status) {
+	case series.DownloadQueued, series.DownloadDownloading:
+		// fetchable
+	default:
+		s.logger.Info("ddl fetch skipped: download already terminal",
+			slog.Int64("download_id", downloadID), slog.String("status", row.Status))
+		return nil
+	}
+
+	fetcher, ok := s.ddlFetchers[row.Provider]
+	if !ok {
+		return fmt.Errorf("no ddl fetcher for provider %q (download %d)", row.Provider, downloadID)
+	}
+
+	// Stream the file. The clientRef is the post URL the resolver re-fetches for mirror links.
+	// Progress is surfaced on the per-issue timeline by reusing the poll loop's progress path
+	// (Queued->Downloading + a download-progress event on first observed progress, DL-08).
+	var emittedStart bool
+	path, ferr := fetcher.Fetch(ctx, row.ClientRef, func(done, total int64) {
+		if emittedStart || total <= 0 {
+			return
+		}
+		emittedStart = true
+		pct := float64(done) / float64(total) * 100
+		if perr := s.onProgress(ctx, row, download.PollResult{
+			Status: download.PollInProgress, ProgressPct: pct,
+		}); perr != nil {
+			s.logger.Warn("ddl progress event failed (non-fatal)",
+				slog.Int64("download_id", downloadID), slog.Any("error", perr))
+		}
+	})
+	if ferr != nil {
+		if errors.Is(ferr, download.ErrMirrorExhaustion) {
+			// Mirror exhaustion is a handled failure (D-04): route into the shared failure path
+			// (Failed + replacement) and return nil so River does not retry a dead post.
+			s.logger.Warn("ddl fetch exhausted all mirrors, routing to replacement",
+				slog.Int64("download_id", downloadID), slog.String("client_ref", row.ClientRef))
+			// Re-load the row in case onProgress flipped Queued->Downloading mid-stream.
+			cur, gerr := s.repos.Downloads.Get(ctx, downloadID)
+			if gerr != nil {
+				return fmt.Errorf("reload download %d after exhaustion: %w", downloadID, gerr)
+			}
+			return s.onFailed(ctx, cur, "mirror exhaustion")
+		}
+		// A transient error (network/disk) is a job error so River retries it under the cap.
+		return fmt.Errorf("ddl fetch download %d: %w", downloadID, ferr)
+	}
+
+	// Success: feed the streamed file into the SAME Completed->post-process path as a SAB grab
+	// (D-03) by reusing onCompleted with a synthetic completed PollResult carrying the local
+	// path as storage. Re-load the row so onCompleted transitions from the current status.
+	cur, gerr := s.repos.Downloads.Get(ctx, downloadID)
+	if gerr != nil {
+		return fmt.Errorf("reload download %d after fetch: %w", downloadID, gerr)
+	}
+	return s.onCompleted(ctx, cur, download.PollResult{
+		Status: download.PollCompleted, StoragePath: path,
+	})
 }
 
 // pollOne reconciles a single active download row.

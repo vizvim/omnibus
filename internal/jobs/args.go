@@ -150,6 +150,33 @@ func (PostProcessArgs) InsertOpts() river.InsertOpts {
 	}
 }
 
+// ddlQueue is the dedicated River queue the DDLFetch job runs on. It is configured with
+// MaxWorkers:1 (see jobs.New) so at most one GetComics DDL stream runs at a time, mirroring
+// Mylar's global DDL_LOCK to avoid IP/bandwidth thrash (RESEARCH Pattern 5 / Pitfall 6).
+const ddlQueue = "ddl"
+
+// DDLFetchArgs are the arguments for a GetComics direct-download fetch (D-03): resolve a
+// mirror from the post page, stream the file, then flip the download Completed + enqueue
+// post-process (or Failed + replacement on mirror exhaustion). DownloadID is tagged
+// river:"unique" so a re-enqueue for the same download coalesces into the in-flight job (a
+// re-grab or duplicate enqueue does not start a second stream).
+type DDLFetchArgs struct {
+	DownloadID int64 `json:"download_id" river:"unique"`
+}
+
+// Kind uniquely identifies the DDL-fetch job type, stable across deploys.
+func (DDLFetchArgs) Kind() string { return "ddl_fetch" }
+
+// InsertOpts pins the job to the serialized "ddl" queue (MaxWorkers:1) and enforces
+// per-download uniqueness, so concurrent DDL fetches never thrash and a duplicate enqueue
+// for the same download collapses into the in-flight one.
+func (DDLFetchArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{
+		Queue:      ddlQueue,
+		UniqueOpts: river.UniqueOpts{ByArgs: true},
+	}
+}
+
 // DownloadPollArgs are the (empty) arguments for the periodic download-status poll
 // (DL-03/04/08), registered as a River periodic job. Unique by kind so an overlapping
 // tick (while a previous poll is still queued/running) collapses into the in-flight one.

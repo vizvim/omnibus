@@ -23,6 +23,10 @@ type Enqueuer interface {
 	// issue whose download failed or was blacklisted (D-12/DL-05). Satisfied by the jobs
 	// client (*jobs.Client.EnqueueReplacementSearch).
 	EnqueueReplacementSearch(ctx context.Context, issueID int64) error
+	// EnqueueDDLFetch durably enqueues a GetComics direct-download fetch for a grabbed
+	// getcomics download (D-03), on the serialized "ddl" queue. Satisfied by the jobs client
+	// (*jobs.Client.EnqueueDDLFetch). SAB grabs need no DDL fetch (the poll loop tracks them).
+	EnqueueDDLFetch(ctx context.Context, downloadID int64) error
 }
 
 // SetEnqueuer wires the job enqueuer after construction. This resolves the service<->jobs

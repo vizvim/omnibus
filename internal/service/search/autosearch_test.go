@@ -24,6 +24,10 @@ func (f *fakeEnqueuer) EnqueueReplacementSearch(_ context.Context, _ int64) erro
 	return nil
 }
 
+func (f *fakeEnqueuer) EnqueueDDLFetch(_ context.Context, _ int64) error {
+	return nil
+}
+
 // seedWantedIssue inserts a Wanted issue (in the series seeded by newSearchService's
 // fixture would conflict; this helper takes the repos + series id directly).
 func seedWanted(t *testing.T, repos *repository.Repositories, seriesID, cvID int64, raw string, sort float64, created string, attempts int32) int64 {
@@ -120,6 +124,7 @@ func TestSearchAndGrabReturnsFloorReasonWhenNothingAcceptable(t *testing.T) {
 type recordingEnqueuer struct {
 	searched    []int64
 	replacement []int64
+	ddlFetched  []int64
 }
 
 func (r *recordingEnqueuer) EnqueueSearchIssue(_ context.Context, issueID int64) error {
@@ -129,6 +134,11 @@ func (r *recordingEnqueuer) EnqueueSearchIssue(_ context.Context, issueID int64)
 
 func (r *recordingEnqueuer) EnqueueReplacementSearch(_ context.Context, issueID int64) error {
 	r.replacement = append(r.replacement, issueID)
+	return nil
+}
+
+func (r *recordingEnqueuer) EnqueueDDLFetch(_ context.Context, downloadID int64) error {
+	r.ddlFetched = append(r.ddlFetched, downloadID)
 	return nil
 }
 

@@ -97,6 +97,10 @@ func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, sweepInte
 		MaxAttempts: defaultMaxAttempts,
 		Queues: map[string]river.QueueConfig{
 			river.QueueDefault: {MaxWorkers: maxWorkers},
+			// The DDL queue is serialized (MaxWorkers:1) so at most one GetComics direct
+			// download streams at a time, mirroring Mylar's DDL_LOCK to avoid IP/bandwidth
+			// thrash (RESEARCH Pattern 5 / Pitfall 6).
+			ddlQueue: {MaxWorkers: 1},
 		},
 		Workers:      workers,
 		PeriodicJobs: periodicJobs,
@@ -186,6 +190,18 @@ func (c *Client) EnqueuePostProcess(ctx context.Context, downloadID int64) error
 	_, err := c.river.Insert(ctx, PostProcessArgs{DownloadID: downloadID}, nil)
 	if err != nil {
 		return fmt.Errorf("enqueue post-process for download %d: %w", downloadID, err)
+	}
+	return nil
+}
+
+// EnqueueDDLFetch durably enqueues a GetComics direct-download fetch for a download row (D-03).
+// The job runs on the serialized "ddl" queue (MaxWorkers:1). Duplicate enqueues for the same
+// download collapse via DDLFetchArgs' unique-by-args opts, so a re-grab or a re-poll of the
+// same getcomics download does not start a second stream.
+func (c *Client) EnqueueDDLFetch(ctx context.Context, downloadID int64) error {
+	_, err := c.river.Insert(ctx, DDLFetchArgs{DownloadID: downloadID}, nil)
+	if err != nil {
+		return fmt.Errorf("enqueue ddl fetch for download %d: %w", downloadID, err)
 	}
 	return nil
 }
