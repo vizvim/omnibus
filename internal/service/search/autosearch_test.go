@@ -20,6 +20,10 @@ func (f *fakeEnqueuer) EnqueueSearchIssue(_ context.Context, issueID int64) erro
 	return nil
 }
 
+func (f *fakeEnqueuer) EnqueueReplacementSearch(_ context.Context, _ int64) error {
+	return nil
+}
+
 // seedWantedIssue inserts a Wanted issue (in the series seeded by newSearchService's
 // fixture would conflict; this helper takes the repos + series id directly).
 func seedWanted(t *testing.T, repos *repository.Repositories, seriesID, cvID int64, raw string, sort float64, created string, attempts int32) int64 {
@@ -109,6 +113,110 @@ func TestSearchAndGrabReturnsFloorReasonWhenNothingAcceptable(t *testing.T) {
 	require.False(t, outcome.Grabbed)
 	require.Empty(t, outcome.Title)
 	require.NotEmpty(t, outcome.FloorReason, "non-acceptable outcome carries the floor reason")
+}
+
+// recordingEnqueuer records replacement-search enqueues so the BlacklistRelease path can
+// be asserted without a real River client.
+type recordingEnqueuer struct {
+	searched    []int64
+	replacement []int64
+}
+
+func (r *recordingEnqueuer) EnqueueSearchIssue(_ context.Context, issueID int64) error {
+	r.searched = append(r.searched, issueID)
+	return nil
+}
+
+func (r *recordingEnqueuer) EnqueueReplacementSearch(_ context.Context, issueID int64) error {
+	r.replacement = append(r.replacement, issueID)
+	return nil
+}
+
+// TestReplacementCoolOff: at the download_attempts cap, RunReplacement does NOT re-search
+// (cool-off, D-14) — no grab, no further attempt bump, no searched event.
+func TestReplacementCoolOff(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	// A clearing candidate exists, but the issue is already at the cap (AttemptCap=5).
+	svc, repos, issueID := newSearchService(t, []indexer.Candidate{
+		svcCand("newznab", "rk-cbz", "cbz", 30*1024*1024),
+	})
+	for range 5 {
+		require.NoError(t, repos.Issue.IncrementDownloadAttempts(ctx, issueID))
+	}
+
+	require.NoError(t, svc.RunReplacement(ctx, issueID))
+
+	iss, err := repos.Issue.GetByID(ctx, issueID)
+	require.NoError(t, err)
+	require.Equal(t, "Wanted", iss.Status, "cool-off: no grab at the cap")
+	require.Equal(t, int64(5), iss.DownloadAttempts, "cool-off does not bump attempts further")
+
+	events, err := repos.IssueEvents.ListByIssue(ctx, issueID)
+	require.NoError(t, err)
+	require.Empty(t, events, "cool-off does not even run the search pipeline")
+}
+
+// TestReplacementBumpsDownloadAttemptsWhenNothingAcceptable: below the cap, a replacement
+// search that finds nothing acceptable increments download_attempts (D-13), not search only.
+func TestReplacementBumpsDownloadAttemptsWhenNothingAcceptable(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	// A lone below-floor pdf clears nothing.
+	svc, repos, issueID := newSearchService(t, []indexer.Candidate{
+		svcCand("newznab", "rk-pdf", "pdf", 5*1024*1024),
+	})
+
+	before, err := repos.Issue.GetByID(ctx, issueID)
+	require.NoError(t, err)
+
+	require.NoError(t, svc.RunReplacement(ctx, issueID))
+
+	after, err := repos.Issue.GetByID(ctx, issueID)
+	require.NoError(t, err)
+	require.Equal(t, before.DownloadAttempts+1, after.DownloadAttempts, "no replacement bumps download_attempts (D-13)")
+}
+
+// TestBlacklistReleaseAddsRowAndEnqueuesReplacement: BlacklistRelease persists the per-issue
+// blacklist row (D-11) and enqueues a replacement search (DL-05 -> auto-replace).
+func TestBlacklistReleaseAddsRowAndEnqueuesReplacement(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	svc, repos, issueID := newSearchService(t, nil)
+
+	enq := &recordingEnqueuer{}
+	svc.SetEnqueuer(enq)
+
+	require.NoError(t, svc.BlacklistRelease(ctx, issueID, "newznab", "rk-bad"))
+
+	keys, err := repos.Blacklist.ListForIssue(ctx, issueID)
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+	require.Equal(t, repository.BlacklistKey{Provider: "newznab", ReleaseKey: "rk-bad"}, keys[0])
+	require.Equal(t, []int64{issueID}, enq.replacement, "blacklisting triggers a replacement search (DL-05)")
+}
+
+// TestManualRetry: RetryDownload resets the cool-off (download_attempts -> 0, D-14) and
+// re-runs the search pipeline immediately, auto-grabbing a clearing replacement (DL-07).
+func TestManualRetry(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	svc, repos, issueID := newSearchService(t, []indexer.Candidate{
+		svcCand("newznab", "rk-cbz", "cbz", 30*1024*1024),
+	})
+	// Park the issue in cool-off (at the cap).
+	for range 5 {
+		require.NoError(t, repos.Issue.IncrementDownloadAttempts(ctx, issueID))
+	}
+
+	outcome, err := svc.RetryDownload(ctx, issueID)
+	require.NoError(t, err)
+	require.True(t, outcome.Grabbed, "retry re-runs the pipeline and grabs the clearing release")
+
+	iss, err := repos.Issue.GetByID(ctx, issueID)
+	require.NoError(t, err)
+	require.Equal(t, int64(0), iss.DownloadAttempts, "retry resets the cool-off (D-14)")
+	require.Equal(t, "Snatched", iss.Status, "the replacement is grabbed")
 }
 
 // TestReplacementDedup: a release that already Failed for an issue (a dead key in the

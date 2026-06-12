@@ -83,6 +83,29 @@ message GetIssueTimelineResponse {
   repeated IssueEvent events = 1;
 }
 
+message BlacklistReleaseRequest {
+  int64 issue_id = 1;
+  string provider = 2;
+  string release_key = 3;
+}
+
+message BlacklistReleaseResponse {}
+
+message RetryDownloadRequest {
+  int64 issue_id = 1;
+}
+
+message RetryDownloadResponse {
+  // grabbed reports whether the immediate re-search cleared the floor and auto-grabbed a
+  // replacement. The search runs inline (bypassing the River queue) and completes before
+  // the response is returned.
+  bool grabbed = 1;
+  // title is the auto-grabbed release's title when grabbed is true; empty otherwise.
+  string title = 2;
+  // floor_reason explains why nothing was grabbed when grabbed is false.
+  string floor_reason = 3;
+}
+
 // SearchService owns manual search, candidate selection, auto-search triggering, and the
 // per-issue timeline (SRCH-06, OBS-01). GetIssueTimeline is folded in here for this phase
 // (the only timeline consumer; DownloadService lands in Phase 5).
@@ -98,4 +121,10 @@ service SearchService {
   rpc SelectCandidate(SelectCandidateRequest) returns (SelectCandidateResponse);
   // GetIssueTimeline returns the per-issue event timeline in occurred_at order.
   rpc GetIssueTimeline(GetIssueTimelineRequest) returns (GetIssueTimelineResponse);
+  // BlacklistRelease blacklists a specific release for an issue (per-issue scope, D-11) and
+  // enqueues a replacement search so omnibus auto-replaces the bad grab (DL-05).
+  rpc BlacklistRelease(BlacklistReleaseRequest) returns (BlacklistReleaseResponse);
+  // RetryDownload manually retries a failed download (DL-07): it resets the cool-off
+  // (download_attempts) and re-runs the search pipeline immediately, inline.
+  rpc RetryDownload(RetryDownloadRequest) returns (RetryDownloadResponse);
 }

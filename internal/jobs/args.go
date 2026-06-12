@@ -111,6 +111,25 @@ func (RSSPollArgs) InsertOpts() river.InsertOpts {
 	}
 }
 
+// ReplacementSearchArgs are the arguments for a reactive, attempt-capped replacement
+// search of a single issue (05-04). IssueID is tagged river:"unique" so duplicate enqueues
+// for the same issue collapse into the in-flight job — a failed download + a user blacklist
+// racing to enqueue a replacement coalesce into one (RESEARCH Pitfall 4).
+type ReplacementSearchArgs struct {
+	IssueID int64 `json:"issue_id" river:"unique"`
+}
+
+// Kind uniquely identifies the replacement-search job type, stable across deploys.
+func (ReplacementSearchArgs) Kind() string { return "replacement_search" }
+
+// InsertOpts enforces per-issue uniqueness (see ReplacementSearchArgs doc).
+func (ReplacementSearchArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{
+		Queue:      river.QueueDefault,
+		UniqueOpts: river.UniqueOpts{ByArgs: true},
+	}
+}
+
 // DownloadPollArgs are the (empty) arguments for the periodic download-status poll
 // (DL-03/04/08), registered as a River periodic job. Unique by kind so an overlapping
 // tick (while a previous poll is still queued/running) collapses into the in-flight one.

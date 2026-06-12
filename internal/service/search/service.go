@@ -46,6 +46,9 @@ type Deps struct {
 	DownloadProviders map[string]download.DownloadProvider
 	Logger            *slog.Logger
 	AttemptCap        int
+	// DownloadAttemptCap bounds the attempt-capped replacement loop on the SEPARATE
+	// download_attempts counter (D-13/D-14). Zero falls back to AttemptCap.
+	DownloadAttemptCap int
 	// AutoSearchBatch bounds how many Wanted issues one auto-search sweep tick enqueues
 	// (D-08). Zero falls back to defaultAutoSearchBatch.
 	AutoSearchBatch int
@@ -61,15 +64,16 @@ type Deps struct {
 // Grabber). It depends only on repository interfaces + the gateway + download providers.
 type Service struct {
 	*Grabber
-	gateway         IndexerGateway
-	repos           *repository.Repositories
-	logger          *slog.Logger
-	filterOpts      FilterOpts
-	scoreOpts       ScoreOpts
-	floor           float64
-	attemptCap      int
-	autoSearchBatch int
-	enqueuer        Enqueuer
+	gateway            IndexerGateway
+	repos              *repository.Repositories
+	logger             *slog.Logger
+	filterOpts         FilterOpts
+	scoreOpts          ScoreOpts
+	floor              float64
+	attemptCap         int
+	downloadAttemptCap int
+	autoSearchBatch    int
+	enqueuer           Enqueuer
 }
 
 // defaultAutoSearchBatch bounds an auto-search sweep tick when AutoSearchBatch is unset.
@@ -97,6 +101,10 @@ func New(d Deps) *Service {
 	if batch <= 0 {
 		batch = defaultAutoSearchBatch
 	}
+	dlCap := d.DownloadAttemptCap
+	if dlCap <= 0 {
+		dlCap = d.AttemptCap
+	}
 	grabber := NewGrabber(GrabDeps{
 		Providers:  d.DownloadProviders,
 		Repos:      d.Repos,
@@ -104,15 +112,16 @@ func New(d Deps) *Service {
 		AttemptCap: d.AttemptCap,
 	})
 	return &Service{
-		Grabber:         grabber,
-		gateway:         d.Gateway,
-		repos:           d.Repos,
-		logger:          logger,
-		filterOpts:      fopts,
-		scoreOpts:       sopts,
-		floor:           floor,
-		attemptCap:      d.AttemptCap,
-		autoSearchBatch: batch,
+		Grabber:            grabber,
+		gateway:            d.Gateway,
+		repos:              d.Repos,
+		logger:             logger,
+		filterOpts:         fopts,
+		scoreOpts:          sopts,
+		floor:              floor,
+		attemptCap:         d.AttemptCap,
+		downloadAttemptCap: dlCap,
+		autoSearchBatch:    batch,
 	}
 }
 

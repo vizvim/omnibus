@@ -34,3 +34,19 @@ export const selectCandidate = SearchService.method.selectCandidate;
  * @generated from rpc omnibus.v1.SearchService.GetIssueTimeline
  */
 export const getIssueTimeline = SearchService.method.getIssueTimeline;
+
+/**
+ * BlacklistRelease blacklists a specific release for an issue (per-issue scope, D-11) and
+ * enqueues a replacement search so omnibus auto-replaces the bad grab (DL-05).
+ *
+ * @generated from rpc omnibus.v1.SearchService.BlacklistRelease
+ */
+export const blacklistRelease = SearchService.method.blacklistRelease;
+
+/**
+ * RetryDownload manually retries a failed download (DL-07): it resets the cool-off
+ * (download_attempts) and re-runs the search pipeline immediately, inline.
+ *
+ * @generated from rpc omnibus.v1.SearchService.RetryDownload
+ */
+export const retryDownload = SearchService.method.retryDownload;

@@ -18,6 +18,8 @@ type SearchServicer interface {
 	SelectCandidate(ctx context.Context, issueID int64, provider, releaseKey string) (search.DownloadResult, error)
 	GetTimeline(ctx context.Context, issueID int64) ([]search.TimelineEvent, error)
 	SearchAndGrab(ctx context.Context, issueID int64) (search.AutoSearchOutcome, error)
+	BlacklistRelease(ctx context.Context, issueID int64, provider, releaseKey string) error
+	RetryDownload(ctx context.Context, issueID int64) (search.AutoSearchOutcome, error)
 }
 
 // SearchHandler implements the generated SearchServiceHandler over the search service.
@@ -133,6 +135,44 @@ func (h *SearchHandler) TriggerAutoSearch(
 		return nil, serviceError(err)
 	}
 	return connect.NewResponse(&omnibusv1.TriggerAutoSearchResponse{
+		Grabbed:     outcome.Grabbed,
+		Title:       outcome.Title,
+		FloorReason: outcome.FloorReason,
+	}), nil
+}
+
+// BlacklistRelease handles the per-issue blacklist RPC: it validates the inputs (T-05-13),
+// blacklists the release, and triggers a replacement search (DL-05).
+func (h *SearchHandler) BlacklistRelease(
+	ctx context.Context, req *connect.Request[omnibusv1.BlacklistReleaseRequest],
+) (*connect.Response[omnibusv1.BlacklistReleaseResponse], error) {
+	m := req.Msg
+	if m.GetIssueId() <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("issue_id must be positive"))
+	}
+	if m.GetProvider() == "" || m.GetReleaseKey() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("provider and release_key must not be empty"))
+	}
+	if err := h.svc.BlacklistRelease(ctx, m.GetIssueId(), m.GetProvider(), m.GetReleaseKey()); err != nil {
+		return nil, serviceError(err)
+	}
+	return connect.NewResponse(&omnibusv1.BlacklistReleaseResponse{}), nil
+}
+
+// RetryDownload handles the manual-retry RPC (DL-07): it resets the cool-off and re-runs
+// the search pipeline immediately, returning whether a replacement was grabbed.
+func (h *SearchHandler) RetryDownload(
+	ctx context.Context, req *connect.Request[omnibusv1.RetryDownloadRequest],
+) (*connect.Response[omnibusv1.RetryDownloadResponse], error) {
+	issueID := req.Msg.GetIssueId()
+	if issueID <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("issue_id must be positive"))
+	}
+	outcome, err := h.svc.RetryDownload(ctx, issueID)
+	if err != nil {
+		return nil, serviceError(err)
+	}
+	return connect.NewResponse(&omnibusv1.RetryDownloadResponse{
 		Grabbed:     outcome.Grabbed,
 		Title:       outcome.Title,
 		FloorReason: outcome.FloorReason,

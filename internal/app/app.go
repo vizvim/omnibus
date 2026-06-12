@@ -133,6 +133,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	river.AddWorker(workers, jobs.NewSearchIssueWorker(searchSvc))
 	river.AddWorker(workers, jobs.NewRSSPollWorker(searchSvc))
 	river.AddWorker(workers, jobs.NewDownloadPollWorker(trackingSvc))
+	river.AddWorker(workers, jobs.NewReplacementWorker(searchSvc))
 
 	sweepInterval := time.Duration(cfg.RefreshIntervalHours) * time.Hour
 	autoSearchInterval := time.Duration(cfg.AutoSearchIntervalHours) * time.Hour
@@ -142,9 +143,13 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		_ = database.Close()
 		return fmt.Errorf("build jobs client: %w", err)
 	}
-	// Resolve the service<->jobs cycle: both services receive the client as their enqueuer.
+	// Resolve the service<->jobs cycle: every service receives the client as its enqueuer.
+	// The tracking service fans out to the replacement search (DL-04 Failed branch, 05-04)
+	// and post-process (05-01 Completed branch); the search service fans out replacement
+	// searches it enqueues from BlacklistRelease (DL-05).
 	svc.SetEnqueuer(riverClient)
 	searchSvc.SetEnqueuer(riverClient)
+	trackingSvc.SetEnqueuer(riverClient)
 
 	// JobService reads run history from River's tables (via the jobs client).
 	jobSvc := jobsservice.New(riverClient)

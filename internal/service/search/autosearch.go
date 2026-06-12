@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
+	"github.com/vizvim/omnibus/internal/repository"
 )
 
 // errNoEnqueuer is returned when the auto-search sweep runs before SetEnqueuer wired the
@@ -17,6 +19,10 @@ var errNoEnqueuer = errors.New("auto-search sweep: enqueuer not configured")
 // series<->jobs seam).
 type Enqueuer interface {
 	EnqueueSearchIssue(ctx context.Context, issueID int64) error
+	// EnqueueReplacementSearch durably enqueues an attempt-capped replacement search for an
+	// issue whose download failed or was blacklisted (D-12/DL-05). Satisfied by the jobs
+	// client (*jobs.Client.EnqueueReplacementSearch).
+	EnqueueReplacementSearch(ctx context.Context, issueID int64) error
 }
 
 // SetEnqueuer wires the job enqueuer after construction. This resolves the service<->jobs
@@ -77,6 +83,83 @@ func (s *Service) RunSearchIssue(ctx context.Context, issueID int64) error {
 // the AutoSearchOutcome. It backs the on-demand manual "auto-grab & download" path
 // (TriggerAutoSearch), which bypasses the River queue and runs synchronously.
 func (s *Service) SearchAndGrab(ctx context.Context, issueID int64) (AutoSearchOutcome, error) {
+	return s.runSearchIssue(ctx, issueID)
+}
+
+// RunReplacement is the reactive replacement-search entrypoint (the body the
+// ReplacementSearch River job delegates to). It is triggered when a download Failed (poll
+// reap, 05-01) or a post-process corruption (05-03) leaves an issue stranded. It mirrors
+// runSearchIssue but on the SEPARATE download_attempts counter (D-13/D-14):
+//
+//   - If download_attempts has reached the cap, it enters cool-off: it does NOT re-search,
+//     leaving the issue parked until a manual retry resets the counter (D-14).
+//   - Otherwise it runs the shared pipeline, which now dedups against the dead-download
+//     keys (D-12), so a replacement can never re-pick a release that already failed.
+//   - If the pipeline grabs a clearing replacement, the cycle succeeds. If nothing was
+//     acceptable (every survivor was excluded or below floor), it increments
+//     download_attempts so the loop is bounded and eventually cools off.
+func (s *Service) RunReplacement(ctx context.Context, issueID int64) error {
+	issue, err := s.repos.Issue.GetByID(ctx, issueID)
+	if err != nil {
+		return fmt.Errorf("load issue %d: %w", issueID, err)
+	}
+
+	if int(issue.DownloadAttempts) >= s.downloadAttemptCap {
+		// Cool-off: the replacement loop is exhausted; wait for a manual retry (D-14).
+		s.logger.Info("replacement search in cool-off (download attempt cap reached)",
+			slog.Int64("issue_id", issueID),
+			slog.Int64("download_attempts", issue.DownloadAttempts),
+			slog.Int("cap", s.downloadAttemptCap))
+		return nil
+	}
+
+	outcome, err := s.runSearchIssue(ctx, issueID)
+	if err != nil {
+		return err
+	}
+	if !outcome.Grabbed {
+		// No acceptable replacement this cycle — record the attempt on the SEPARATE
+		// download_attempts counter so the replacement loop is bounded (D-13/D-14). Note
+		// runSearchIssue already bumped search_attempts; the replacement loop additionally
+		// counts on download_attempts so the two caps stay distinct.
+		if ierr := s.repos.Issue.IncrementDownloadAttempts(ctx, issueID); ierr != nil {
+			return fmt.Errorf("increment download_attempts for issue %d: %w", issueID, ierr)
+		}
+		s.logger.Info("replacement search found no acceptable release",
+			slog.Int64("issue_id", issueID), slog.String("reason", outcome.FloorReason))
+	}
+	return nil
+}
+
+// BlacklistRelease blacklists a specific release for an issue (D-11) and enqueues a
+// replacement search so omnibus auto-replaces it (DL-05 -> auto-replace). The blacklist
+// add is per-issue (series_id NULL). The replacement is enqueued through the reactive
+// enqueuer seam; a nil enqueuer leaves the blacklist persisted but skips the fan-out.
+func (s *Service) BlacklistRelease(ctx context.Context, issueID int64, provider, releaseKey string) error {
+	nowISO := s.now().UTC().Format("2006-01-02T15:04:05Z07:00")
+	if err := s.repos.Blacklist.Add(ctx, repository.BlacklistAdd{
+		IssueID: issueID, Provider: provider, ReleaseKey: releaseKey, Reason: "user blacklist",
+	}, nowISO); err != nil {
+		return fmt.Errorf("blacklist release %s/%s for issue %d: %w", provider, releaseKey, issueID, err)
+	}
+	if s.enqueuer != nil {
+		if err := s.enqueuer.EnqueueReplacementSearch(ctx, issueID); err != nil {
+			return fmt.Errorf("enqueue replacement search for issue %d: %w", issueID, err)
+		}
+	}
+	s.logger.Info("release blacklisted; replacement enqueued",
+		slog.Int64("issue_id", issueID), slog.String("provider", provider), slog.String("release_key", releaseKey))
+	return nil
+}
+
+// RetryDownload is the manual-retry entrypoint (DL-07): it resets the download_attempts
+// cool-off (D-14 — the user's explicit retry is the intended cap reset) and re-runs the
+// search pipeline immediately (inline, bypassing the River queue), so a stranded issue is
+// re-searched at once. It returns the outcome so the caller can report grabbed-vs-not.
+func (s *Service) RetryDownload(ctx context.Context, issueID int64) (AutoSearchOutcome, error) {
+	if err := s.repos.Issue.ResetDownloadAttempts(ctx, issueID); err != nil {
+		return AutoSearchOutcome{}, fmt.Errorf("reset download_attempts for issue %d: %w", issueID, err)
+	}
 	return s.runSearchIssue(ctx, issueID)
 }
 

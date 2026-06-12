@@ -45,6 +45,12 @@ const (
 	// SearchServiceGetIssueTimelineProcedure is the fully-qualified name of the SearchService's
 	// GetIssueTimeline RPC.
 	SearchServiceGetIssueTimelineProcedure = "/omnibus.v1.SearchService/GetIssueTimeline"
+	// SearchServiceBlacklistReleaseProcedure is the fully-qualified name of the SearchService's
+	// BlacklistRelease RPC.
+	SearchServiceBlacklistReleaseProcedure = "/omnibus.v1.SearchService/BlacklistRelease"
+	// SearchServiceRetryDownloadProcedure is the fully-qualified name of the SearchService's
+	// RetryDownload RPC.
+	SearchServiceRetryDownloadProcedure = "/omnibus.v1.SearchService/RetryDownload"
 )
 
 // SearchServiceClient is a client for the omnibus.v1.SearchService service.
@@ -60,6 +66,12 @@ type SearchServiceClient interface {
 	SelectCandidate(context.Context, *connect.Request[v1.SelectCandidateRequest]) (*connect.Response[v1.SelectCandidateResponse], error)
 	// GetIssueTimeline returns the per-issue event timeline in occurred_at order.
 	GetIssueTimeline(context.Context, *connect.Request[v1.GetIssueTimelineRequest]) (*connect.Response[v1.GetIssueTimelineResponse], error)
+	// BlacklistRelease blacklists a specific release for an issue (per-issue scope, D-11) and
+	// enqueues a replacement search so omnibus auto-replaces the bad grab (DL-05).
+	BlacklistRelease(context.Context, *connect.Request[v1.BlacklistReleaseRequest]) (*connect.Response[v1.BlacklistReleaseResponse], error)
+	// RetryDownload manually retries a failed download (DL-07): it resets the cool-off
+	// (download_attempts) and re-runs the search pipeline immediately, inline.
+	RetryDownload(context.Context, *connect.Request[v1.RetryDownloadRequest]) (*connect.Response[v1.RetryDownloadResponse], error)
 }
 
 // NewSearchServiceClient constructs a client for the omnibus.v1.SearchService service. By default,
@@ -97,6 +109,18 @@ func NewSearchServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(searchServiceMethods.ByName("GetIssueTimeline")),
 			connect.WithClientOptions(opts...),
 		),
+		blacklistRelease: connect.NewClient[v1.BlacklistReleaseRequest, v1.BlacklistReleaseResponse](
+			httpClient,
+			baseURL+SearchServiceBlacklistReleaseProcedure,
+			connect.WithSchema(searchServiceMethods.ByName("BlacklistRelease")),
+			connect.WithClientOptions(opts...),
+		),
+		retryDownload: connect.NewClient[v1.RetryDownloadRequest, v1.RetryDownloadResponse](
+			httpClient,
+			baseURL+SearchServiceRetryDownloadProcedure,
+			connect.WithSchema(searchServiceMethods.ByName("RetryDownload")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -106,6 +130,8 @@ type searchServiceClient struct {
 	triggerAutoSearch *connect.Client[v1.TriggerAutoSearchRequest, v1.TriggerAutoSearchResponse]
 	selectCandidate   *connect.Client[v1.SelectCandidateRequest, v1.SelectCandidateResponse]
 	getIssueTimeline  *connect.Client[v1.GetIssueTimelineRequest, v1.GetIssueTimelineResponse]
+	blacklistRelease  *connect.Client[v1.BlacklistReleaseRequest, v1.BlacklistReleaseResponse]
+	retryDownload     *connect.Client[v1.RetryDownloadRequest, v1.RetryDownloadResponse]
 }
 
 // SearchIssue calls omnibus.v1.SearchService.SearchIssue.
@@ -128,6 +154,16 @@ func (c *searchServiceClient) GetIssueTimeline(ctx context.Context, req *connect
 	return c.getIssueTimeline.CallUnary(ctx, req)
 }
 
+// BlacklistRelease calls omnibus.v1.SearchService.BlacklistRelease.
+func (c *searchServiceClient) BlacklistRelease(ctx context.Context, req *connect.Request[v1.BlacklistReleaseRequest]) (*connect.Response[v1.BlacklistReleaseResponse], error) {
+	return c.blacklistRelease.CallUnary(ctx, req)
+}
+
+// RetryDownload calls omnibus.v1.SearchService.RetryDownload.
+func (c *searchServiceClient) RetryDownload(ctx context.Context, req *connect.Request[v1.RetryDownloadRequest]) (*connect.Response[v1.RetryDownloadResponse], error) {
+	return c.retryDownload.CallUnary(ctx, req)
+}
+
 // SearchServiceHandler is an implementation of the omnibus.v1.SearchService service.
 type SearchServiceHandler interface {
 	// SearchIssue runs the filter/score/floor pipeline for a Wanted issue and records a
@@ -141,6 +177,12 @@ type SearchServiceHandler interface {
 	SelectCandidate(context.Context, *connect.Request[v1.SelectCandidateRequest]) (*connect.Response[v1.SelectCandidateResponse], error)
 	// GetIssueTimeline returns the per-issue event timeline in occurred_at order.
 	GetIssueTimeline(context.Context, *connect.Request[v1.GetIssueTimelineRequest]) (*connect.Response[v1.GetIssueTimelineResponse], error)
+	// BlacklistRelease blacklists a specific release for an issue (per-issue scope, D-11) and
+	// enqueues a replacement search so omnibus auto-replaces the bad grab (DL-05).
+	BlacklistRelease(context.Context, *connect.Request[v1.BlacklistReleaseRequest]) (*connect.Response[v1.BlacklistReleaseResponse], error)
+	// RetryDownload manually retries a failed download (DL-07): it resets the cool-off
+	// (download_attempts) and re-runs the search pipeline immediately, inline.
+	RetryDownload(context.Context, *connect.Request[v1.RetryDownloadRequest]) (*connect.Response[v1.RetryDownloadResponse], error)
 }
 
 // NewSearchServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -174,6 +216,18 @@ func NewSearchServiceHandler(svc SearchServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(searchServiceMethods.ByName("GetIssueTimeline")),
 		connect.WithHandlerOptions(opts...),
 	)
+	searchServiceBlacklistReleaseHandler := connect.NewUnaryHandler(
+		SearchServiceBlacklistReleaseProcedure,
+		svc.BlacklistRelease,
+		connect.WithSchema(searchServiceMethods.ByName("BlacklistRelease")),
+		connect.WithHandlerOptions(opts...),
+	)
+	searchServiceRetryDownloadHandler := connect.NewUnaryHandler(
+		SearchServiceRetryDownloadProcedure,
+		svc.RetryDownload,
+		connect.WithSchema(searchServiceMethods.ByName("RetryDownload")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/omnibus.v1.SearchService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SearchServiceSearchIssueProcedure:
@@ -184,6 +238,10 @@ func NewSearchServiceHandler(svc SearchServiceHandler, opts ...connect.HandlerOp
 			searchServiceSelectCandidateHandler.ServeHTTP(w, r)
 		case SearchServiceGetIssueTimelineProcedure:
 			searchServiceGetIssueTimelineHandler.ServeHTTP(w, r)
+		case SearchServiceBlacklistReleaseProcedure:
+			searchServiceBlacklistReleaseHandler.ServeHTTP(w, r)
+		case SearchServiceRetryDownloadProcedure:
+			searchServiceRetryDownloadHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -207,4 +265,12 @@ func (UnimplementedSearchServiceHandler) SelectCandidate(context.Context, *conne
 
 func (UnimplementedSearchServiceHandler) GetIssueTimeline(context.Context, *connect.Request[v1.GetIssueTimelineRequest]) (*connect.Response[v1.GetIssueTimelineResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("omnibus.v1.SearchService.GetIssueTimeline is not implemented"))
+}
+
+func (UnimplementedSearchServiceHandler) BlacklistRelease(context.Context, *connect.Request[v1.BlacklistReleaseRequest]) (*connect.Response[v1.BlacklistReleaseResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("omnibus.v1.SearchService.BlacklistRelease is not implemented"))
+}
+
+func (UnimplementedSearchServiceHandler) RetryDownload(context.Context, *connect.Request[v1.RetryDownloadRequest]) (*connect.Response[v1.RetryDownloadResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("omnibus.v1.SearchService.RetryDownload is not implemented"))
 }

@@ -678,6 +678,211 @@ func (x *GetIssueTimelineResponse) GetEvents() []*IssueEvent {
 	return nil
 }
 
+type BlacklistReleaseRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IssueId       int64                  `protobuf:"varint,1,opt,name=issue_id,json=issueId,proto3" json:"issue_id,omitempty"`
+	Provider      string                 `protobuf:"bytes,2,opt,name=provider,proto3" json:"provider,omitempty"`
+	ReleaseKey    string                 `protobuf:"bytes,3,opt,name=release_key,json=releaseKey,proto3" json:"release_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BlacklistReleaseRequest) Reset() {
+	*x = BlacklistReleaseRequest{}
+	mi := &file_omnibus_v1_search_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BlacklistReleaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BlacklistReleaseRequest) ProtoMessage() {}
+
+func (x *BlacklistReleaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_omnibus_v1_search_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BlacklistReleaseRequest.ProtoReflect.Descriptor instead.
+func (*BlacklistReleaseRequest) Descriptor() ([]byte, []int) {
+	return file_omnibus_v1_search_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *BlacklistReleaseRequest) GetIssueId() int64 {
+	if x != nil {
+		return x.IssueId
+	}
+	return 0
+}
+
+func (x *BlacklistReleaseRequest) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *BlacklistReleaseRequest) GetReleaseKey() string {
+	if x != nil {
+		return x.ReleaseKey
+	}
+	return ""
+}
+
+type BlacklistReleaseResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BlacklistReleaseResponse) Reset() {
+	*x = BlacklistReleaseResponse{}
+	mi := &file_omnibus_v1_search_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BlacklistReleaseResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BlacklistReleaseResponse) ProtoMessage() {}
+
+func (x *BlacklistReleaseResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_omnibus_v1_search_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BlacklistReleaseResponse.ProtoReflect.Descriptor instead.
+func (*BlacklistReleaseResponse) Descriptor() ([]byte, []int) {
+	return file_omnibus_v1_search_proto_rawDescGZIP(), []int{12}
+}
+
+type RetryDownloadRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IssueId       int64                  `protobuf:"varint,1,opt,name=issue_id,json=issueId,proto3" json:"issue_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RetryDownloadRequest) Reset() {
+	*x = RetryDownloadRequest{}
+	mi := &file_omnibus_v1_search_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RetryDownloadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RetryDownloadRequest) ProtoMessage() {}
+
+func (x *RetryDownloadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_omnibus_v1_search_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RetryDownloadRequest.ProtoReflect.Descriptor instead.
+func (*RetryDownloadRequest) Descriptor() ([]byte, []int) {
+	return file_omnibus_v1_search_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *RetryDownloadRequest) GetIssueId() int64 {
+	if x != nil {
+		return x.IssueId
+	}
+	return 0
+}
+
+type RetryDownloadResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// grabbed reports whether the immediate re-search cleared the floor and auto-grabbed a
+	// replacement. The search runs inline (bypassing the River queue) and completes before
+	// the response is returned.
+	Grabbed bool `protobuf:"varint,1,opt,name=grabbed,proto3" json:"grabbed,omitempty"`
+	// title is the auto-grabbed release's title when grabbed is true; empty otherwise.
+	Title string `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	// floor_reason explains why nothing was grabbed when grabbed is false.
+	FloorReason   string `protobuf:"bytes,3,opt,name=floor_reason,json=floorReason,proto3" json:"floor_reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RetryDownloadResponse) Reset() {
+	*x = RetryDownloadResponse{}
+	mi := &file_omnibus_v1_search_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RetryDownloadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RetryDownloadResponse) ProtoMessage() {}
+
+func (x *RetryDownloadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_omnibus_v1_search_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RetryDownloadResponse.ProtoReflect.Descriptor instead.
+func (*RetryDownloadResponse) Descriptor() ([]byte, []int) {
+	return file_omnibus_v1_search_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *RetryDownloadResponse) GetGrabbed() bool {
+	if x != nil {
+		return x.Grabbed
+	}
+	return false
+}
+
+func (x *RetryDownloadResponse) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *RetryDownloadResponse) GetFloorReason() string {
+	if x != nil {
+		return x.FloorReason
+	}
+	return ""
+}
+
 var File_omnibus_v1_search_proto protoreflect.FileDescriptor
 
 const file_omnibus_v1_search_proto_rawDesc = "" +
@@ -736,12 +941,26 @@ const file_omnibus_v1_search_proto_rawDesc = "" +
 	"\x17GetIssueTimelineRequest\x12\x19\n" +
 	"\bissue_id\x18\x01 \x01(\x03R\aissueId\"J\n" +
 	"\x18GetIssueTimelineResponse\x12.\n" +
-	"\x06events\x18\x01 \x03(\v2\x16.omnibus.v1.IssueEventR\x06events2\xfc\x02\n" +
+	"\x06events\x18\x01 \x03(\v2\x16.omnibus.v1.IssueEventR\x06events\"q\n" +
+	"\x17BlacklistReleaseRequest\x12\x19\n" +
+	"\bissue_id\x18\x01 \x01(\x03R\aissueId\x12\x1a\n" +
+	"\bprovider\x18\x02 \x01(\tR\bprovider\x12\x1f\n" +
+	"\vrelease_key\x18\x03 \x01(\tR\n" +
+	"releaseKey\"\x1a\n" +
+	"\x18BlacklistReleaseResponse\"1\n" +
+	"\x14RetryDownloadRequest\x12\x19\n" +
+	"\bissue_id\x18\x01 \x01(\x03R\aissueId\"j\n" +
+	"\x15RetryDownloadResponse\x12\x18\n" +
+	"\agrabbed\x18\x01 \x01(\bR\agrabbed\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12!\n" +
+	"\ffloor_reason\x18\x03 \x01(\tR\vfloorReason2\xb1\x04\n" +
 	"\rSearchService\x12N\n" +
 	"\vSearchIssue\x12\x1e.omnibus.v1.SearchIssueRequest\x1a\x1f.omnibus.v1.SearchIssueResponse\x12`\n" +
 	"\x11TriggerAutoSearch\x12$.omnibus.v1.TriggerAutoSearchRequest\x1a%.omnibus.v1.TriggerAutoSearchResponse\x12Z\n" +
 	"\x0fSelectCandidate\x12\".omnibus.v1.SelectCandidateRequest\x1a#.omnibus.v1.SelectCandidateResponse\x12]\n" +
-	"\x10GetIssueTimeline\x12#.omnibus.v1.GetIssueTimelineRequest\x1a$.omnibus.v1.GetIssueTimelineResponseB7Z5github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1b\x06proto3"
+	"\x10GetIssueTimeline\x12#.omnibus.v1.GetIssueTimelineRequest\x1a$.omnibus.v1.GetIssueTimelineResponse\x12]\n" +
+	"\x10BlacklistRelease\x12#.omnibus.v1.BlacklistReleaseRequest\x1a$.omnibus.v1.BlacklistReleaseResponse\x12T\n" +
+	"\rRetryDownload\x12 .omnibus.v1.RetryDownloadRequest\x1a!.omnibus.v1.RetryDownloadResponseB7Z5github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1b\x06proto3"
 
 var (
 	file_omnibus_v1_search_proto_rawDescOnce sync.Once
@@ -755,7 +974,7 @@ func file_omnibus_v1_search_proto_rawDescGZIP() []byte {
 	return file_omnibus_v1_search_proto_rawDescData
 }
 
-var file_omnibus_v1_search_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_omnibus_v1_search_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_omnibus_v1_search_proto_goTypes = []any{
 	(*Candidate)(nil),                 // 0: omnibus.v1.Candidate
 	(*IssueEvent)(nil),                // 1: omnibus.v1.IssueEvent
@@ -768,10 +987,14 @@ var file_omnibus_v1_search_proto_goTypes = []any{
 	(*SelectCandidateResponse)(nil),   // 8: omnibus.v1.SelectCandidateResponse
 	(*GetIssueTimelineRequest)(nil),   // 9: omnibus.v1.GetIssueTimelineRequest
 	(*GetIssueTimelineResponse)(nil),  // 10: omnibus.v1.GetIssueTimelineResponse
-	(IssueEventType)(0),               // 11: omnibus.v1.IssueEventType
+	(*BlacklistReleaseRequest)(nil),   // 11: omnibus.v1.BlacklistReleaseRequest
+	(*BlacklistReleaseResponse)(nil),  // 12: omnibus.v1.BlacklistReleaseResponse
+	(*RetryDownloadRequest)(nil),      // 13: omnibus.v1.RetryDownloadRequest
+	(*RetryDownloadResponse)(nil),     // 14: omnibus.v1.RetryDownloadResponse
+	(IssueEventType)(0),               // 15: omnibus.v1.IssueEventType
 }
 var file_omnibus_v1_search_proto_depIdxs = []int32{
-	11, // 0: omnibus.v1.IssueEvent.type:type_name -> omnibus.v1.IssueEventType
+	15, // 0: omnibus.v1.IssueEvent.type:type_name -> omnibus.v1.IssueEventType
 	0,  // 1: omnibus.v1.SearchIssueResponse.candidates:type_name -> omnibus.v1.Candidate
 	2,  // 2: omnibus.v1.SelectCandidateResponse.download:type_name -> omnibus.v1.Download
 	1,  // 3: omnibus.v1.GetIssueTimelineResponse.events:type_name -> omnibus.v1.IssueEvent
@@ -779,12 +1002,16 @@ var file_omnibus_v1_search_proto_depIdxs = []int32{
 	5,  // 5: omnibus.v1.SearchService.TriggerAutoSearch:input_type -> omnibus.v1.TriggerAutoSearchRequest
 	7,  // 6: omnibus.v1.SearchService.SelectCandidate:input_type -> omnibus.v1.SelectCandidateRequest
 	9,  // 7: omnibus.v1.SearchService.GetIssueTimeline:input_type -> omnibus.v1.GetIssueTimelineRequest
-	4,  // 8: omnibus.v1.SearchService.SearchIssue:output_type -> omnibus.v1.SearchIssueResponse
-	6,  // 9: omnibus.v1.SearchService.TriggerAutoSearch:output_type -> omnibus.v1.TriggerAutoSearchResponse
-	8,  // 10: omnibus.v1.SearchService.SelectCandidate:output_type -> omnibus.v1.SelectCandidateResponse
-	10, // 11: omnibus.v1.SearchService.GetIssueTimeline:output_type -> omnibus.v1.GetIssueTimelineResponse
-	8,  // [8:12] is the sub-list for method output_type
-	4,  // [4:8] is the sub-list for method input_type
+	11, // 8: omnibus.v1.SearchService.BlacklistRelease:input_type -> omnibus.v1.BlacklistReleaseRequest
+	13, // 9: omnibus.v1.SearchService.RetryDownload:input_type -> omnibus.v1.RetryDownloadRequest
+	4,  // 10: omnibus.v1.SearchService.SearchIssue:output_type -> omnibus.v1.SearchIssueResponse
+	6,  // 11: omnibus.v1.SearchService.TriggerAutoSearch:output_type -> omnibus.v1.TriggerAutoSearchResponse
+	8,  // 12: omnibus.v1.SearchService.SelectCandidate:output_type -> omnibus.v1.SelectCandidateResponse
+	10, // 13: omnibus.v1.SearchService.GetIssueTimeline:output_type -> omnibus.v1.GetIssueTimelineResponse
+	12, // 14: omnibus.v1.SearchService.BlacklistRelease:output_type -> omnibus.v1.BlacklistReleaseResponse
+	14, // 15: omnibus.v1.SearchService.RetryDownload:output_type -> omnibus.v1.RetryDownloadResponse
+	10, // [10:16] is the sub-list for method output_type
+	4,  // [4:10] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
 	4,  // [4:4] is the sub-list for extension extendee
 	0,  // [0:4] is the sub-list for field type_name
@@ -802,7 +1029,7 @@ func file_omnibus_v1_search_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_omnibus_v1_search_proto_rawDesc), len(file_omnibus_v1_search_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

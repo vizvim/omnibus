@@ -165,6 +165,29 @@ func (c *Client) EnqueueSearchIssue(ctx context.Context, issueID int64) error {
 	return nil
 }
 
+// EnqueueReplacementSearch durably enqueues a reactive, attempt-capped replacement search
+// for an issue whose download failed (poll reap, 05-01) or was blacklisted (DL-05). Duplicate
+// enqueues for the same issue collapse via ReplacementSearchArgs' unique-by-args opts, so a
+// failed download and a user blacklist racing to enqueue coalesce into one job (D-12/D-14).
+func (c *Client) EnqueueReplacementSearch(ctx context.Context, issueID int64) error {
+	_, err := c.river.Insert(ctx, ReplacementSearchArgs{IssueID: issueID}, nil)
+	if err != nil {
+		return fmt.Errorf("enqueue replacement search for issue %d: %w", issueID, err)
+	}
+	return nil
+}
+
+// EnqueuePostProcess is a placeholder for the post-process fan-out the tracking service's
+// completed-download branch calls (05-01 seam). The real PostProcess River job lands in
+// 05-03 (the post-process orchestrator); until then this logs the intent and returns nil so
+// the tracking Enqueuer is fully satisfiable now (enabling the Failed -> replacement wiring)
+// without silently failing a completion. 05-03 replaces this body with the durable enqueue.
+func (c *Client) EnqueuePostProcess(_ context.Context, downloadID int64) error {
+	c.logger.Info("post-process enqueue requested (no-op until 05-03 wires the PostProcess job)",
+		slog.Int64("download_id", downloadID))
+	return nil
+}
+
 // EnqueueDownloadPoll reactively enqueues a one-off download-status poll, so a fresh grab
 // can trigger an immediate poll instead of waiting for the next periodic tick. Duplicate
 // enqueues collapse via DownloadPollArgs' unique-by-kind opts (no stacked polls).

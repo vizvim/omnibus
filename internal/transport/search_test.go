@@ -24,6 +24,15 @@ type fakeSearchService struct {
 	outcome  search.AutoSearchOutcome
 	runErr   error
 	ranIssue int64
+
+	blacklistErr error
+	blIssue      int64
+	blProvider   string
+	blReleaseKey string
+
+	retryErr     error
+	retriedIssue int64
+	retryOutcome search.AutoSearchOutcome
 }
 
 func (f *fakeSearchService) SearchIssue(_ context.Context, _ int64) (search.Result, error) {
@@ -47,6 +56,21 @@ func (f *fakeSearchService) SearchAndGrab(_ context.Context, issueID int64) (sea
 		return search.AutoSearchOutcome{}, f.runErr
 	}
 	return f.outcome, nil
+}
+
+func (f *fakeSearchService) BlacklistRelease(_ context.Context, issueID int64, provider, releaseKey string) error {
+	f.blIssue = issueID
+	f.blProvider = provider
+	f.blReleaseKey = releaseKey
+	return f.blacklistErr
+}
+
+func (f *fakeSearchService) RetryDownload(_ context.Context, issueID int64) (search.AutoSearchOutcome, error) {
+	f.retriedIssue = issueID
+	if f.retryErr != nil {
+		return search.AutoSearchOutcome{}, f.retryErr
+	}
+	return f.retryOutcome, nil
 }
 
 func newSearchClient(t *testing.T, svc transport.SearchServicer) omnibusv1connect.SearchServiceClient {
@@ -161,4 +185,58 @@ func TestTriggerAutoSearchReportsNothingAcceptable(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, resp.Msg.GetGrabbed())
 	require.Equal(t, "best candidate scored 54 < floor 60", resp.Msg.GetFloorReason())
+}
+
+func TestBlacklistReleaseRejectsNonPositiveID(t *testing.T) {
+	t.Parallel()
+	client := newSearchClient(t, &fakeSearchService{})
+
+	_, err := client.BlacklistRelease(context.Background(), connect.NewRequest(
+		&omnibusv1.BlacklistReleaseRequest{IssueId: 0, Provider: "newznab", ReleaseKey: "rk"}))
+	require.Error(t, err)
+	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+func TestBlacklistReleaseRejectsEmptyProviderOrKey(t *testing.T) {
+	t.Parallel()
+	client := newSearchClient(t, &fakeSearchService{})
+
+	_, err := client.BlacklistRelease(context.Background(), connect.NewRequest(
+		&omnibusv1.BlacklistReleaseRequest{IssueId: 1, Provider: "", ReleaseKey: "rk"}))
+	require.Error(t, err)
+	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+func TestBlacklistReleasePassesThroughToService(t *testing.T) {
+	t.Parallel()
+	svc := &fakeSearchService{}
+	client := newSearchClient(t, svc)
+
+	_, err := client.BlacklistRelease(context.Background(), connect.NewRequest(
+		&omnibusv1.BlacklistReleaseRequest{IssueId: 42, Provider: "newznab", ReleaseKey: "rk-bad"}))
+	require.NoError(t, err)
+	require.Equal(t, int64(42), svc.blIssue)
+	require.Equal(t, "newznab", svc.blProvider)
+	require.Equal(t, "rk-bad", svc.blReleaseKey)
+}
+
+func TestRetryDownloadRejectsNonPositiveID(t *testing.T) {
+	t.Parallel()
+	client := newSearchClient(t, &fakeSearchService{})
+
+	_, err := client.RetryDownload(context.Background(), connect.NewRequest(&omnibusv1.RetryDownloadRequest{IssueId: 0}))
+	require.Error(t, err)
+	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+func TestRetryDownloadReturnsOutcome(t *testing.T) {
+	t.Parallel()
+	svc := &fakeSearchService{retryOutcome: search.AutoSearchOutcome{Grabbed: true, Title: "Saga #7 (cbz)"}}
+	client := newSearchClient(t, svc)
+
+	resp, err := client.RetryDownload(context.Background(), connect.NewRequest(&omnibusv1.RetryDownloadRequest{IssueId: 7}))
+	require.NoError(t, err)
+	require.True(t, resp.Msg.GetGrabbed())
+	require.Equal(t, "Saga #7 (cbz)", resp.Msg.GetTitle())
+	require.Equal(t, int64(7), svc.retriedIssue)
 }
