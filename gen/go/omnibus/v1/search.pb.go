@@ -422,9 +422,15 @@ func (x *TriggerAutoSearchRequest) GetIssueId() int64 {
 
 type TriggerAutoSearchResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// enqueued reports whether the auto-search job was enqueued. The job workers land in
-	// Plan 06; until then this RPC returns Unimplemented.
-	Enqueued      bool `protobuf:"varint,1,opt,name=enqueued,proto3" json:"enqueued,omitempty"`
+	// grabbed reports whether a release cleared the acceptance floor and was auto-grabbed.
+	// The search runs inline (bypassing the River queue) and completes before the response
+	// is returned.
+	Grabbed bool `protobuf:"varint,1,opt,name=grabbed,proto3" json:"grabbed,omitempty"`
+	// title is the auto-grabbed release's title when grabbed is true; empty otherwise.
+	Title string `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	// floor_reason explains why nothing was grabbed when grabbed is false (e.g. the best
+	// candidate scored below the floor, or no candidate passed the hard filter).
+	FloorReason   string `protobuf:"bytes,3,opt,name=floor_reason,json=floorReason,proto3" json:"floor_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -459,11 +465,25 @@ func (*TriggerAutoSearchResponse) Descriptor() ([]byte, []int) {
 	return file_omnibus_v1_search_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *TriggerAutoSearchResponse) GetEnqueued() bool {
+func (x *TriggerAutoSearchResponse) GetGrabbed() bool {
 	if x != nil {
-		return x.Enqueued
+		return x.Grabbed
 	}
 	return false
+}
+
+func (x *TriggerAutoSearchResponse) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *TriggerAutoSearchResponse) GetFloorReason() string {
+	if x != nil {
+		return x.FloorReason
+	}
+	return ""
 }
 
 type SelectCandidateRequest struct {
@@ -701,9 +721,11 @@ const file_omnibus_v1_search_proto_rawDesc = "" +
 	"acceptable\x12!\n" +
 	"\ffloor_reason\x18\x03 \x01(\tR\vfloorReason\"5\n" +
 	"\x18TriggerAutoSearchRequest\x12\x19\n" +
-	"\bissue_id\x18\x01 \x01(\x03R\aissueId\"7\n" +
-	"\x19TriggerAutoSearchResponse\x12\x1a\n" +
-	"\benqueued\x18\x01 \x01(\bR\benqueued\"p\n" +
+	"\bissue_id\x18\x01 \x01(\x03R\aissueId\"n\n" +
+	"\x19TriggerAutoSearchResponse\x12\x18\n" +
+	"\agrabbed\x18\x01 \x01(\bR\agrabbed\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12!\n" +
+	"\ffloor_reason\x18\x03 \x01(\tR\vfloorReason\"p\n" +
 	"\x16SelectCandidateRequest\x12\x19\n" +
 	"\bissue_id\x18\x01 \x01(\x03R\aissueId\x12\x1a\n" +
 	"\bprovider\x18\x02 \x01(\tR\bprovider\x12\x1f\n" +

@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file omnibus/v1/search.proto.
  */
 export const file_omnibus_v1_search: GenFile = /*@__PURE__*/
-  fileDesc("ChdvbW5pYnVzL3YxL3NlYXJjaC5wcm90bxIKb21uaWJ1cy52MSJ0CglDYW5kaWRhdGUSEAoIcHJvdmlkZXIYASABKAkSEwoLcmVsZWFzZV9rZXkYAiABKAkSDQoFdGl0bGUYAyABKAkSEgoKc2l6ZV9ieXRlcxgEIAEoAxINCgVzY29yZRgFIAEoARIOCgZyZWFzb24YBiABKAkieQoKSXNzdWVFdmVudBIKCgJpZBgBIAEoAxIQCghpc3N1ZV9pZBgCIAEoAxIoCgR0eXBlGAMgASgOMhoub21uaWJ1cy52MS5Jc3N1ZUV2ZW50VHlwZRITCgtvY2N1cnJlZF9hdBgEIAEoCRIOCgZkZXRhaWwYBSABKAkicwoIRG93bmxvYWQSCgoCaWQYASABKAMSEAoIaXNzdWVfaWQYAiABKAMSEAoIcHJvdmlkZXIYAyABKAkSEwoLcmVsZWFzZV9rZXkYBCABKAkSDgoGc3RhdHVzGAUgASgJEhIKCmNsaWVudF9yZWYYBiABKAkiJgoSU2VhcmNoSXNzdWVSZXF1ZXN0EhAKCGlzc3VlX2lkGAEgASgDImoKE1NlYXJjaElzc3VlUmVzcG9uc2USKQoKY2FuZGlkYXRlcxgBIAMoCzIVLm9tbmlidXMudjEuQ2FuZGlkYXRlEhIKCmFjY2VwdGFibGUYAiABKAgSFAoMZmxvb3JfcmVhc29uGAMgASgJIiwKGFRyaWdnZXJBdXRvU2VhcmNoUmVxdWVzdBIQCghpc3N1ZV9pZBgBIAEoAyItChlUcmlnZ2VyQXV0b1NlYXJjaFJlc3BvbnNlEhAKCGVucXVldWVkGAEgASgIIlEKFlNlbGVjdENhbmRpZGF0ZVJlcXVlc3QSEAoIaXNzdWVfaWQYASABKAMSEAoIcHJvdmlkZXIYAiABKAkSEwoLcmVsZWFzZV9rZXkYAyABKAkiQQoXU2VsZWN0Q2FuZGlkYXRlUmVzcG9uc2USJgoIZG93bmxvYWQYASABKAsyFC5vbW5pYnVzLnYxLkRvd25sb2FkIisKF0dldElzc3VlVGltZWxpbmVSZXF1ZXN0EhAKCGlzc3VlX2lkGAEgASgDIkIKGEdldElzc3VlVGltZWxpbmVSZXNwb25zZRImCgZldmVudHMYASADKAsyFi5vbW5pYnVzLnYxLklzc3VlRXZlbnQy/AIKDVNlYXJjaFNlcnZpY2USTgoLU2VhcmNoSXNzdWUSHi5vbW5pYnVzLnYxLlNlYXJjaElzc3VlUmVxdWVzdBofLm9tbmlidXMudjEuU2VhcmNoSXNzdWVSZXNwb25zZRJgChFUcmlnZ2VyQXV0b1NlYXJjaBIkLm9tbmlidXMudjEuVHJpZ2dlckF1dG9TZWFyY2hSZXF1ZXN0GiUub21uaWJ1cy52MS5UcmlnZ2VyQXV0b1NlYXJjaFJlc3BvbnNlEloKD1NlbGVjdENhbmRpZGF0ZRIiLm9tbmlidXMudjEuU2VsZWN0Q2FuZGlkYXRlUmVxdWVzdBojLm9tbmlidXMudjEuU2VsZWN0Q2FuZGlkYXRlUmVzcG9uc2USXQoQR2V0SXNzdWVUaW1lbGluZRIjLm9tbmlidXMudjEuR2V0SXNzdWVUaW1lbGluZVJlcXVlc3QaJC5vbW5pYnVzLnYxLkdldElzc3VlVGltZWxpbmVSZXNwb25zZUI3WjVnaXRodWIuY29tL3ZpenZpbS9vbW5pYnVzL2dlbi9nby9vbW5pYnVzL3YxO29tbmlidXN2MWIGcHJvdG8z", [file_omnibus_v1_common]);
+  fileDesc("ChdvbW5pYnVzL3YxL3NlYXJjaC5wcm90bxIKb21uaWJ1cy52MSJ0CglDYW5kaWRhdGUSEAoIcHJvdmlkZXIYASABKAkSEwoLcmVsZWFzZV9rZXkYAiABKAkSDQoFdGl0bGUYAyABKAkSEgoKc2l6ZV9ieXRlcxgEIAEoAxINCgVzY29yZRgFIAEoARIOCgZyZWFzb24YBiABKAkieQoKSXNzdWVFdmVudBIKCgJpZBgBIAEoAxIQCghpc3N1ZV9pZBgCIAEoAxIoCgR0eXBlGAMgASgOMhoub21uaWJ1cy52MS5Jc3N1ZUV2ZW50VHlwZRITCgtvY2N1cnJlZF9hdBgEIAEoCRIOCgZkZXRhaWwYBSABKAkicwoIRG93bmxvYWQSCgoCaWQYASABKAMSEAoIaXNzdWVfaWQYAiABKAMSEAoIcHJvdmlkZXIYAyABKAkSEwoLcmVsZWFzZV9rZXkYBCABKAkSDgoGc3RhdHVzGAUgASgJEhIKCmNsaWVudF9yZWYYBiABKAkiJgoSU2VhcmNoSXNzdWVSZXF1ZXN0EhAKCGlzc3VlX2lkGAEgASgDImoKE1NlYXJjaElzc3VlUmVzcG9uc2USKQoKY2FuZGlkYXRlcxgBIAMoCzIVLm9tbmlidXMudjEuQ2FuZGlkYXRlEhIKCmFjY2VwdGFibGUYAiABKAgSFAoMZmxvb3JfcmVhc29uGAMgASgJIiwKGFRyaWdnZXJBdXRvU2VhcmNoUmVxdWVzdBIQCghpc3N1ZV9pZBgBIAEoAyJRChlUcmlnZ2VyQXV0b1NlYXJjaFJlc3BvbnNlEg8KB2dyYWJiZWQYASABKAgSDQoFdGl0bGUYAiABKAkSFAoMZmxvb3JfcmVhc29uGAMgASgJIlEKFlNlbGVjdENhbmRpZGF0ZVJlcXVlc3QSEAoIaXNzdWVfaWQYASABKAMSEAoIcHJvdmlkZXIYAiABKAkSEwoLcmVsZWFzZV9rZXkYAyABKAkiQQoXU2VsZWN0Q2FuZGlkYXRlUmVzcG9uc2USJgoIZG93bmxvYWQYASABKAsyFC5vbW5pYnVzLnYxLkRvd25sb2FkIisKF0dldElzc3VlVGltZWxpbmVSZXF1ZXN0EhAKCGlzc3VlX2lkGAEgASgDIkIKGEdldElzc3VlVGltZWxpbmVSZXNwb25zZRImCgZldmVudHMYASADKAsyFi5vbW5pYnVzLnYxLklzc3VlRXZlbnQy/AIKDVNlYXJjaFNlcnZpY2USTgoLU2VhcmNoSXNzdWUSHi5vbW5pYnVzLnYxLlNlYXJjaElzc3VlUmVxdWVzdBofLm9tbmlidXMudjEuU2VhcmNoSXNzdWVSZXNwb25zZRJgChFUcmlnZ2VyQXV0b1NlYXJjaBIkLm9tbmlidXMudjEuVHJpZ2dlckF1dG9TZWFyY2hSZXF1ZXN0GiUub21uaWJ1cy52MS5UcmlnZ2VyQXV0b1NlYXJjaFJlc3BvbnNlEloKD1NlbGVjdENhbmRpZGF0ZRIiLm9tbmlidXMudjEuU2VsZWN0Q2FuZGlkYXRlUmVxdWVzdBojLm9tbmlidXMudjEuU2VsZWN0Q2FuZGlkYXRlUmVzcG9uc2USXQoQR2V0SXNzdWVUaW1lbGluZRIjLm9tbmlidXMudjEuR2V0SXNzdWVUaW1lbGluZVJlcXVlc3QaJC5vbW5pYnVzLnYxLkdldElzc3VlVGltZWxpbmVSZXNwb25zZUI3WjVnaXRodWIuY29tL3ZpenZpbS9vbW5pYnVzL2dlbi9nby9vbW5pYnVzL3YxO29tbmlidXN2MWIGcHJvdG8z", [file_omnibus_v1_common]);
 
 /**
  * Candidate is one ranked release candidate for an issue. score is the pipeline's
@@ -211,12 +211,28 @@ export const TriggerAutoSearchRequestSchema: GenMessage<TriggerAutoSearchRequest
  */
 export type TriggerAutoSearchResponse = Message<"omnibus.v1.TriggerAutoSearchResponse"> & {
   /**
-   * enqueued reports whether the auto-search job was enqueued. The job workers land in
-   * Plan 06; until then this RPC returns Unimplemented.
+   * grabbed reports whether a release cleared the acceptance floor and was auto-grabbed.
+   * The search runs inline (bypassing the River queue) and completes before the response
+   * is returned.
    *
-   * @generated from field: bool enqueued = 1;
+   * @generated from field: bool grabbed = 1;
    */
-  enqueued: boolean;
+  grabbed: boolean;
+
+  /**
+   * title is the auto-grabbed release's title when grabbed is true; empty otherwise.
+   *
+   * @generated from field: string title = 2;
+   */
+  title: string;
+
+  /**
+   * floor_reason explains why nothing was grabbed when grabbed is false (e.g. the best
+   * candidate scored below the floor, or no candidate passed the hard filter).
+   *
+   * @generated from field: string floor_reason = 3;
+   */
+  floorReason: string;
 };
 
 /**
@@ -324,7 +340,8 @@ export const SearchService: GenService<{
     output: typeof SearchIssueResponseSchema;
   },
   /**
-   * TriggerAutoSearch enqueues an auto-search job for an issue (workers land in Plan 06).
+   * TriggerAutoSearch runs an on-demand search-and-auto-grab for an issue immediately,
+   * bypassing the River auto-search queue. The pipeline runs inline in the request.
    *
    * @generated from rpc omnibus.v1.SearchService.TriggerAutoSearch
    */

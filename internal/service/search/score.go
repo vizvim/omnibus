@@ -30,7 +30,11 @@ func DefaultScoreOpts() ScoreOpts {
 			"cbz": 100,
 			"cbr": 70,
 			"pdf": 40,
-			"":    20, // unknown format — neutral-low
+			// Unknown format — neutral. Most indexer release titles carry no container
+			// token (.cbz/.cbr), so inferFormat yields "" for legitimate releases. Scoring
+			// those near pdf-level wrongly gated good single issues out below the floor;
+			// absence of a tag is not evidence of bad quality, so treat it as neutral-good.
+			"": 60,
 		},
 		SizeFitWeight:      30,
 		IdealSizeBytes:     30 * 1024 * 1024, // ~30MB single issue

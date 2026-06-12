@@ -13,7 +13,8 @@ import { SearchService } from "./search_pb";
 export const searchIssue = SearchService.method.searchIssue;
 
 /**
- * TriggerAutoSearch enqueues an auto-search job for an issue (workers land in Plan 06).
+ * TriggerAutoSearch runs an on-demand search-and-auto-grab for an issue immediately,
+ * bypassing the River auto-search queue. The pipeline runs inline in the request.
  *
  * @generated from rpc omnibus.v1.SearchService.TriggerAutoSearch
  */

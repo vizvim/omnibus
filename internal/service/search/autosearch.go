@@ -55,44 +55,68 @@ func (s *Service) RunAutoSearchSweep(ctx context.Context) error {
 	return nil
 }
 
-// RunSearchIssue is the auto-search worker body for a single issue. It runs the SAME
-// shared pipeline as the manual path, writes a searched event with the reasons (D-04),
-// and then diverges from manual: if the top candidate clears the acceptance floor (D-02)
-// it auto-grabs it (Plan 04 Grab → Snatched + snatched event); if nothing was acceptable
-// it increments search_attempts (D-09 backoff/cool-off). An already-non-Wanted issue is a
-// no-op (it may have been grabbed/skipped between enqueue and run).
+// AutoSearchOutcome is the result of an inline search-and-auto-grab pass: whether a
+// release cleared the floor and was grabbed, the grabbed title, and (when nothing was
+// grabbed) the human floor reason. The manual on-demand path returns this to the caller
+// so the UI can show "grabbed X" vs "nothing acceptable"; the River worker discards it.
+type AutoSearchOutcome struct {
+	Grabbed     bool
+	Title       string
+	FloorReason string
+}
+
+// RunSearchIssue is the auto-search worker body for a single issue (jobs-facing,
+// error-only so internal/jobs stays free of any search-package type). It delegates to the
+// shared runSearchIssue core and discards the outcome.
 func (s *Service) RunSearchIssue(ctx context.Context, issueID int64) error {
+	_, err := s.runSearchIssue(ctx, issueID)
+	return err
+}
+
+// SearchAndGrab runs the same inline search-and-auto-grab pass as the worker but returns
+// the AutoSearchOutcome. It backs the on-demand manual "auto-grab & download" path
+// (TriggerAutoSearch), which bypasses the River queue and runs synchronously.
+func (s *Service) SearchAndGrab(ctx context.Context, issueID int64) (AutoSearchOutcome, error) {
+	return s.runSearchIssue(ctx, issueID)
+}
+
+// runSearchIssue runs the SAME shared pipeline as the manual path, writes a searched event
+// with the reasons (D-04), and then diverges from a plain manual search: if the top
+// candidate clears the acceptance floor (D-02) it auto-grabs it (Grab → Snatched +
+// snatched event); if nothing was acceptable it increments search_attempts (D-09
+// backoff/cool-off). It returns the outcome for callers that surface it.
+func (s *Service) runSearchIssue(ctx context.Context, issueID int64) (AutoSearchOutcome, error) {
 	issue, err := s.repos.Issue.GetByID(ctx, issueID)
 	if err != nil {
-		return fmt.Errorf("load issue %d: %w", issueID, err)
+		return AutoSearchOutcome{}, fmt.Errorf("load issue %d: %w", issueID, err)
 	}
 
 	cands, err := s.gatherCandidates(ctx, issue)
 	if err != nil {
-		return err
+		return AutoSearchOutcome{}, err
 	}
 
 	target := IssueMatch{Sort: issue.IssueNumberSort, Qual: issue.IssueNumberQual.String}
 	result := Pipeline(cands, target, s.blacklistFor(issue.ID), s.filterOpts, s.scoreOpts, s.floor)
 
 	if err := s.writeSearchedEvent(ctx, issueID, result); err != nil {
-		return err
+		return AutoSearchOutcome{}, err
 	}
 
 	if !result.Acceptable || result.Pick == nil {
 		// No clearing candidate — record the attempt so backoff/cool-off applies (D-09).
 		if err := s.repos.Issue.IncrementSearchAttempts(ctx, issueID); err != nil {
-			return fmt.Errorf("increment search_attempts for issue %d: %w", issueID, err)
+			return AutoSearchOutcome{}, fmt.Errorf("increment search_attempts for issue %d: %w", issueID, err)
 		}
 		s.logger.Info("auto-search no acceptable candidate",
 			slog.Int64("issue_id", issueID), slog.String("reason", result.FloorReason))
-		return nil
+		return AutoSearchOutcome{Grabbed: false, FloorReason: result.FloorReason}, nil
 	}
 
 	// A candidate cleared the floor — auto-grab it through the shared Grab path (Plan 04).
 	pick := result.Pick.Candidate
 	if _, err := s.Grab(ctx, issueID, downloadKindFor(pick.Provider), pick.ReleaseKey, pick); err != nil {
-		return fmt.Errorf("auto-grab issue %d: %w", issueID, err)
+		return AutoSearchOutcome{}, fmt.Errorf("auto-grab issue %d: %w", issueID, err)
 	}
-	return nil
+	return AutoSearchOutcome{Grabbed: true, Title: pick.Title}, nil
 }

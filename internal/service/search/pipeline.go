@@ -7,8 +7,9 @@ import (
 )
 
 // DefaultAcceptanceFloor is the fixed minimum score the top survivor must clear to be an
-// acceptable pick (D-02/D-05). Calibrated against DefaultScoreOpts: a cbz at neutral
-// size with completeness clears it; a lone pdf of unknown size does not.
+// acceptable pick (D-02/D-05). Calibrated against DefaultScoreOpts: a single issue of an
+// untagged-but-plausible format at a reasonable size clears it; a lone pdf, a pack, or a
+// wildly mis-sized release does not.
 const DefaultAcceptanceFloor = 60.0
 
 // PipelineResult is the full, observable outcome of the shared search pipeline. Ranked

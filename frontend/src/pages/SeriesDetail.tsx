@@ -7,6 +7,7 @@ import { IssueDetailPanel } from "../components/IssueDetailPanel";
 import { IssueTimeline } from "../components/IssueTimeline";
 import { IssueTile } from "../components/IssueTile";
 import { SyncingBadge } from "../components/SyncingBadge";
+import { triggerAutoSearch } from "../gen/omnibus/v1/search-SearchService_connectquery";
 import {
   getSeries,
   refreshSeries,
@@ -43,6 +44,13 @@ export function SeriesDetail({ seriesId }: { seriesId: bigint }) {
       // Re-poll GetSeries so the refreshing/idle state reflects the new run.
       void detail.refetch();
     },
+  });
+
+  // The "Auto-grab & download" path: run the inline search-and-auto-grab (bypassing the
+  // River queue) and report the outcome. On success re-poll GetSeries so the issue's
+  // status (e.g. Snatched) updates; the polled IssueTimeline surfaces the snatched event.
+  const autoGrab = useMutation(triggerAutoSearch, {
+    onSuccess: () => void detail.refetch(),
   });
 
   if (detail.isError) {
@@ -117,6 +125,7 @@ export function SeriesDetail({ seriesId }: { seriesId: bigint }) {
                 onClick={() => {
                   setSelectedIssueId(issue.id);
                   setSearchActive(false);
+                  autoGrab.reset();
                 }}
                 aria-pressed={selectedIssueId === issue.id}
                 className={`rounded text-left ${
@@ -137,12 +146,39 @@ export function SeriesDetail({ seriesId }: { seriesId: bigint }) {
                       <h2 className="text-xl font-semibold">Candidates</h2>
                       <button
                         type="button"
-                        onClick={() => setSearchActive(true)}
-                        className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                        disabled={autoGrab.isPending}
+                        onClick={() => autoGrab.mutate({ issueId: issue.id })}
+                        className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
                       >
-                        Search
+                        {autoGrab.isPending ? "Auto-grabbing…" : "Auto-grab & download"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSearchActive(true)}
+                        className="rounded border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+                      >
+                        Search & choose
                       </button>
                     </div>
+                    {autoGrab.isError ? (
+                      <p className="text-sm text-red-600">
+                        Couldn't complete the auto-grab. Check the server and download client
+                        are reachable, then try again.
+                      </p>
+                    ) : autoGrab.data ? (
+                      autoGrab.data.grabbed ? (
+                        <p className="text-sm text-green-700">
+                          Grabbed {autoGrab.data.title}. Handed off to the download client —
+                          see the timeline below.
+                        </p>
+                      ) : (
+                        <p className="text-sm text-slate-600">
+                          {autoGrab.data.floorReason
+                            ? `No release cleared the match and quality checks (${autoGrab.data.floorReason}). omnibus will keep trying automatically, or use “Search & choose” to grab one manually.`
+                            : "No release cleared the match and quality checks. omnibus will keep trying automatically, or use “Search & choose” to grab one manually."}
+                        </p>
+                      )
+                    ) : null}
                     <CandidateList
                       issueId={issue.id}
                       enabled={searchActive}

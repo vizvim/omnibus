@@ -54,9 +54,15 @@ message TriggerAutoSearchRequest {
 }
 
 message TriggerAutoSearchResponse {
-  // enqueued reports whether the auto-search job was enqueued. The job workers land in
-  // Plan 06; until then this RPC returns Unimplemented.
-  bool enqueued = 1;
+  // grabbed reports whether a release cleared the acceptance floor and was auto-grabbed.
+  // The search runs inline (bypassing the River queue) and completes before the response
+  // is returned.
+  bool grabbed = 1;
+  // title is the auto-grabbed release's title when grabbed is true; empty otherwise.
+  string title = 2;
+  // floor_reason explains why nothing was grabbed when grabbed is false (e.g. the best
+  // candidate scored below the floor, or no candidate passed the hard filter).
+  string floor_reason = 3;
 }
 
 message SelectCandidateRequest {
@@ -84,7 +90,8 @@ service SearchService {
   // SearchIssue runs the filter/score/floor pipeline for a Wanted issue and records a
   // searched timeline event. It returns the ranked candidates regardless of acceptability.
   rpc SearchIssue(SearchIssueRequest) returns (SearchIssueResponse);
-  // TriggerAutoSearch enqueues an auto-search job for an issue (workers land in Plan 06).
+  // TriggerAutoSearch runs an on-demand search-and-auto-grab for an issue immediately,
+  // bypassing the River auto-search queue. The pipeline runs inline in the request.
   rpc TriggerAutoSearch(TriggerAutoSearchRequest) returns (TriggerAutoSearchResponse);
   // SelectCandidate grabs a chosen candidate: writes candidate-selected, then hands off
   // (submit + Snatched + snatched event). Rejects a release_key not produced for the issue.
