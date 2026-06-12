@@ -40,7 +40,7 @@ type Client struct {
 // job (the stale-refresh sweep, the auto-search sweep, and the RSS poll respectively) at
 // that interval. None run on start, to avoid a burst of external calls right after boot.
 // The returned client is not yet started — call Start to begin working jobs.
-func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, sweepInterval, autoSearchInterval, rssPollInterval time.Duration, logger *slog.Logger, workers *river.Workers) (*Client, error) {
+func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, sweepInterval, autoSearchInterval, rssPollInterval, downloadPollInterval time.Duration, logger *slog.Logger, workers *river.Workers) (*Client, error) {
 	if maxWorkers < 1 {
 		maxWorkers = 1
 	}
@@ -80,6 +80,14 @@ func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, sweepInte
 		periodicJobs = append(periodicJobs, river.NewPeriodicJob(
 			river.PeriodicInterval(rssPollInterval),
 			func() (river.JobArgs, *river.InsertOpts) { return RSSPollArgs{}, nil },
+			&river.PeriodicJobOpts{RunOnStart: false},
+		))
+	}
+	if downloadPollInterval > 0 {
+		// The periodic download-status poll (DL-03/04/08). RunOnStart false (no boot burst).
+		periodicJobs = append(periodicJobs, river.NewPeriodicJob(
+			river.PeriodicInterval(downloadPollInterval),
+			func() (river.JobArgs, *river.InsertOpts) { return DownloadPollArgs{}, nil },
 			&river.PeriodicJobOpts{RunOnStart: false},
 		))
 	}
@@ -153,6 +161,17 @@ func (c *Client) EnqueueSearchIssue(ctx context.Context, issueID int64) error {
 	_, err := c.river.Insert(ctx, SearchIssueArgs{IssueID: issueID}, nil)
 	if err != nil {
 		return fmt.Errorf("enqueue search for issue %d: %w", issueID, err)
+	}
+	return nil
+}
+
+// EnqueueDownloadPoll reactively enqueues a one-off download-status poll, so a fresh grab
+// can trigger an immediate poll instead of waiting for the next periodic tick. Duplicate
+// enqueues collapse via DownloadPollArgs' unique-by-kind opts (no stacked polls).
+func (c *Client) EnqueueDownloadPoll(ctx context.Context) error {
+	_, err := c.river.Insert(ctx, DownloadPollArgs{}, nil)
+	if err != nil {
+		return fmt.Errorf("enqueue download poll: %w", err)
 	}
 	return nil
 }
