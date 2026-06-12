@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<!--
+  Representative GetComics post-page fixture for the DDL mirror resolver.
+
+  NOTE: this is a *representative* fixture built to match the documented GetComics
+  post-page mirror-link structure (Mylar getcomics.py parse_downloadresults parity):
+  a post wraps its download links in a `.aio-pulse`/`.aio-button-center` block, and the
+  primary "DOWNLOAD NOW" anchor sits alongside secondary mirrors (Mirror Download /
+  mediafire / pixeldrain / mega). The resolver prefers "Download Now"/"Mirror Download"
+  anchors over the cloud-host mirrors.
+
+  The live capture (a real getcomics.org post page) must be confirmed during the
+  Task-3 human-verify step — GetComics HTML can drift from these selectors.
+-->
+<html lang="en">
+<head><title>Example Comic #1 (2026) | GetComics</title></head>
+<body>
+  <article id="post-12345" class="post type-post">
+    <h1 class="post-title entry-title"><a href="https://getcomics.org/other-comics/example-comic-1-2026/">Example Comic #1 (2026)</a></h1>
+    <div class="entry-content">
+      <p>Size : 42 MB</p>
+
+      <div class="aio-pulse">
+        <a href="https://dl1.example-mirror.test/download/example-comic-1.cbz" title="Download Now" class="aio-red">
+          <span class="aio-button-text">DOWNLOAD NOW</span>
+        </a>
+        <a href="https://dl2.example-mirror.test/download/example-comic-1.cbz" title="Mirror Download" class="aio-purple">
+          <span class="aio-button-text">MIRROR DOWNLOAD</span>
+        </a>
+      </div>
+
+      <div class="aio-pulse">
+        <a href="https://mega.nz/file/abc123" title="MEGA" class="aio-green">
+          <span class="aio-button-text">MEGA</span>
+        </a>
+        <a href="https://pixeldrain.com/u/xyz789" title="PIXELDRAIN" class="aio-blue">
+          <span class="aio-button-text">PIXELDRAIN</span>
+        </a>
+        <a href="https://www.mediafire.com/file/qqq/example.cbz" title="MEDIAFIRE" class="aio-orange">
+          <span class="aio-button-text">MEDIAFIRE</span>
+        </a>
+      </div>
+    </div>
+  </article>
+</body>
+</html>
