@@ -31,9 +31,9 @@ func Normalize(raw string) (sortKey float64, qual string) {
 		rest := strings.TrimSpace(s[len("annual"):])
 		n, err := strconv.ParseFloat(rest, 64)
 		if err != nil {
-			return 0, "annual"
+			return 0, issueTypeAnnual
 		}
-		return n, "annual"
+		return n, issueTypeAnnual
 	}
 
 	// "<base>.<suffix>" — numeric suffix stays in sort; text suffix becomes qual.

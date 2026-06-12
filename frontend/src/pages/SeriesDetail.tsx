@@ -1,8 +1,9 @@
 import { useMutation, useQuery } from "@connectrpc/connect-query";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { CandidateList } from "../components/CandidateList";
 import { EmptyState } from "../components/EmptyState";
+import { IssueDetailPanel } from "../components/IssueDetailPanel";
 import { IssueTimeline } from "../components/IssueTimeline";
 import { IssueTile } from "../components/IssueTile";
 import { SyncingBadge } from "../components/SyncingBadge";
@@ -110,50 +111,55 @@ export function SeriesDetail({ seriesId }: { seriesId: bigint }) {
         <h2 className="text-xl font-semibold">Issues</h2>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
           {issues.map((issue) => (
-            <button
-              key={issue.id.toString()}
-              type="button"
-              onClick={() => {
-                setSelectedIssueId(issue.id);
-                setSearchActive(false);
-              }}
-              aria-pressed={selectedIssueId === issue.id}
-              className={`rounded text-left ${
-                selectedIssueId === issue.id ? "ring-2 ring-blue-600" : ""
-              }`}
-            >
-              <IssueTile issue={issue} />
-            </button>
+            <Fragment key={issue.id.toString()}>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedIssueId(issue.id);
+                  setSearchActive(false);
+                }}
+                aria-pressed={selectedIssueId === issue.id}
+                className={`rounded text-left ${
+                  selectedIssueId === issue.id ? "ring-2 ring-blue-600" : ""
+                }`}
+              >
+                <IssueTile issue={issue} />
+              </button>
+
+              {selectedIssueId === issue.id ? (
+                // Expand the selected-issue detail inline, full-width, directly under the
+                // clicked tile. col-span-full makes it occupy a whole grid row.
+                <section className="col-span-full flex flex-col gap-6">
+                  <IssueDetailPanel issueId={issue.id} />
+
+                  <section className="flex flex-col gap-4">
+                    <div className="flex items-center gap-4">
+                      <h2 className="text-xl font-semibold">Candidates</h2>
+                      <button
+                        type="button"
+                        onClick={() => setSearchActive(true)}
+                        className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                      >
+                        Search
+                      </button>
+                    </div>
+                    <CandidateList
+                      issueId={issue.id}
+                      enabled={searchActive}
+                      onGrabbed={() => void detail.refetch()}
+                    />
+                  </section>
+
+                  <section className="flex flex-col gap-4">
+                    <h2 className="text-xl font-semibold">Timeline</h2>
+                    <IssueTimeline issueId={issue.id} />
+                  </section>
+                </section>
+              ) : null}
+            </Fragment>
           ))}
         </div>
       </section>
-
-      {selectedIssueId !== null ? (
-        <section className="flex flex-col gap-6">
-          <section className="flex flex-col gap-4">
-            <div className="flex items-center gap-4">
-              <h2 className="text-xl font-semibold">Candidates</h2>
-              <button
-                type="button"
-                onClick={() => setSearchActive(true)}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
-              >
-                Search
-              </button>
-            </div>
-            <CandidateList
-              issueId={selectedIssueId}
-              enabled={searchActive}
-              onGrabbed={() => void detail.refetch()}
-            />
-          </section>
-
-          <section className="flex flex-col gap-4">
-            <h2 className="text-xl font-semibold">Timeline</h2>
-            <IssueTimeline issueId={selectedIssueId} />
-          </section>
-        </section>
-      ) : null}
     </div>
   );
 }

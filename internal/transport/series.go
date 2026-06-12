@@ -24,6 +24,7 @@ type SeriesServicer interface {
 	AddSeries(ctx context.Context, volumeID int64) (series.Series, error)
 	ListSeries(ctx context.Context, page int32) ([]series.Series, error)
 	GetSeries(ctx context.Context, seriesID int64) (series.View, error)
+	GetIssue(ctx context.Context, issueID int64) (series.IssueDetail, error)
 	UpdateSeriesSettings(ctx context.Context, seriesID int64, status string) (series.Series, error)
 	RefreshSeries(ctx context.Context, seriesID int64) (series.Series, error)
 }
@@ -130,6 +131,21 @@ func (h *SeriesHandler) GetSeries(
 	}), nil
 }
 
+// GetIssue handles the per-issue detail RPC.
+func (h *SeriesHandler) GetIssue(
+	ctx context.Context, req *connect.Request[omnibusv1.GetIssueRequest],
+) (*connect.Response[omnibusv1.GetIssueResponse], error) {
+	issueID := req.Msg.GetIssueId()
+	if issueID <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("issue_id must be positive"))
+	}
+	detail, err := h.svc.GetIssue(ctx, issueID)
+	if err != nil {
+		return nil, serviceError(err)
+	}
+	return connect.NewResponse(&omnibusv1.GetIssueResponse{Issue: issueDetailToProto(detail)}), nil
+}
+
 // UpdateSeriesSettings handles the settings RPC.
 func (h *SeriesHandler) UpdateSeriesSettings(
 	ctx context.Context, req *connect.Request[omnibusv1.UpdateSeriesSettingsRequest],
@@ -190,6 +206,34 @@ func issueToProto(i series.Issue) *omnibusv1.Issue {
 		CoverDate:            i.CoverDate,
 		Status:               statusToProto(i.Status),
 		CoverUrl:             coverURL("issues", i.ID, i.HasCover),
+		IssueType:            i.IssueType,
+	}
+}
+
+// issueDetailToProto maps a domain IssueDetail to its proto message, reusing
+// issueToProto for the base issue and creditToProto for each ordered credit.
+func issueDetailToProto(d series.IssueDetail) *omnibusv1.IssueDetail {
+	credits := make([]*omnibusv1.Credit, 0, len(d.Credits))
+	for _, c := range d.Credits {
+		credits = append(credits, creditToProto(c))
+	}
+	return &omnibusv1.IssueDetail{
+		Issue:          issueToProto(d.Issue),
+		Description:    d.Description,
+		IssueType:      d.IssueType,
+		AltIssueNumber: d.AltIssueNumber,
+		PageCount:      d.PageCount,
+		StoreDate:      d.StoreDate,
+		CvLastUpdated:  d.CVLastUpdated,
+		Credits:        credits,
+	}
+}
+
+func creditToProto(c series.Credit) *omnibusv1.Credit {
+	return &omnibusv1.Credit{
+		Role:              c.Role,
+		Name:              c.Name,
+		ComicvinePersonId: c.ComicvinePersonID,
 	}
 }
 

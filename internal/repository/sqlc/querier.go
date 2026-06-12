@@ -16,6 +16,8 @@ type Querier interface {
 	CreateDownload(ctx context.Context, arg CreateDownloadParams) (Download, error)
 	CreateIndexer(ctx context.Context, arg CreateIndexerParams) (Indexer, error)
 	DeleteIndexer(ctx context.Context, id int64) error
+	// Removes all credit rows for an issue, so Replace can rebuild them idempotently.
+	DeleteIssueCredits(ctx context.Context, issueID int64) error
 	GetCover(ctx context.Context, arg GetCoverParams) (GetCoverRow, error)
 	GetDownloadByID(ctx context.Context, id int64) (Download, error)
 	GetDownloadClientConfig(ctx context.Context) (DownloadClientConfig, error)
@@ -29,12 +31,15 @@ type Querier interface {
 	// Records a no-result auto-search attempt; the growing count spaces retries and
 	// eventually crosses the cap so the issue goes cold (D-09).
 	IncrementSearchAttempts(ctx context.Context, id int64) error
+	// Inserts one normalized credit; duplicate (issue_id, role, name) rows are no-ops.
+	InsertIssueCredit(ctx context.Context, arg InsertIssueCreditParams) error
 	InsertIssueEvent(ctx context.Context, arg InsertIssueEventParams) (IssueEvent, error)
 	LinkArcIssue(ctx context.Context, arg LinkArcIssueParams) error
 	ListArcsBySeries(ctx context.Context, seriesID int64) ([]StoryArc, error)
 	ListDownloadsByIssue(ctx context.Context, issueID int64) ([]Download, error)
 	ListEnabledIndexers(ctx context.Context) ([]Indexer, error)
 	ListIndexers(ctx context.Context) ([]Indexer, error)
+	ListIssueCredits(ctx context.Context, issueID int64) ([]IssueCredit, error)
 	ListIssueEventsByIssue(ctx context.Context, issueID int64) ([]IssueEvent, error)
 	ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Issue, error)
 	ListSeries(ctx context.Context, arg ListSeriesParams) ([]Series, error)

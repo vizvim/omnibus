@@ -3,9 +3,10 @@
 INSERT INTO issues (
   series_id, comicvine_issue_id, issue_number_raw, issue_number_sort,
   issue_number_qual, title, cover_date, store_date, release_date,
-  status, created_at
+  description, image_url, cv_last_updated, issue_type, alt_issue_number,
+  page_count, status, created_at
 ) VALUES (
-  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 ON CONFLICT(comicvine_issue_id) DO UPDATE SET
   issue_number_raw  = excluded.issue_number_raw,
@@ -14,7 +15,13 @@ ON CONFLICT(comicvine_issue_id) DO UPDATE SET
   title             = excluded.title,
   cover_date        = excluded.cover_date,
   store_date        = excluded.store_date,
-  release_date      = excluded.release_date
+  release_date      = excluded.release_date,
+  description       = excluded.description,
+  image_url         = excluded.image_url,
+  cv_last_updated   = excluded.cv_last_updated,
+  issue_type        = excluded.issue_type,
+  alt_issue_number  = excluded.alt_issue_number,
+  page_count        = excluded.page_count
 RETURNING *;
 
 -- name: ListIssuesBySeries :many

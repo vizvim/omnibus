@@ -177,7 +177,9 @@ func (s *Service) GetTimeline(ctx context.Context, issueID int64) ([]TimelineEve
 }
 
 // gatherCandidates loads the enabled indexers, builds their providers, and searches them
-// via the paced gateway. The query is the issue's series name + issue number.
+// via the paced gateway. It composes mylar-style queries from the issue's series name and
+// padded issue-number variants (issue_type aware), runs each query, and unions the results
+// deduped by Candidate.ReleaseKey (first occurrence wins, order preserved).
 func (s *Service) gatherCandidates(ctx context.Context, issue repository.Issue) ([]indexer.Candidate, error) {
 	rows, err := s.repos.Indexers.ListEnabled(ctx)
 	if err != nil {
@@ -187,18 +189,29 @@ func (s *Service) gatherCandidates(ctx context.Context, issue repository.Issue) 
 	if len(providers) == 0 {
 		return nil, nil
 	}
-	query := searchQuery(issue)
-	cands, err := s.gateway.Search(ctx, providers, query)
-	if err != nil {
-		return nil, fmt.Errorf("indexer search: %w", err)
-	}
-	return cands, nil
-}
 
-// searchQuery builds the indexer query from an issue (issue number is the discriminator;
-// the series name would be joined in once the series is loaded — kept minimal here).
-func searchQuery(issue repository.Issue) string {
-	return issue.IssueNumberRaw
+	ser, err := s.repos.Series.GetByID(ctx, issue.SeriesID)
+	if err != nil {
+		return nil, fmt.Errorf("load series %d: %w", issue.SeriesID, err)
+	}
+	queries := buildQueries(ser.Name, issue.IssueNumberRaw, issue.IssueType)
+
+	var union []indexer.Candidate
+	seen := make(map[string]struct{})
+	for _, q := range queries {
+		cands, err := s.gateway.Search(ctx, providers, q)
+		if err != nil {
+			return nil, fmt.Errorf("indexer search: %w", err)
+		}
+		for _, c := range cands {
+			if _, dup := seen[c.ReleaseKey]; dup {
+				continue
+			}
+			seen[c.ReleaseKey] = struct{}{}
+			union = append(union, c)
+		}
+	}
+	return union, nil
 }
 
 // buildIndexerProviders constructs an IndexerProvider per enabled indexer row.

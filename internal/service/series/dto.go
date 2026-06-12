@@ -1,10 +1,39 @@
 package series
 
 import (
+	"html"
 	"math"
+	"regexp"
+	"strings"
 
 	"github.com/vizvim/omnibus/internal/repository"
 )
+
+// htmlTagRE matches a single HTML/XML tag (e.g. <p>, </b>, <br/>, <a href="...">).
+var htmlTagRE = regexp.MustCompile(`<[^>]*>`)
+
+// wsRE collapses any run of whitespace (including the newlines that tag removal can
+// leave behind) into a single space.
+var wsRE = regexp.MustCompile(`\s+`)
+
+// spaceBeforePunctRE matches a space sitting immediately before sentence punctuation,
+// which tag removal (tags replaced by a space) can introduce, e.g. "<i>x</i>." -> "x .".
+var spaceBeforePunctRE = regexp.MustCompile(` +([.,;:!?])`)
+
+// stripHTML renders ComicVine's HTML description as plain text: it removes tags,
+// unescapes HTML entities, and collapses whitespace. It is deliberately minimal — the
+// descriptions are short, trusted-source summaries, not arbitrary user HTML — so a
+// regex tag-strip plus stdlib entity unescaping is sufficient and dependency-free.
+func stripHTML(s string) string {
+	if s == "" {
+		return ""
+	}
+	out := htmlTagRE.ReplaceAllString(s, " ")
+	out = html.UnescapeString(out)
+	out = wsRE.ReplaceAllString(out, " ")
+	out = spaceBeforePunctRE.ReplaceAllString(out, "$1")
+	return strings.TrimSpace(out)
+}
 
 // toInt32 clamps an int64 into int32 range. Series/issue counts and years are far
 // within int32, but clamping keeps gosec (G115) satisfied and is defensive.
@@ -46,7 +75,29 @@ type Issue struct {
 	Title            string
 	CoverDate        string
 	Status           string
+	IssueType        string
 	HasCover         bool
+}
+
+// Credit is the domain view of a normalized per-issue creator credit, ordered by
+// (role, name) within an IssueDetail.
+type Credit struct {
+	Role              string
+	Name              string
+	ComicvinePersonID int64
+}
+
+// IssueDetail is the rich per-issue view fetched on demand: the base Issue plus the
+// summary, extra dates, and the ordered creator credits.
+type IssueDetail struct {
+	Issue          Issue
+	Description    string
+	IssueType      string
+	AltIssueNumber string
+	PageCount      int32
+	StoreDate      string
+	CVLastUpdated  string
+	Credits        []Credit
 }
 
 // StoryArc is the domain view of a story arc.
@@ -82,6 +133,7 @@ func issueFromRow(r repository.Issue, hasCover bool) Issue {
 		Title:            r.Title.String,
 		CoverDate:        r.CoverDate.String,
 		Status:           r.Status,
+		IssueType:        r.IssueType,
 		HasCover:         hasCover,
 	}
 }

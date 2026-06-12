@@ -28,7 +28,7 @@ const (
 	// volumeFieldList / issueFieldList request only the fields we use (fewer bytes,
 	// fewer chances to trip ComicVine's per-resource budget).
 	volumeFieldList = "id,name,start_year,count_of_issues,description,publisher,image,date_last_updated"
-	issueFieldList  = "id,issue_number,name,cover_date,store_date,image,date_last_updated"
+	issueFieldList  = "id,issue_number,name,cover_date,store_date,image,description,deck,person_credits,date_last_updated"
 	searchFieldList = "id,name,start_year,count_of_issues,description,publisher,image"
 )
 
@@ -99,12 +99,24 @@ type cvVolume struct {
 }
 
 type cvIssue struct {
-	ID          int64    `json:"id"`
-	IssueNumber string   `json:"issue_number"`
-	Name        string   `json:"name"`
-	CoverDate   string   `json:"cover_date"`
-	StoreDate   string   `json:"store_date"`
-	Image       *cvImage `json:"image"`
+	ID              int64            `json:"id"`
+	IssueNumber     string           `json:"issue_number"`
+	Name            string           `json:"name"`
+	CoverDate       string           `json:"cover_date"`
+	StoreDate       string           `json:"store_date"`
+	Image           *cvImage         `json:"image"`
+	Description     string           `json:"description"`
+	Deck            string           `json:"deck"`
+	DateLastUpdated string           `json:"date_last_updated"`
+	PersonCredits   []cvPersonCredit `json:"person_credits"`
+}
+
+// cvPersonCredit is one ComicVine creator credit. Role is a comma-separated list of
+// roles (e.g. "writer, cover") which we split into one Credit per role.
+type cvPersonCredit struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Role string `json:"role"`
 }
 
 // cvEnvelope is the common ComicVine response envelope. Results is decoded
@@ -258,18 +270,76 @@ func (p *ComicVineProvider) ListIssues(ctx context.Context, volumeID int64, offs
 
 	issues := make([]IssueDetail, 0, len(raw))
 	for _, i := range raw {
-		issues = append(issues, IssueDetail{
-			ComicvineIssueID: i.ID,
-			IssueNumber:      i.IssueNumber,
-			Title:            i.Name,
-			CoverDate:        i.CoverDate,
-			StoreDate:        i.StoreDate,
-			CoverURL:         imageURL(i.Image),
-		})
+		issues = append(issues, issueDetailFromCV(i))
 	}
 
 	hasMore := offset+len(raw) < env.NumberOfTotalResults
 	return issues, hasMore, body, nil
+}
+
+// GetIssue fetches a single issue's DETAIL from the per-issue resource endpoint
+// (/issue/4000-{id}/). This is the only endpoint that returns person_credits (the
+// /issues/ LIST endpoint omits them even when requested), so it is the source for
+// populating an issue's creator credits. The envelope's results is a SINGLE object
+// here (not an array), but for robustness this decodes either shape.
+func (p *ComicVineProvider) GetIssue(ctx context.Context, cvIssueID int64) (IssueDetail, error) {
+	q := url.Values{}
+	q.Set("field_list", issueFieldList)
+
+	// ComicVine's issue resource prefix is 4000-.
+	path := fmt.Sprintf("/issue/4000-%d/", cvIssueID)
+	body, err := p.do(ctx, path, q)
+	if err != nil {
+		return IssueDetail{}, err
+	}
+
+	var env cvEnvelope
+	if uerr := json.Unmarshal(body, &env); uerr != nil {
+		return IssueDetail{}, fmt.Errorf("decode issue: %w", uerr)
+	}
+	i, err := decodeSingleIssue(env.Results)
+	if err != nil {
+		return IssueDetail{}, err
+	}
+	return issueDetailFromCV(i), nil
+}
+
+// decodeSingleIssue decodes a CV issue results payload that may be either a single
+// object (the /issue/ DETAIL endpoint) or a one-element array (defensive), returning
+// the issue. An empty array yields a zero-value issue with no error.
+func decodeSingleIssue(results json.RawMessage) (cvIssue, error) {
+	trimmed := strings.TrimSpace(string(results))
+	if strings.HasPrefix(trimmed, "[") {
+		var arr []cvIssue
+		if err := json.Unmarshal(results, &arr); err != nil {
+			return cvIssue{}, fmt.Errorf("decode issue results array: %w", err)
+		}
+		if len(arr) == 0 {
+			return cvIssue{}, nil
+		}
+		return arr[0], nil
+	}
+	var i cvIssue
+	if err := json.Unmarshal(results, &i); err != nil {
+		return cvIssue{}, fmt.Errorf("decode issue results object: %w", err)
+	}
+	return i, nil
+}
+
+// issueDetailFromCV maps a decoded ComicVine issue into an IssueDetail, the single
+// shared mapping used by both ListIssues and GetIssue.
+func issueDetailFromCV(i cvIssue) IssueDetail {
+	return IssueDetail{
+		ComicvineIssueID: i.ID,
+		IssueNumber:      i.IssueNumber,
+		Title:            i.Name,
+		CoverDate:        i.CoverDate,
+		StoreDate:        i.StoreDate,
+		CoverURL:         imageURL(i.Image),
+		Description:      issueDescription(i),
+		CVLastUpdated:    i.DateLastUpdated,
+		Credits:          issueCredits(i.PersonCredits),
+	}
 }
 
 // GetCover fetches cover bytes, but only from https ComicVine hosts (SSRF guard).
@@ -314,6 +384,97 @@ func imageURL(i *cvImage) string {
 		return ""
 	}
 	return i.best()
+}
+
+// issueDescription prefers CV's short "deck" summary when present, falling back to the
+// longer (HTML) description field.
+func issueDescription(i cvIssue) string {
+	if strings.TrimSpace(i.Deck) != "" {
+		return i.Deck
+	}
+	return i.Description
+}
+
+// issueCredits flattens ComicVine person_credits into one Credit per role: a credit's
+// Role field may carry several comma-separated roles (e.g. "writer, cover"), each of
+// which becomes its own Credit. Roles are trimmed and lowercased here; the service
+// layer applies synonym normalization. Empty roles and names are skipped.
+func issueCredits(pcs []cvPersonCredit) []Credit {
+	if len(pcs) == 0 {
+		return nil
+	}
+	out := make([]Credit, 0, len(pcs))
+	for _, pc := range pcs {
+		name := strings.TrimSpace(pc.Name)
+		if name == "" {
+			continue
+		}
+		for role := range strings.SplitSeq(pc.Role, ",") {
+			role = strings.ToLower(strings.TrimSpace(role))
+			if role == "" {
+				continue
+			}
+			out = append(out, Credit{
+				Role:              role,
+				Name:              name,
+				ComicvinePersonID: pc.ID,
+			})
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// decodeIssueDetail decodes a cached CV-shaped single-issue envelope back into an
+// IssueDetail, handling both the object and array results shapes.
+func decodeIssueDetail(body []byte) (IssueDetail, error) {
+	var env cvEnvelope
+	if err := json.Unmarshal(body, &env); err != nil {
+		return IssueDetail{}, fmt.Errorf("decode cached issue: %w", err)
+	}
+	i, err := decodeSingleIssue(env.Results)
+	if err != nil {
+		return IssueDetail{}, err
+	}
+	return issueDetailFromCV(i), nil
+}
+
+// encodeIssueEnvelope re-encodes an IssueDetail into the CV-shaped single-issue
+// envelope (results as an object) so the gateway can cache then re-read it. Each
+// already-flattened Credit becomes one person_credit with a single role; decoding
+// re-splits/normalizes idempotently. Description is written to the description field
+// (deck is left empty so issueDescription returns it unchanged on read-back).
+func encodeIssueEnvelope(d IssueDetail) ([]byte, error) {
+	pcs := make([]cvPersonCredit, 0, len(d.Credits))
+	for _, c := range d.Credits {
+		pcs = append(pcs, cvPersonCredit{
+			ID:   c.ComicvinePersonID,
+			Name: c.Name,
+			Role: c.Role,
+		})
+	}
+	iss := cvIssue{
+		ID:              d.ComicvineIssueID,
+		IssueNumber:     d.IssueNumber,
+		Name:            d.Title,
+		CoverDate:       d.CoverDate,
+		StoreDate:       d.StoreDate,
+		Image:           &cvImage{SuperURL: d.CoverURL},
+		Description:     d.Description,
+		DateLastUpdated: d.CVLastUpdated,
+		PersonCredits:   pcs,
+	}
+	env := struct {
+		StatusCode int     `json:"status_code"`
+		Results    cvIssue `json:"results"`
+	}{StatusCode: 1, Results: iss}
+	b, err := json.Marshal(env)
+	if err != nil {
+		return nil, fmt.Errorf("encode issue envelope: %w", err)
+	}
+	return b, nil
 }
 
 // encodeSearchEnvelope re-encodes normalized search results into the CV-shaped

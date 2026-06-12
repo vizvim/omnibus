@@ -23,6 +23,12 @@ type IssueUpsert struct {
 	CoverDate        string
 	StoreDate        string
 	ReleaseDate      string
+	Description      string
+	ImageURL         string
+	CVLastUpdated    string
+	IssueType        string
+	AltIssueNumber   string
+	PageCount        int64
 	Status           string
 	CreatedAt        string
 }
@@ -65,9 +71,24 @@ func (r *issueRepository) Upsert(ctx context.Context, in IssueUpsert) (Issue, er
 		CoverDate:        nullString(in.CoverDate),
 		StoreDate:        nullString(in.StoreDate),
 		ReleaseDate:      nullString(in.ReleaseDate),
+		Description:      nullString(in.Description),
+		ImageUrl:         nullString(in.ImageURL),
+		CvLastUpdated:    nullString(in.CVLastUpdated),
+		IssueType:        defaultIssueType(in.IssueType),
+		AltIssueNumber:   nullString(in.AltIssueNumber),
+		PageCount:        nullInt64(in.PageCount),
 		Status:           in.Status,
 		CreatedAt:        in.CreatedAt,
 	})
+}
+
+// defaultIssueType maps an empty issue-type to the schema default so the NOT NULL
+// CHECK column is always satisfied even when a caller leaves the field unset.
+func defaultIssueType(t string) string {
+	if t == "" {
+		return "standard"
+	}
+	return t
 }
 
 func (r *issueRepository) GetByID(ctx context.Context, id int64) (Issue, error) {

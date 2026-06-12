@@ -38,6 +38,28 @@ message Issue {
   string cover_date = 8;
   IssueStatus status = 9;
   string cover_url = 10;
+  string issue_type = 11; // standard/annual/one-shot — surfaced as a grid badge.
+}
+
+// Credit is a single normalized creator credit for an issue (role + name), ordered
+// by (role, name) when returned in an IssueDetail.
+message Credit {
+  string role = 1; // normalized: writer|penciller|inker|colorist|letterer|editor|cover|<other>
+  string name = 2;
+  int64 comicvine_person_id = 3;
+}
+
+// IssueDetail is the rich per-issue view fetched on demand (separate from the
+// lightweight issue list), carrying the summary, creator credits, and extra dates.
+message IssueDetail {
+  Issue issue = 1; // the base fields (reuse, incl. cover_url)
+  string description = 2; // summary
+  string issue_type = 3;
+  string alt_issue_number = 4;
+  int32 page_count = 5;
+  string store_date = 6;
+  string cv_last_updated = 7;
+  repeated Credit credits = 8; // ordered by role, name
 }
 
 // StoryArc is a named arc a series participates in.
@@ -83,6 +105,14 @@ message GetSeriesResponse {
   repeated StoryArc story_arcs = 4;
 }
 
+message GetIssueRequest {
+  int64 issue_id = 1;
+}
+
+message GetIssueResponse {
+  IssueDetail issue = 1;
+}
+
 message UpdateSeriesSettingsRequest {
   int64 series_id = 1;
   string status = 2; // Active/Paused/Ended
@@ -111,6 +141,8 @@ service SeriesService {
   rpc ListSeries(ListSeriesRequest) returns (ListSeriesResponse);
   // GetSeries returns a series with its issues, publisher, and story arcs.
   rpc GetSeries(GetSeriesRequest) returns (GetSeriesResponse);
+  // GetIssue returns the rich per-issue detail (summary, credits, dates) on demand.
+  rpc GetIssue(GetIssueRequest) returns (GetIssueResponse);
   // UpdateSeriesSettings updates per-series settings (e.g. watch status).
   rpc UpdateSeriesSettings(UpdateSeriesSettingsRequest) returns (UpdateSeriesSettingsResponse);
   // RefreshSeries enqueues a durable, unique conditional metadata refresh for a

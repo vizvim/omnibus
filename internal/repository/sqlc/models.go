@@ -83,10 +83,23 @@ type Issue struct {
 	CoverDate        sql.NullString
 	StoreDate        sql.NullString
 	ReleaseDate      sql.NullString
+	Description      sql.NullString
+	ImageUrl         sql.NullString
+	CvLastUpdated    sql.NullString
+	IssueType        string
+	AltIssueNumber   sql.NullString
+	PageCount        sql.NullInt64
 	Status           string
 	SearchAttempts   int64
 	Location         sql.NullString
 	CreatedAt        string
+}
+
+type IssueCredit struct {
+	IssueID    int64
+	Role       string
+	Name       string
+	CvPersonID int64
 }
 
 type IssueEvent struct {

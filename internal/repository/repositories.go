@@ -15,6 +15,7 @@ type Repositories struct {
 	Indexers       IndexerRepository
 	Downloads      DownloadRepository
 	IssueEvents    IssueEventRepository
+	IssueCredits   IssueCreditRepository
 	DownloadClient DownloadClientRepository
 }
 
@@ -31,6 +32,7 @@ func NewRepositories(d *db.DB) *Repositories {
 		Indexers:       NewIndexerRepository(d),
 		Downloads:      NewDownloadRepository(d),
 		IssueEvents:    NewIssueEventRepository(d),
+		IssueCredits:   NewIssueCreditRepository(d),
 		DownloadClient: NewDownloadClientRepository(d),
 	}
 }

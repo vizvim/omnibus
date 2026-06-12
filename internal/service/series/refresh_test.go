@@ -27,6 +27,11 @@ type stubGateway struct {
 	hasCachedMarker bool
 	issues          []metadata.IssueDetail
 	listIssuesCalls atomic.Int32
+	// issueDetail / issueErr control GetIssue; getIssueCalls counts it so a test can
+	// prove the lazy credit fetch is a one-time, cache-gated operation.
+	issueDetail   metadata.IssueDetail
+	issueErr      error
+	getIssueCalls atomic.Int32
 }
 
 func (g *stubGateway) SearchSeries(context.Context, string) ([]metadata.SeriesResult, error) {
@@ -43,6 +48,14 @@ func (g *stubGateway) ListIssues(_ context.Context, _ int64, offset int) ([]meta
 		return nil, false, nil
 	}
 	return g.issues, false, nil
+}
+
+func (g *stubGateway) GetIssue(context.Context, int64) (metadata.IssueDetail, error) {
+	g.getIssueCalls.Add(1)
+	if g.issueErr != nil {
+		return metadata.IssueDetail{}, g.issueErr
+	}
+	return g.issueDetail, nil
 }
 
 func (g *stubGateway) GetCover(context.Context, string) ([]byte, error) { return nil, nil }
@@ -162,6 +175,68 @@ func TestImportEnqueuesSearchForWantedIssues(t *testing.T) {
 	enq.mu.Lock()
 	defer enq.mu.Unlock()
 	require.Len(t, enq.searches, 2, "one auto-search enqueued per newly-Wanted issue (D-10)")
+}
+
+// TestImportPersistsParityFieldsAndCredits: a changed refresh stores the new
+// mylar-parity issue fields (description, image_url, cv_last_updated), derives the
+// issue_type, and persists normalized creator credits via IssueCredits.Replace.
+func TestImportPersistsParityFieldsAndCredits(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	gw := &stubGateway{
+		volume:          metadata.VolumeDetail{ComicvineVolumeID: 4050, Name: "Daredevil", CountOfIssues: 2, DateLastUpdated: "2026-02-02 00:00:00"},
+		cachedMarker:    "2026-01-01 00:00:00",
+		hasCachedMarker: true,
+		issues: []metadata.IssueDetail{
+			{
+				ComicvineIssueID: 1, IssueNumber: "1", Title: "One",
+				Description: "Summary one", CoverURL: "https://comicvine.gamespot.com/x.jpg",
+				CVLastUpdated: "2026-02-02 00:00:00",
+				Credits: []metadata.Credit{
+					{Role: "writer", Name: "Wendy Writer", ComicvinePersonID: 10},
+					// "penciler" normalizes to "penciller"; comma roles already split upstream.
+					{Role: "penciler", Name: "Penny Penciller", ComicvinePersonID: 11},
+					{Role: "cover", Name: "Penny Penciller", ComicvinePersonID: 11},
+				},
+			},
+			{ComicvineIssueID: 2, IssueNumber: "Annual 1", Title: "Annual One"},
+		},
+	}
+	svc, repos, id := newRefreshService(t, gw)
+
+	require.NoError(t, svc.RunRefresh(ctx, id, 4050))
+
+	stored, err := repos.Issue.ListBySeries(ctx, id)
+	require.NoError(t, err)
+	require.Len(t, stored, 2)
+
+	byCV := map[int64]repository.Issue{}
+	for _, iss := range stored {
+		byCV[iss.ComicvineIssueID] = iss
+	}
+
+	one := byCV[1]
+	require.Equal(t, "Summary one", one.Description.String)
+	require.Equal(t, "https://comicvine.gamespot.com/x.jpg", one.ImageUrl.String)
+	require.Equal(t, "2026-02-02 00:00:00", one.CvLastUpdated.String)
+	require.Equal(t, "standard", one.IssueType)
+
+	// "Annual 1" derives the annual issue_type.
+	require.Equal(t, "annual", byCV[2].IssueType)
+
+	credits, err := repos.IssueCredits.ListByIssue(ctx, one.ID)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []repository.IssueCredit{
+		{IssueID: one.ID, Role: "writer", Name: "Wendy Writer", CVPersonID: 10},
+		{IssueID: one.ID, Role: "penciller", Name: "Penny Penciller", CVPersonID: 11},
+		{IssueID: one.ID, Role: "cover", Name: "Penny Penciller", CVPersonID: 11},
+	}, credits)
+
+	// Re-import is idempotent: credits are not duplicated.
+	require.NoError(t, svc.RunRefresh(ctx, id, 4050))
+	credits, err = repos.IssueCredits.ListByIssue(ctx, one.ID)
+	require.NoError(t, err)
+	require.Len(t, credits, 3)
 }
 
 // TestRunSweepEnqueuesOnlyStaleSeries: with two stale Active series seeded and a fake

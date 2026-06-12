@@ -1,0 +1,23 @@
+{
+  "status_code": 1,
+  "error": "OK",
+  "limit": 1,
+  "offset": 0,
+  "number_of_total_results": 1,
+  "results": {
+    "id": 1001,
+    "issue_number": "7",
+    "name": "Issue Seven",
+    "cover_date": "2013-01-01",
+    "store_date": "2013-01-02",
+    "date_last_updated": "2026-05-01 12:00:00",
+    "description": "<p><em><b>Detail</b></em> summary with &amp; entities &mdash; and <i>tags</i>.</p>",
+    "deck": "",
+    "person_credits": [
+      { "id": 5001, "name": "Brian K. Vaughan", "role": "writer" },
+      { "id": 5002, "name": "Fiona Staples", "role": "penciler, cover" },
+      { "id": 5003, "name": "", "role": "editor" }
+    ],
+    "image": { "super_url": "https://comicvine.gamespot.com/a/uploads/scale_large/0/i7.jpg" }
+  }
+}

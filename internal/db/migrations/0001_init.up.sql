@@ -42,6 +42,13 @@ CREATE TABLE issues (
   cover_date          TEXT,
   store_date          TEXT,
   release_date        TEXT,
+  description         TEXT,
+  image_url           TEXT,
+  cv_last_updated     TEXT,
+  issue_type          TEXT NOT NULL DEFAULT 'standard'
+                        CHECK (issue_type IN ('standard','annual','one-shot')),
+  alt_issue_number    TEXT,
+  page_count          INTEGER,
   status              TEXT NOT NULL DEFAULT 'Wanted'
                         CHECK (status IN ('Wanted','Snatched','Downloaded','Archived','Skipped','Failed','Ignored')),
   search_attempts     INTEGER NOT NULL DEFAULT 0,
@@ -52,6 +59,15 @@ CREATE INDEX idx_issues_series ON issues(series_id);
 CREATE INDEX idx_issues_status ON issues(status);
 CREATE UNIQUE INDEX uq_issues_series_number
   ON issues(series_id, issue_number_sort, COALESCE(issue_number_qual,''));
+
+CREATE TABLE issue_credits (
+  issue_id      INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+  role          TEXT NOT NULL,        -- normalized: writer|penciller|inker|colorist|letterer|editor|cover|<other>
+  name          TEXT NOT NULL,
+  cv_person_id  INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (issue_id, role, name)
+);
+CREATE INDEX idx_issue_credits_issue ON issue_credits(issue_id);
 
 CREATE TABLE covers (
   entity_type  TEXT NOT NULL,
