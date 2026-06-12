@@ -56,6 +56,7 @@ func TestDDLResolveAndFetch(t *testing.T) {
 	p := download.NewGetComicsDDLProvider("https://getcomics.org",
 		download.WithDDLHTTPClient(srv.Client()),
 		download.WithDDLDataPath(dataPath),
+		download.WithDDLAllowPrivateHosts(),
 	)
 
 	var lastDone, lastTotal int64
@@ -107,6 +108,7 @@ func TestDDLResolvePrefersPrimaryMirror(t *testing.T) {
 	p := download.NewGetComicsDDLProvider("https://getcomics.org",
 		download.WithDDLHTTPClient(srv.Client()),
 		download.WithDDLDataPath(t.TempDir()),
+		download.WithDDLAllowPrivateHosts(),
 	)
 
 	got, err := p.Fetch(context.Background(), srv.URL+"/post", nil)
@@ -143,6 +145,7 @@ func TestDDLMirrorExhaustion(t *testing.T) {
 	p := download.NewGetComicsDDLProvider("https://getcomics.org",
 		download.WithDDLHTTPClient(srv.Client()),
 		download.WithDDLDataPath(dataPath),
+		download.WithDDLAllowPrivateHosts(),
 	)
 
 	got, err := p.Fetch(context.Background(), srv.URL+"/post", nil)

@@ -38,6 +38,10 @@ type GetComicsDDLProvider struct {
 	baseURL  string
 	client   *http.Client
 	dataPath string
+	// allowPrivateHosts relaxes the SSRF guard's loopback/link-local/private-range rejection
+	// (the scheme + host-present checks still apply). It exists ONLY as a test seam so httptest
+	// servers on 127.0.0.1 are reachable; production never sets it.
+	allowPrivateHosts bool
 }
 
 // GetComicsDDLOption configures a GetComicsDDLProvider (test seams + data path injection).
@@ -55,19 +59,26 @@ func WithDDLDataPath(dataPath string) GetComicsDDLOption {
 	return func(p *GetComicsDDLProvider) { p.dataPath = dataPath }
 }
 
+// WithDDLAllowPrivateHosts relaxes the SSRF guard's loopback/link-local/private-range
+// rejection. It is a TEST SEAM ONLY (so httptest servers on 127.0.0.1 are reachable) and must
+// never be enabled in production wiring — the scheme/host-present checks still apply.
+func WithDDLAllowPrivateHosts() GetComicsDDLOption {
+	return func(p *GetComicsDDLProvider) { p.allowPrivateHosts = true }
+}
+
 // NewGetComicsDDLProvider builds a GetComics DDL provider.
 func NewGetComicsDDLProvider(baseURL string, opts ...GetComicsDDLOption) *GetComicsDDLProvider {
 	p := &GetComicsDDLProvider{
 		baseURL: strings.TrimRight(baseURL, "/"),
-		client:  ssrfGuardedClient(http.DefaultClient),
+		client:  http.DefaultClient,
 	}
 	for _, o := range opts {
 		o(p)
 	}
-	// Ensure any injected client is also SSRF-guarded on redirects (T-05-15): a benign
-	// first-hop URL can 302 the server into the internal network, so every redirect hop is
-	// re-validated against the scheme/host allowlist regardless of who supplied the client.
-	p.client = ssrfGuardedClient(p.client)
+	// Wrap whatever client we ended up with (default or injected) so every redirect hop is
+	// re-validated against the SSRF guard (T-05-15): a benign first-hop URL can 302 the server
+	// into the internal network. This runs after options so the guard honors allowPrivateHosts.
+	p.client = ssrfGuardedClient(p.client, p.allowPrivateHosts)
 	return p
 }
 
@@ -80,7 +91,7 @@ var errRejectedTarget = errors.New("getcomics ddl: rejected target (ssrf guard)"
 // literal IP (or every resolved IP) — rejects loopback, link-local, private-range, and
 // unspecified addresses (e.g. the 169.254.169.254 cloud-metadata endpoint). A page parsed
 // off a remote-influenced GetComics post is NOT a trust boundary, so this runs for every URL.
-func safeMirrorURL(raw string) (*url.URL, error) {
+func safeMirrorURL(raw string, allowPrivate bool) (*url.URL, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
 		return nil, fmt.Errorf("%w: parse %q: %v", errRejectedTarget, raw, err)
@@ -91,6 +102,11 @@ func safeMirrorURL(raw string) (*url.URL, error) {
 	host := u.Hostname()
 	if host == "" {
 		return nil, fmt.Errorf("%w: no host", errRejectedTarget)
+	}
+	if allowPrivate {
+		// Test seam: scheme + host already validated; skip the private-range rejection so
+		// httptest servers on 127.0.0.1 are reachable.
+		return u, nil
 	}
 	if err := assertPublicHost(host); err != nil {
 		return nil, err
@@ -131,8 +147,9 @@ func assertPublicIP(ip net.IP) error {
 
 // ssrfGuardedClient wraps base with a CheckRedirect that re-validates every redirect hop
 // against safeMirrorURL (T-05-15). It clones base so the caller's client is not mutated, and
-// caps the redirect chain. A nil base defaults to http.DefaultClient.
-func ssrfGuardedClient(base *http.Client) *http.Client {
+// caps the redirect chain. A nil base defaults to http.DefaultClient. allowPrivate threads the
+// test seam through so redirect validation honors the same relaxation as the direct dial.
+func ssrfGuardedClient(base *http.Client, allowPrivate bool) *http.Client {
 	if base == nil {
 		base = http.DefaultClient
 	}
@@ -141,7 +158,7 @@ func ssrfGuardedClient(base *http.Client) *http.Client {
 		if len(via) >= 10 {
 			return fmt.Errorf("%w: too many redirects", errRejectedTarget)
 		}
-		if _, err := safeMirrorURL(req.URL.String()); err != nil {
+		if _, err := safeMirrorURL(req.URL.String(), allowPrivate); err != nil {
 			return err
 		}
 		return nil
@@ -209,7 +226,7 @@ func (p *GetComicsDDLProvider) Fetch(ctx context.Context, clientRef string, prog
 // links in preference order. Only links parsed from the trusted GetComics post page are
 // followed (T-05-15 SSRF mitigation: no arbitrary user-supplied redirect targets).
 func (p *GetComicsDDLProvider) resolveMirrors(ctx context.Context, postURL string) ([]string, error) {
-	if _, err := safeMirrorURL(postURL); err != nil {
+	if _, err := safeMirrorURL(postURL, p.allowPrivateHosts); err != nil {
 		return nil, fmt.Errorf("reject getcomics post url: %w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, postURL, http.NoBody)
@@ -236,7 +253,7 @@ func (p *GetComicsDDLProvider) resolveMirrors(ctx context.Context, postURL strin
 // (Mylar treats a missing Content-Length as a bad/ad page, T-05-17). On success it returns
 // the local path. The body is streamed with io.Copy — never fully buffered.
 func (p *GetComicsDDLProvider) streamMirror(ctx context.Context, mirrorURL, dir string, progress func(done, total int64)) (string, error) {
-	if _, err := safeMirrorURL(mirrorURL); err != nil {
+	if _, err := safeMirrorURL(mirrorURL, p.allowPrivateHosts); err != nil {
 		return "", fmt.Errorf("reject mirror url: %w", err)
 	}
 	// A per-mirror cancellable context backs the stall watchdog (WR-01): if the stream goes
