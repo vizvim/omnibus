@@ -110,7 +110,10 @@ func copyFile(src, dst string) error {
 		return fmt.Errorf("stat source: %w", err)
 	}
 
-	out, err := os.Create(dst)
+	// O_CREATE|O_EXCL mirrors os.Link's no-clobber semantics: an existing destination yields
+	// os.ErrExist rather than a silent truncate (CR-02), so the copy fallback never destroys a
+	// previously-filed issue on cross-filesystem (EXDEV) imports.
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, info.Mode().Perm())
 	if err != nil {
 		return fmt.Errorf("create dest: %w", err)
 	}
