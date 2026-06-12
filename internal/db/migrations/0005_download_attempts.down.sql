@@ -1,6 +1,13 @@
 -- 0005_download_attempts (down): drop the download_attempts counter (D-13) and revert the
 -- issue_events CHECK to the 0001 type set (rebuild copy-swap; rows with the new
 -- 'download-progress' type are dropped to satisfy the narrower CHECK).
+--
+-- DESTRUCTIVE (WR-05): this down migration is NOT loss-free. It permanently deletes every
+--   'download-progress' issue_events row (see the WHERE clause below) — the narrower 0001
+--   CHECK cannot hold those rows. Rolling back also discards the download_attempts counter.
+--   Both are accepted dev-rollback semantics; do not run on data you need to keep.
+-- Requires SQLite >= 3.35.0 for ALTER TABLE ... DROP COLUMN (the bundled modernc.org/sqlite
+--   driver satisfies this).
 ALTER TABLE issues DROP COLUMN download_attempts;
 
 CREATE TABLE issue_events_old (
