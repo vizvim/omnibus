@@ -144,7 +144,19 @@ func (s *Service) Process(ctx context.Context, downloadID int64) error {
 	if err != nil {
 		return fmt.Errorf("load download %d: %w", downloadID, err)
 	}
-	if series.DownloadStatus(row.Status) != series.DownloadCompleted {
+	// Idempotency on the download row's own status (CR-03): only a Completed download is
+	// processable. An already-terminal row (Blacklisted from a prior corrupt run, or Failed) is
+	// a handled no-op so a River retry of a corrupt job — e.g. a worker crash after handleCorrupt
+	// committed the Blacklisted flip but before the job ack — acks cleanly instead of looping on
+	// ErrDownloadNotCompleted and double-counting download_attempts.
+	switch series.DownloadStatus(row.Status) {
+	case series.DownloadCompleted:
+		// proceed
+	case series.DownloadBlacklisted, series.DownloadFailed:
+		s.logger.Info("post-process skipped: download already terminal",
+			slog.Int64("download_id", downloadID), slog.String("status", row.Status))
+		return nil
+	default:
 		return fmt.Errorf("%w: download %d is %q", ErrDownloadNotCompleted, downloadID, row.Status)
 	}
 
@@ -253,6 +265,18 @@ func (s *Service) Process(ctx context.Context, downloadID int64) error {
 // nil — a corrupt archive is a handled failure, not a job error (River must not retry it).
 func (s *Service) handleCorrupt(ctx context.Context, row repository.DownloadRow, issue repository.Issue) error {
 	nowISO := s.now().UTC().Format(time.RFC3339)
+
+	// Partial-replay guard (CR-03): if this download was already routed to Blacklisted by a
+	// prior (interrupted) corrupt run, do not re-bump download_attempts / re-write history /
+	// re-enqueue a replacement. A re-read of the freshest status closes the window where a crash
+	// between the Blacklisted flip and the job ack would otherwise double-count.
+	if cur, gerr := s.repos.Downloads.Get(ctx, row.ID); gerr == nil {
+		if series.DownloadStatus(cur.Status) == series.DownloadBlacklisted {
+			s.logger.Info("post-process: corrupt download already blacklisted, skipping replay",
+				slog.Int64("download_id", row.ID), slog.Int64("issue_id", row.IssueID))
+			return nil
+		}
+	}
 
 	// The download itself genuinely Completed (the bytes arrived) — Completed is terminal in
 	// the download-status machine (Completed->Failed is illegal). A corrupt archive is a
