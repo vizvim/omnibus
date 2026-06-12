@@ -90,6 +90,31 @@ func (q *Queries) GetDownloadByID(ctx context.Context, id int64) (Download, erro
 	return i, err
 }
 
+const getLatestCompletedStorageForIssue = `-- name: GetLatestCompletedStorageForIssue :one
+SELECT detail FROM download_history
+WHERE issue_id = ? AND provider = ? AND release_key = ? AND result = 'completed'
+ORDER BY occurred_at DESC, id DESC
+LIMIT 1
+`
+
+type GetLatestCompletedStorageForIssueParams struct {
+	IssueID    int64
+	Provider   string
+	ReleaseKey string
+}
+
+// The storage path the poll loop captured when a download for this issue completed
+// (DL-03: written into download_history.detail with result='completed'). The post-process
+// orchestrator (05-03) reads it to locate the file on disk for validate->render->import.
+// Most-recent-first so a re-grabbed release uses the latest completion. detail may be NULL
+// if the client reported an empty storage path.
+func (q *Queries) GetLatestCompletedStorageForIssue(ctx context.Context, arg GetLatestCompletedStorageForIssueParams) (sql.NullString, error) {
+	row := q.db.QueryRowContext(ctx, getLatestCompletedStorageForIssue, arg.IssueID, arg.Provider, arg.ReleaseKey)
+	var detail sql.NullString
+	err := row.Scan(&detail)
+	return detail, err
+}
+
 const insertDownloadHistory = `-- name: InsertDownloadHistory :one
 INSERT INTO download_history (
   issue_id, provider, release_key, result, detail, occurred_at

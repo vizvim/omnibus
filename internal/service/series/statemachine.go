@@ -84,13 +84,17 @@ const (
 // legalDownloadTransitions encodes the legal download-status edges. A grab starts Queued,
 // progresses to Downloading, and ends Completed or Failed; either active state can also
 // fail outright (explicit client failure or stall), and a user can Blacklist an active or
-// failed release. Completed is terminal. Every downloads.status flip in Phase 5 routes
-// through TransitionDownload, never a raw UPDATE downloads SET status.
+// failed release. A Completed download whose archive fails post-process validation (a
+// corrupt download, D-16) routes Completed->Blacklisted: the bytes arrived (so it is not
+// Failed) but the content is dead, so the release is blacklisted, recording the dead
+// release_key for the D-12 replacement dedup. Completed is otherwise terminal. Every
+// downloads.status flip in Phase 5 routes through TransitionDownload, never a raw UPDATE
+// downloads SET status.
 var legalDownloadTransitions = map[DownloadStatus]map[DownloadStatus]bool{
 	DownloadQueued:      {DownloadDownloading: true, DownloadCompleted: true, DownloadFailed: true, DownloadBlacklisted: true},
 	DownloadDownloading: {DownloadCompleted: true, DownloadFailed: true, DownloadBlacklisted: true},
 	DownloadFailed:      {DownloadBlacklisted: true},
-	DownloadCompleted:   {},
+	DownloadCompleted:   {DownloadBlacklisted: true},
 	DownloadBlacklisted: {},
 }
 

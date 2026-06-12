@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 
 	"github.com/vizvim/omnibus/internal/db"
 	"github.com/vizvim/omnibus/internal/repository/sqlc"
@@ -76,6 +78,11 @@ type DownloadRepository interface {
 	// ListDeadReleaseKeys returns the (provider, release_key) pairs already Failed or
 	// Blacklisted for an issue, so a replacement search cannot re-pick them (D-12).
 	ListDeadReleaseKeys(ctx context.Context, issueID int64) ([]DeadReleaseKey, error)
+	// GetCompletedStorage returns the storage path the poll loop captured when this
+	// release completed for the issue (DL-03 history.detail with result='completed'). The
+	// post-process orchestrator reads it to locate the file on disk. The bool is false when
+	// no completed history row exists (the download never reached Completed).
+	GetCompletedStorage(ctx context.Context, issueID int64, provider, releaseKey string) (string, bool, error)
 }
 
 type downloadRepository struct {
@@ -183,6 +190,23 @@ func (r *downloadRepository) ListDeadReleaseKeys(ctx context.Context, issueID in
 		out = append(out, DeadReleaseKey{Provider: row.Provider, ReleaseKey: row.ReleaseKey})
 	}
 	return out, nil
+}
+
+func (r *downloadRepository) GetCompletedStorage(ctx context.Context, issueID int64, provider, releaseKey string) (string, bool, error) {
+	detail, err := r.read.GetLatestCompletedStorageForIssue(ctx, sqlc.GetLatestCompletedStorageForIssueParams{
+		IssueID:    issueID,
+		Provider:   provider,
+		ReleaseKey: releaseKey,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	// A completed history row with a NULL/empty detail means the client reported no storage
+	// path: treat as "present row, but no usable path" so the orchestrator fails loudly.
+	return detail.String, true, nil
 }
 
 func mapDownload(in sqlc.Download) DownloadRow {

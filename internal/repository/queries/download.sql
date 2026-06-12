@@ -47,6 +47,17 @@ INSERT INTO download_history (
 )
 RETURNING id, issue_id, provider, release_key, result, detail, occurred_at;
 
+-- name: GetLatestCompletedStorageForIssue :one
+-- The storage path the poll loop captured when a download for this issue completed
+-- (DL-03: written into download_history.detail with result='completed'). The post-process
+-- orchestrator (05-03) reads it to locate the file on disk for validate->render->import.
+-- Most-recent-first so a re-grabbed release uses the latest completion. detail may be NULL
+-- if the client reported an empty storage path.
+SELECT detail FROM download_history
+WHERE issue_id = ? AND provider = ? AND release_key = ? AND result = 'completed'
+ORDER BY occurred_at DESC, id DESC
+LIMIT 1;
+
 -- name: ListDeadReleaseKeysForIssue :many
 -- The (provider, release_key) pairs already known-bad for an issue: rows with a
 -- Failed/Blacklisted downloads status. The replacement search excludes these so a

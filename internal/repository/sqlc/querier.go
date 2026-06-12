@@ -28,6 +28,12 @@ type Querier interface {
 	GetDownloadClientConfig(ctx context.Context) (DownloadClientConfig, error)
 	GetIndexer(ctx context.Context, id int64) (Indexer, error)
 	GetIssueByID(ctx context.Context, id int64) (Issue, error)
+	// The storage path the poll loop captured when a download for this issue completed
+	// (DL-03: written into download_history.detail with result='completed'). The post-process
+	// orchestrator (05-03) reads it to locate the file on disk for validate->render->import.
+	// Most-recent-first so a re-grabbed release uses the latest completion. detail may be NULL
+	// if the client reported an empty storage path.
+	GetLatestCompletedStorageForIssue(ctx context.Context, arg GetLatestCompletedStorageForIssueParams) (sql.NullString, error)
 	GetMetadataCache(ctx context.Context, cacheKey string) (MetadataCache, error)
 	GetPublisherByID(ctx context.Context, id int64) (Publisher, error)
 	GetSeriesByID(ctx context.Context, id int64) (Series, error)

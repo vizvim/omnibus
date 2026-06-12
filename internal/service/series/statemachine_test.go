@@ -102,6 +102,9 @@ func TestDownloadTransition(t *testing.T) {
 		{series.DownloadDownloading, series.DownloadFailed},
 		{series.DownloadDownloading, series.DownloadBlacklisted},
 		{series.DownloadFailed, series.DownloadBlacklisted},
+		// D-16: a Completed download whose archive fails post-process validation is
+		// blacklisted (corrupt content; the dead release_key feeds the replacement dedup).
+		{series.DownloadCompleted, series.DownloadBlacklisted},
 	}
 	for _, tc := range legal {
 		require.True(t, series.CanTransitionDownload(tc.from, tc.to), "%s -> %s should be legal", tc.from, tc.to)
