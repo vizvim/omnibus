@@ -32,6 +32,7 @@ import (
 	"github.com/vizvim/omnibus/internal/service/downloadclient"
 	"github.com/vizvim/omnibus/internal/service/indexer"
 	jobsservice "github.com/vizvim/omnibus/internal/service/jobs"
+	"github.com/vizvim/omnibus/internal/service/postprocess"
 	"github.com/vizvim/omnibus/internal/service/renameconfig"
 	"github.com/vizvim/omnibus/internal/service/search"
 	"github.com/vizvim/omnibus/internal/service/series"
@@ -125,6 +126,25 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		Logger:   logger,
 	})
 
+	// RenameConfigService owns the DB-backed, runtime-editable renaming config (D-09), the
+	// config source the post-process template engine renders against. Built before the
+	// post-process service (its config getter) and the jobs client.
+	renameConfigSvc := renameconfig.New(renameconfig.Deps{Repos: repos, Logger: logger})
+
+	// PostProcessService composes the 05-02 units against a real completed download (05-03):
+	// validate -> render -> import -> Snatched->Downloaded -> events -> history -> remove, and
+	// routes a corrupt archive into the shared D-16 replacement path. Built before the jobs
+	// client so it can be the PostProcessRunner; the client is injected back as its
+	// replacement enqueuer below.
+	postProcessSvc := postprocess.New(postprocess.Deps{
+		Repos:        repos,
+		Providers:    downloadProviders,
+		RenameConfig: renameConfigSvc,
+		LibraryPath:  cfg.LibraryPath,
+		AttemptCap:   attemptCap,
+		Logger:       logger,
+	})
+
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewImportWorker(svc))
 	river.AddWorker(workers, jobs.NewRefreshWorker(svc))
@@ -134,6 +154,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	river.AddWorker(workers, jobs.NewRSSPollWorker(searchSvc))
 	river.AddWorker(workers, jobs.NewDownloadPollWorker(trackingSvc))
 	river.AddWorker(workers, jobs.NewReplacementWorker(searchSvc))
+	river.AddWorker(workers, jobs.NewPostProcessWorker(postProcessSvc))
 
 	sweepInterval := time.Duration(cfg.RefreshIntervalHours) * time.Hour
 	autoSearchInterval := time.Duration(cfg.AutoSearchIntervalHours) * time.Hour
@@ -150,6 +171,8 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	svc.SetEnqueuer(riverClient)
 	searchSvc.SetEnqueuer(riverClient)
 	trackingSvc.SetEnqueuer(riverClient)
+	// The post-process service fans out a replacement search on a corrupt archive (D-16).
+	postProcessSvc.SetEnqueuer(riverClient)
 
 	// JobService reads run history from River's tables (via the jobs client).
 	jobSvc := jobsservice.New(riverClient)
@@ -161,10 +184,6 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// editable at runtime (supersedes D-16). The same SAB provider is injected as the
 	// connectivity prober so Test probes the live, DB-resolved config.
 	downloadClientSvc := downloadclient.New(downloadclient.Deps{Repos: repos, Logger: logger, Prober: sabProvider})
-
-	// RenameConfigService owns the DB-backed, runtime-editable renaming config (D-09),
-	// the config source the post-process template engine consumes.
-	renameConfigSvc := renameconfig.New(renameconfig.Deps{Repos: repos, Logger: logger})
 
 	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, renameConfigSvc, searchSvc, repos.Cover)
 	if err != nil {

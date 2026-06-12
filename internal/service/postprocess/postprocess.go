@@ -125,6 +125,13 @@ type corruptPayload struct {
 	Reason     string `json:"reason"`
 }
 
+// RunPostProcess is the runner-facing entrypoint the PostProcess River worker delegates to
+// (jobs.PostProcessRunner). It is an alias for Process so internal/jobs depends on a narrow
+// interface rather than the concrete service, mirroring search.RunReplacement.
+func (s *Service) RunPostProcess(ctx context.Context, downloadID int64) error {
+	return s.Process(ctx, downloadID)
+}
+
 // Process runs the post-process pipeline for a completed download: load the download + its
 // issue + series, validate the archive, render the folder+file templates, import the file
 // into the library, flip the issue to Downloaded, write downloaded+processed events + a

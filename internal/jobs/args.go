@@ -130,6 +130,26 @@ func (ReplacementSearchArgs) InsertOpts() river.InsertOpts {
 	}
 }
 
+// PostProcessArgs are the arguments for a reactive post-process of a completed download
+// (05-03): validate -> render -> import -> transition -> events -> history -> remove.
+// DownloadID is tagged river:"unique" so a re-enqueue for the same completed download
+// coalesces into the in-flight job (idempotent re-run safe — the Process body is itself a
+// no-op on an already-Downloaded issue).
+type PostProcessArgs struct {
+	DownloadID int64 `json:"download_id" river:"unique"`
+}
+
+// Kind uniquely identifies the post-process job type, stable across deploys.
+func (PostProcessArgs) Kind() string { return "post_process" }
+
+// InsertOpts enforces per-download uniqueness (see PostProcessArgs doc).
+func (PostProcessArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{
+		Queue:      river.QueueDefault,
+		UniqueOpts: river.UniqueOpts{ByArgs: true},
+	}
+}
+
 // DownloadPollArgs are the (empty) arguments for the periodic download-status poll
 // (DL-03/04/08), registered as a River periodic job. Unique by kind so an overlapping
 // tick (while a previous poll is still queued/running) collapses into the in-flight one.

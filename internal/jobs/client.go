@@ -177,14 +177,16 @@ func (c *Client) EnqueueReplacementSearch(ctx context.Context, issueID int64) er
 	return nil
 }
 
-// EnqueuePostProcess is a placeholder for the post-process fan-out the tracking service's
-// completed-download branch calls (05-01 seam). The real PostProcess River job lands in
-// 05-03 (the post-process orchestrator); until then this logs the intent and returns nil so
-// the tracking Enqueuer is fully satisfiable now (enabling the Failed -> replacement wiring)
-// without silently failing a completion. 05-03 replaces this body with the durable enqueue.
-func (c *Client) EnqueuePostProcess(_ context.Context, downloadID int64) error {
-	c.logger.Info("post-process enqueue requested (no-op until 05-03 wires the PostProcess job)",
-		slog.Int64("download_id", downloadID))
+// EnqueuePostProcess durably enqueues a post-process job for a completed download — the
+// reactive fan-out the tracking service's Completed branch calls (05-01 seam). Duplicate
+// enqueues for the same download collapse via PostProcessArgs' unique-by-args opts, so a
+// re-poll of an already-completed row (or a retried poll tick) coalesces into the in-flight
+// job (idempotent re-run safe: Process no-ops on an already-Downloaded issue).
+func (c *Client) EnqueuePostProcess(ctx context.Context, downloadID int64) error {
+	_, err := c.river.Insert(ctx, PostProcessArgs{DownloadID: downloadID}, nil)
+	if err != nil {
+		return fmt.Errorf("enqueue post-process for download %d: %w", downloadID, err)
+	}
 	return nil
 }
 
