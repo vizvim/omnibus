@@ -32,11 +32,50 @@ type DownloadUpsert struct {
 	ClientRef    string
 }
 
+// DownloadHistoryInsert carries the fields for an append-only download_history row (DL-03).
+type DownloadHistoryInsert struct {
+	IssueID    int64
+	Provider   string
+	ReleaseKey string
+	Result     string
+	Detail     string
+	OccurredAt string
+}
+
+// DownloadHistoryRow is the domain view of a download_history row.
+type DownloadHistoryRow struct {
+	ID         int64
+	IssueID    int64
+	Provider   string
+	ReleaseKey string
+	Result     string
+	Detail     string
+	OccurredAt string
+}
+
+// DeadReleaseKey is a (provider, release_key) pair already known-bad for an issue (a
+// Failed/Blacklisted downloads row), excluded from replacement searches (D-12).
+type DeadReleaseKey struct {
+	Provider   string
+	ReleaseKey string
+}
+
 // DownloadRepository persists downloads, idempotent on (provider, release_key, issue_id).
 type DownloadRepository interface {
 	Upsert(ctx context.Context, in DownloadUpsert, nowISO string) (DownloadRow, error)
 	Get(ctx context.Context, id int64) (DownloadRow, error)
 	ListByIssue(ctx context.Context, issueID int64) ([]DownloadRow, error)
+	// ListActive returns the in-flight downloads (Queued/Downloading) the poll job
+	// reconciles each tick, oldest-updated-first (D-01).
+	ListActive(ctx context.Context) ([]DownloadRow, error)
+	// UpdateStatus flips a download row's status and bumps updated_at, returning the row.
+	// Status writes route through the download-status state machine before this call.
+	UpdateStatus(ctx context.Context, id int64, status, nowISO string) (DownloadRow, error)
+	// InsertHistory appends a download_history row (append-only audit trail, DL-03).
+	InsertHistory(ctx context.Context, in DownloadHistoryInsert) (DownloadHistoryRow, error)
+	// ListDeadReleaseKeys returns the (provider, release_key) pairs already Failed or
+	// Blacklisted for an issue, so a replacement search cannot re-pick them (D-12).
+	ListDeadReleaseKeys(ctx context.Context, issueID int64) ([]DeadReleaseKey, error)
 }
 
 type downloadRepository struct {
@@ -83,6 +122,65 @@ func (r *downloadRepository) ListByIssue(ctx context.Context, issueID int64) ([]
 	out := make([]DownloadRow, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, mapDownload(row))
+	}
+	return out, nil
+}
+
+func (r *downloadRepository) ListActive(ctx context.Context) ([]DownloadRow, error) {
+	rows, err := r.read.ListActiveDownloads(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]DownloadRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, mapDownload(row))
+	}
+	return out, nil
+}
+
+func (r *downloadRepository) UpdateStatus(ctx context.Context, id int64, status, nowISO string) (DownloadRow, error) {
+	row, err := r.write.UpdateDownloadStatus(ctx, sqlc.UpdateDownloadStatusParams{
+		Status:    status,
+		UpdatedAt: nowISO,
+		ID:        id,
+	})
+	if err != nil {
+		return DownloadRow{}, err
+	}
+	return mapDownload(row), nil
+}
+
+func (r *downloadRepository) InsertHistory(ctx context.Context, in DownloadHistoryInsert) (DownloadHistoryRow, error) {
+	row, err := r.write.InsertDownloadHistory(ctx, sqlc.InsertDownloadHistoryParams{
+		IssueID:    in.IssueID,
+		Provider:   in.Provider,
+		ReleaseKey: in.ReleaseKey,
+		Result:     in.Result,
+		Detail:     nullString(in.Detail),
+		OccurredAt: in.OccurredAt,
+	})
+	if err != nil {
+		return DownloadHistoryRow{}, err
+	}
+	return DownloadHistoryRow{
+		ID:         row.ID,
+		IssueID:    row.IssueID,
+		Provider:   row.Provider,
+		ReleaseKey: row.ReleaseKey,
+		Result:     row.Result,
+		Detail:     row.Detail.String,
+		OccurredAt: row.OccurredAt,
+	}, nil
+}
+
+func (r *downloadRepository) ListDeadReleaseKeys(ctx context.Context, issueID int64) ([]DeadReleaseKey, error) {
+	rows, err := r.read.ListDeadReleaseKeysForIssue(ctx, issueID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]DeadReleaseKey, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, DeadReleaseKey{Provider: row.Provider, ReleaseKey: row.ReleaseKey})
 	}
 	return out, nil
 }

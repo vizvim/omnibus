@@ -93,6 +93,7 @@ type Issue struct {
 	SearchAttempts   int64
 	Location         sql.NullString
 	CreatedAt        string
+	DownloadAttempts int64
 }
 
 type IssueCredit struct {

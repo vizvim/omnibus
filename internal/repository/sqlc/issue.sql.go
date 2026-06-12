@@ -22,7 +22,7 @@ func (q *Queries) CountIssuesBySeries(ctx context.Context, seriesID int64) (int6
 }
 
 const getIssueByID = `-- name: GetIssueByID :one
-SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at FROM issues WHERE id = ?
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at, download_attempts FROM issues WHERE id = ?
 `
 
 func (q *Queries) GetIssueByID(ctx context.Context, id int64) (Issue, error) {
@@ -49,6 +49,7 @@ func (q *Queries) GetIssueByID(ctx context.Context, id int64) (Issue, error) {
 		&i.SearchAttempts,
 		&i.Location,
 		&i.CreatedAt,
+		&i.DownloadAttempts,
 	)
 	return i, err
 }
@@ -65,7 +66,7 @@ func (q *Queries) IncrementSearchAttempts(ctx context.Context, id int64) error {
 }
 
 const listIssuesBySeries = `-- name: ListIssuesBySeries :many
-SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at FROM issues
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at, download_attempts FROM issues
 WHERE series_id = ?
 ORDER BY issue_number_sort, COALESCE(issue_number_qual, '')
 `
@@ -100,6 +101,7 @@ func (q *Queries) ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Iss
 			&i.SearchAttempts,
 			&i.Location,
 			&i.CreatedAt,
+			&i.DownloadAttempts,
 		); err != nil {
 			return nil, err
 		}
@@ -115,7 +117,7 @@ func (q *Queries) ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Iss
 }
 
 const listWantedForAutoSearch = `-- name: ListWantedForAutoSearch :many
-SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at FROM issues
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at, download_attempts FROM issues
 WHERE status = 'Wanted' AND search_attempts < ?
 ORDER BY search_attempts ASC, created_at ASC
 LIMIT ?
@@ -159,6 +161,7 @@ func (q *Queries) ListWantedForAutoSearch(ctx context.Context, arg ListWantedFor
 			&i.SearchAttempts,
 			&i.Location,
 			&i.CreatedAt,
+			&i.DownloadAttempts,
 		); err != nil {
 			return nil, err
 		}
@@ -174,7 +177,7 @@ func (q *Queries) ListWantedForAutoSearch(ctx context.Context, arg ListWantedFor
 }
 
 const listWantedForMatch = `-- name: ListWantedForMatch :many
-SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at FROM issues
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at, download_attempts FROM issues
 WHERE status = 'Wanted'
 ORDER BY series_id, issue_number_sort
 `
@@ -210,6 +213,7 @@ func (q *Queries) ListWantedForMatch(ctx context.Context) ([]Issue, error) {
 			&i.SearchAttempts,
 			&i.Location,
 			&i.CreatedAt,
+			&i.DownloadAttempts,
 		); err != nil {
 			return nil, err
 		}
@@ -262,7 +266,7 @@ ON CONFLICT(comicvine_issue_id) DO UPDATE SET
   issue_type        = excluded.issue_type,
   alt_issue_number  = excluded.alt_issue_number,
   page_count        = excluded.page_count
-RETURNING id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at
+RETURNING id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at, download_attempts
 `
 
 type UpsertIssueParams struct {
@@ -328,6 +332,7 @@ func (q *Queries) UpsertIssue(ctx context.Context, arg UpsertIssueParams) (Issue
 		&i.SearchAttempts,
 		&i.Location,
 		&i.CreatedAt,
+		&i.DownloadAttempts,
 	)
 	return i, err
 }

@@ -52,6 +52,102 @@ func TestDownloadUpsertIdempotent(t *testing.T) {
 	require.Len(t, all, 1)
 }
 
+func TestDownloadHistory(t *testing.T) {
+	t.Parallel()
+	d := newTestDB(t)
+	repos := repository.NewRepositories(d)
+	ctx := context.Background()
+	issueID := seedIssueForDownload(t, repos)
+
+	// Append-only history round-trips every field (DL-03).
+	got, err := repos.Downloads.InsertHistory(ctx, repository.DownloadHistoryInsert{
+		IssueID: issueID, Provider: "sabnzbd", ReleaseKey: "rk-1",
+		Result: "completed", Detail: "/comics/Saga/Saga 07.cbz", OccurredAt: ts,
+	})
+	require.NoError(t, err)
+	require.NotZero(t, got.ID)
+	require.Equal(t, "sabnzbd", got.Provider)
+	require.Equal(t, "rk-1", got.ReleaseKey)
+	require.Equal(t, "completed", got.Result)
+	require.Equal(t, "/comics/Saga/Saga 07.cbz", got.Detail)
+	require.Equal(t, ts, got.OccurredAt)
+
+	// A second, distinct outcome appends a NEW row (never updates in place).
+	_, err = repos.Downloads.InsertHistory(ctx, repository.DownloadHistoryInsert{
+		IssueID: issueID, Provider: "sabnzbd", ReleaseKey: "rk-1",
+		Result: "failed", Detail: "unpack error", OccurredAt: "2026-01-02T00:00:00Z",
+	})
+	require.NoError(t, err)
+}
+
+func TestActiveDownloads(t *testing.T) {
+	t.Parallel()
+	d := newTestDB(t)
+	repos := repository.NewRepositories(d)
+	ctx := context.Background()
+	issueID := seedIssueForDownload(t, repos)
+
+	// One Queued, one Downloading (both active), one Completed (terminal, not active).
+	queued, err := repos.Downloads.Upsert(ctx, repository.DownloadUpsert{
+		IssueID: issueID, Provider: "sabnzbd", ReleaseKey: "rk-q", Status: "Queued", ClientRef: "nzo_q",
+	}, ts)
+	require.NoError(t, err)
+	_, err = repos.Downloads.Upsert(ctx, repository.DownloadUpsert{
+		IssueID: issueID, Provider: "sabnzbd", ReleaseKey: "rk-d", Status: "Downloading", ClientRef: "nzo_d",
+	}, "2026-01-01T00:00:01Z")
+	require.NoError(t, err)
+	_, err = repos.Downloads.Upsert(ctx, repository.DownloadUpsert{
+		IssueID: issueID, Provider: "sabnzbd", ReleaseKey: "rk-c", Status: "Completed", ClientRef: "nzo_c",
+	}, ts)
+	require.NoError(t, err)
+
+	active, err := repos.Downloads.ListActive(ctx)
+	require.NoError(t, err)
+	require.Len(t, active, 2, "only Queued + Downloading are active")
+	for _, row := range active {
+		require.Contains(t, []string{"Queued", "Downloading"}, row.Status)
+	}
+
+	// UpdateStatus flips a row and bumps updated_at, returning the new row.
+	updated, err := repos.Downloads.UpdateStatus(ctx, queued.ID, "Downloading", "2026-01-01T00:05:00Z")
+	require.NoError(t, err)
+	require.Equal(t, "Downloading", updated.Status)
+	require.Equal(t, "2026-01-01T00:05:00Z", updated.UpdatedAt)
+}
+
+func TestDeadReleaseKeys(t *testing.T) {
+	t.Parallel()
+	d := newTestDB(t)
+	repos := repository.NewRepositories(d)
+	ctx := context.Background()
+	issueID := seedIssueForDownload(t, repos)
+
+	// Failed + Blacklisted rows are "dead"; Queued/Completed are not (D-12 dedup).
+	_, err := repos.Downloads.Upsert(ctx, repository.DownloadUpsert{
+		IssueID: issueID, Provider: "sabnzbd", ReleaseKey: "rk-failed", Status: "Failed", ClientRef: "x",
+	}, ts)
+	require.NoError(t, err)
+	_, err = repos.Downloads.Upsert(ctx, repository.DownloadUpsert{
+		IssueID: issueID, Provider: "getcomics", ReleaseKey: "rk-bl", Status: "Blacklisted", ClientRef: "y",
+	}, ts)
+	require.NoError(t, err)
+	_, err = repos.Downloads.Upsert(ctx, repository.DownloadUpsert{
+		IssueID: issueID, Provider: "sabnzbd", ReleaseKey: "rk-live", Status: "Queued", ClientRef: "z",
+	}, ts)
+	require.NoError(t, err)
+
+	dead, err := repos.Downloads.ListDeadReleaseKeys(ctx, issueID)
+	require.NoError(t, err)
+	require.Len(t, dead, 2)
+	keys := map[string]string{}
+	for _, k := range dead {
+		keys[k.ReleaseKey] = k.Provider
+	}
+	require.Equal(t, "sabnzbd", keys["rk-failed"])
+	require.Equal(t, "getcomics", keys["rk-bl"])
+	require.NotContains(t, keys, "rk-live", "an active Queued release is not dead")
+}
+
 func TestIssueEventsListInOccurredAtOrder(t *testing.T) {
 	t.Parallel()
 	d := newTestDB(t)
