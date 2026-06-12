@@ -207,7 +207,13 @@ func (s *Service) Process(ctx context.Context, downloadID int64) error {
 	// Folder: prefer the series add-time location (D-10) when present, else recompute from
 	// the folder template. The file keeps the source extension (validation confirmed format).
 	folder := s.resolveFolder(issue, cfg.FolderFormat, values, opts)
-	fileBase := Render(cfg.FileFormat, values, opts)
+	fileBase := strings.TrimSpace(Render(cfg.FileFormat, values, opts))
+	// Reject an empty rendered file base (WR-04): otherwise filepath.Join yields a dotfile like
+	// ".cbz" (or ".cbz" at the library root when folder is empty too), which safeJoin accepts —
+	// filing a comic as a hidden file that silently collides with the next empty-render import.
+	if fileBase == "" {
+		return fmt.Errorf("post-process: rendered empty filename for download %d", downloadID)
+	}
 	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(storagePath)), ".")
 	if ext == "" {
 		ext = format // fall back to the detected archive format as the extension
