@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -50,12 +51,94 @@ func WithDDLDataPath(dataPath string) GetComicsDDLOption {
 func NewGetComicsDDLProvider(baseURL string, opts ...GetComicsDDLOption) *GetComicsDDLProvider {
 	p := &GetComicsDDLProvider{
 		baseURL: strings.TrimRight(baseURL, "/"),
-		client:  http.DefaultClient,
+		client:  ssrfGuardedClient(http.DefaultClient),
 	}
 	for _, o := range opts {
 		o(p)
 	}
+	// Ensure any injected client is also SSRF-guarded on redirects (T-05-15): a benign
+	// first-hop URL can 302 the server into the internal network, so every redirect hop is
+	// re-validated against the scheme/host allowlist regardless of who supplied the client.
+	p.client = ssrfGuardedClient(p.client)
 	return p
+}
+
+// errRejectedTarget marks a URL rejected by the SSRF guard (bad scheme, missing host, or a
+// loopback/link-local/private/metadata destination). Used by CheckRedirect to refuse a hop.
+var errRejectedTarget = errors.New("getcomics ddl: rejected target (ssrf guard)")
+
+// safeMirrorURL validates a post/mirror URL before it is dialed (T-05-15 SSRF mitigation).
+// It enforces an http/https scheme allowlist, requires a host, and — when the host is a
+// literal IP (or every resolved IP) — rejects loopback, link-local, private-range, and
+// unspecified addresses (e.g. the 169.254.169.254 cloud-metadata endpoint). A page parsed
+// off a remote-influenced GetComics post is NOT a trust boundary, so this runs for every URL.
+func safeMirrorURL(raw string) (*url.URL, error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return nil, fmt.Errorf("%w: parse %q: %v", errRejectedTarget, raw, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, fmt.Errorf("%w: scheme %q", errRejectedTarget, u.Scheme)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return nil, fmt.Errorf("%w: no host", errRejectedTarget)
+	}
+	if err := assertPublicHost(host); err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+// assertPublicHost rejects a host that resolves (or is) a loopback/link-local/private/
+// unspecified IP — the SSRF sink set (internal services, the 169.254.169.254 metadata IP).
+// A hostname is resolved and rejected if ANY resolved address is internal (fail-closed).
+func assertPublicHost(host string) error {
+	if ip := net.ParseIP(host); ip != nil {
+		return assertPublicIP(ip)
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return fmt.Errorf("%w: resolve %q: %v", errRejectedTarget, host, err)
+	}
+	if len(ips) == 0 {
+		return fmt.Errorf("%w: host %q resolved to no addresses", errRejectedTarget, host)
+	}
+	for _, ip := range ips {
+		if err := assertPublicIP(ip); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// assertPublicIP rejects an IP in a loopback/link-local/private/unspecified range.
+func assertPublicIP(ip net.IP) error {
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsPrivate() || ip.IsUnspecified() || ip.IsMulticast() {
+		return fmt.Errorf("%w: address %s is loopback/link-local/private", errRejectedTarget, ip)
+	}
+	return nil
+}
+
+// ssrfGuardedClient wraps base with a CheckRedirect that re-validates every redirect hop
+// against safeMirrorURL (T-05-15). It clones base so the caller's client is not mutated, and
+// caps the redirect chain. A nil base defaults to http.DefaultClient.
+func ssrfGuardedClient(base *http.Client) *http.Client {
+	if base == nil {
+		base = http.DefaultClient
+	}
+	cloned := *base
+	cloned.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("%w: too many redirects", errRejectedTarget)
+		}
+		if _, err := safeMirrorURL(req.URL.String()); err != nil {
+			return err
+		}
+		return nil
+	}
+	return &cloned
 }
 
 var _ DownloadProvider = (*GetComicsDDLProvider)(nil)
@@ -118,6 +201,9 @@ func (p *GetComicsDDLProvider) Fetch(ctx context.Context, clientRef string, prog
 // links in preference order. Only links parsed from the trusted GetComics post page are
 // followed (T-05-15 SSRF mitigation: no arbitrary user-supplied redirect targets).
 func (p *GetComicsDDLProvider) resolveMirrors(ctx context.Context, postURL string) ([]string, error) {
+	if _, err := safeMirrorURL(postURL); err != nil {
+		return nil, fmt.Errorf("reject getcomics post url: %w", err)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, postURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("build getcomics post request: %w", err)
@@ -142,6 +228,9 @@ func (p *GetComicsDDLProvider) resolveMirrors(ctx context.Context, postURL strin
 // (Mylar treats a missing Content-Length as a bad/ad page, T-05-17). On success it returns
 // the local path. The body is streamed with io.Copy — never fully buffered.
 func (p *GetComicsDDLProvider) streamMirror(ctx context.Context, mirrorURL, dir string, progress func(done, total int64)) (string, error) {
+	if _, err := safeMirrorURL(mirrorURL); err != nil {
+		return "", fmt.Errorf("reject mirror url: %w", err)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mirrorURL, http.NoBody)
 	if err != nil {
 		return "", fmt.Errorf("build mirror request: %w", err)
