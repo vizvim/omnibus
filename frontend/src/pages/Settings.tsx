@@ -7,12 +7,22 @@ import {
 } from "../components/DownloadClientForm";
 import { EmptyState } from "../components/EmptyState";
 import {
+  RenameSettingsForm,
+  type RenameSettingsFormValues,
+} from "../components/RenameSettingsForm";
+import {
   getDownloadClientConfig,
   testDownloadClientConfig,
   updateDownloadClientConfig,
 } from "../gen/omnibus/v1/download_client-DownloadClientService_connectquery";
+import {
+  getRenameConfig,
+  updateRenameConfig,
+} from "../gen/omnibus/v1/rename_config-RenameConfigService_connectquery";
 
 const SAVE_ERROR = "Couldn't save the download client. Check the URL and API key, then try again.";
+const RENAME_SAVE_ERROR =
+  "Couldn't save the renaming settings. Check the folder and file formats, then try again.";
 
 // Settings is the functional-minimal settings page. It currently hosts the Download
 // Client (SABnzbd) section: the DB-backed config is shown (URL + category, never the API
@@ -32,11 +42,33 @@ export function Settings() {
     onSuccess: (res) => setTestResult({ ok: res.ok, detail: res.detail }),
   });
 
+  // Renaming config (D-09): DB-backed, runtime-editable folder/file templates + toggles.
+  const renameConfig = useQuery(getRenameConfig, {}, { retry: false });
+  const [editingRename, setEditingRename] = useState(false);
+  const renameUpdate = useMutation(updateRenameConfig, {
+    onSuccess: () => {
+      setEditingRename(false);
+      void renameConfig.refetch();
+    },
+  });
+
   function submitEdit(values: DownloadClientFormValues) {
     update.mutate({
       url: values.url,
       apiKey: values.apiKey, // empty leaves the stored key unchanged
       category: values.category,
+    });
+  }
+
+  function submitRenameEdit(values: RenameSettingsFormValues) {
+    renameUpdate.mutate({
+      folderFormat: values.folderFormat,
+      fileFormat: values.fileFormat,
+      renameEnabled: values.renameEnabled,
+      issuePaddingEnabled: values.issuePaddingEnabled,
+      paddingFormat: values.paddingFormat,
+      replaceSpaces: values.replaceSpaces,
+      lowercase: values.lowercase,
     });
   }
 
@@ -50,6 +82,7 @@ export function Settings() {
   }
 
   const current = config.data?.config;
+  const renameCurrent = renameConfig.data?.config;
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,6 +103,7 @@ export function Settings() {
               </button>
               <button
                 type="button"
+                aria-label="Edit download client"
                 onClick={() => setEditing(true)}
                 className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
               >
@@ -114,6 +148,68 @@ export function Settings() {
                 <span className="text-sm font-semibold text-red-600">✗ {testResult.detail}</span>
               )
             ) : null}
+          </div>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Renaming</h2>
+          {!editingRename && !renameConfig.isError ? (
+            <button
+              type="button"
+              aria-label="Edit renaming settings"
+              onClick={() => setEditingRename(true)}
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Edit
+            </button>
+          ) : null}
+        </div>
+
+        {renameConfig.isError ? (
+          <p className="text-sm text-red-600">Couldn't load the renaming settings.</p>
+        ) : editingRename ? (
+          <RenameSettingsForm
+            initial={{
+              folderFormat: renameCurrent?.folderFormat ?? "",
+              fileFormat: renameCurrent?.fileFormat ?? "",
+              renameEnabled: renameCurrent?.renameEnabled ?? true,
+              issuePaddingEnabled: renameCurrent?.issuePaddingEnabled ?? true,
+              paddingFormat: renameCurrent?.paddingFormat || "00x",
+              replaceSpaces: renameCurrent?.replaceSpaces ?? false,
+              lowercase: renameCurrent?.lowercase ?? false,
+            }}
+            pending={renameUpdate.isPending}
+            error={renameUpdate.isError ? RENAME_SAVE_ERROR : undefined}
+            onSubmit={submitRenameEdit}
+            onCancel={() => setEditingRename(false)}
+          />
+        ) : (
+          <div className="flex flex-col gap-2 rounded border border-slate-200 bg-slate-50 p-4">
+            <span className="text-sm text-slate-600">
+              Folder Format: <span>{renameCurrent?.folderFormat || "—"}</span>
+            </span>
+            <span className="text-sm text-slate-600">
+              File Format: <span>{renameCurrent?.fileFormat || "—"}</span>
+            </span>
+            <span className="text-sm text-slate-600">
+              Rename files: <span>{renameCurrent?.renameEnabled ? "On" : "Off"}</span>
+            </span>
+            <span className="text-sm text-slate-600">
+              Issue Number Padding:{" "}
+              <span>
+                {renameCurrent?.issuePaddingEnabled
+                  ? `On (${renameCurrent?.paddingFormat || "00x"})`
+                  : "Off"}
+              </span>
+            </span>
+            <span className="text-sm text-slate-600">
+              Replace Spaces: <span>{renameCurrent?.replaceSpaces ? "On" : "Off"}</span>
+            </span>
+            <span className="text-sm text-slate-600">
+              Lowercase: <span>{renameCurrent?.lowercase ? "On" : "Off"}</span>
+            </span>
           </div>
         )}
       </section>
