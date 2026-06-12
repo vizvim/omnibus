@@ -22,9 +22,9 @@ const envPrefix = "OMNIBUS_"
 // Config is the typed runtime configuration. koanf tags map snake_case keys (from
 // file or the OMNIBUS_-prefixed, lowercased env vars) onto these fields.
 type Config struct {
-	HTTPAddr        string `koanf:"http_addr"`
-	DBPath          string `koanf:"db_path"`
-	DataPath        string `koanf:"data_path"`
+	HTTPAddr string `koanf:"http_addr"`
+	DBPath   string `koanf:"db_path"`
+	DataPath string `koanf:"data_path"`
 	// LibraryPath is the root of the organized comic library — the destination
 	// post-processing renames/moves completed downloads into (D-13). Distinct from
 	// DataPath (working/runtime state): the library is the user's curated collection.
