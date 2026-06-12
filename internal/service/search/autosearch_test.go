@@ -83,6 +83,34 @@ func TestRunSearchIssueNoResultIncrementsAttempts(t *testing.T) {
 	require.Equal(t, "searched", events[0].EventType)
 }
 
+func TestSearchAndGrabReturnsGrabbedOutcome(t *testing.T) {
+	t.Parallel()
+	// A cbz at neutral size clears the floor and is auto-grabbed; the outcome reports it.
+	svc, _, issueID := newSearchService(t, []indexer.Candidate{
+		svcCand("newznab", "rk-cbz", "cbz", 30*1024*1024),
+	})
+
+	outcome, err := svc.SearchAndGrab(context.Background(), issueID)
+	require.NoError(t, err)
+	require.True(t, outcome.Grabbed)
+	require.NotEmpty(t, outcome.Title, "grabbed outcome carries the release title")
+	require.Empty(t, outcome.FloorReason)
+}
+
+func TestSearchAndGrabReturnsFloorReasonWhenNothingAcceptable(t *testing.T) {
+	t.Parallel()
+	// A lone below-floor pdf clears nothing; the outcome reports why.
+	svc, _, issueID := newSearchService(t, []indexer.Candidate{
+		svcCand("newznab", "rk-pdf", "pdf", 5*1024*1024),
+	})
+
+	outcome, err := svc.SearchAndGrab(context.Background(), issueID)
+	require.NoError(t, err)
+	require.False(t, outcome.Grabbed)
+	require.Empty(t, outcome.Title)
+	require.NotEmpty(t, outcome.FloorReason, "non-acceptable outcome carries the floor reason")
+}
+
 func TestRunSearchIssueClearingCandidateAutoGrabs(t *testing.T) {
 	t.Parallel()
 	// A cbz at neutral size clears the floor and is auto-grabbed.

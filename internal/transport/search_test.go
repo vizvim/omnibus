@@ -21,6 +21,9 @@ type fakeSearchService struct {
 	download search.DownloadResult
 	events   []search.TimelineEvent
 	selErr   error
+	outcome  search.AutoSearchOutcome
+	runErr   error
+	ranIssue int64
 }
 
 func (f *fakeSearchService) SearchIssue(_ context.Context, _ int64) (search.Result, error) {
@@ -36,6 +39,14 @@ func (f *fakeSearchService) SelectCandidate(_ context.Context, _ int64, _, _ str
 
 func (f *fakeSearchService) GetTimeline(_ context.Context, _ int64) ([]search.TimelineEvent, error) {
 	return f.events, nil
+}
+
+func (f *fakeSearchService) SearchAndGrab(_ context.Context, issueID int64) (search.AutoSearchOutcome, error) {
+	f.ranIssue = issueID
+	if f.runErr != nil {
+		return search.AutoSearchOutcome{}, f.runErr
+	}
+	return f.outcome, nil
 }
 
 func newSearchClient(t *testing.T, svc transport.SearchServicer) omnibusv1connect.SearchServiceClient {
@@ -120,11 +131,34 @@ func TestGetIssueTimelineMapsEvents(t *testing.T) {
 	require.Equal(t, omnibusv1.IssueEventType_ISSUE_EVENT_TYPE_SNATCHED, resp.Msg.GetEvents()[1].GetType())
 }
 
-func TestTriggerAutoSearchUnimplemented(t *testing.T) {
+func TestTriggerAutoSearchRejectsNonPositiveID(t *testing.T) {
 	t.Parallel()
 	client := newSearchClient(t, &fakeSearchService{})
 
-	_, err := client.TriggerAutoSearch(context.Background(), connect.NewRequest(&omnibusv1.TriggerAutoSearchRequest{IssueId: 1}))
+	_, err := client.TriggerAutoSearch(context.Background(), connect.NewRequest(&omnibusv1.TriggerAutoSearchRequest{IssueId: 0}))
 	require.Error(t, err)
-	require.Equal(t, connect.CodeUnimplemented, connect.CodeOf(err))
+	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+func TestTriggerAutoSearchGrabsInline(t *testing.T) {
+	t.Parallel()
+	svc := &fakeSearchService{outcome: search.AutoSearchOutcome{Grabbed: true, Title: "Absolute Batman 001 (cbz)"}}
+	client := newSearchClient(t, svc)
+
+	resp, err := client.TriggerAutoSearch(context.Background(), connect.NewRequest(&omnibusv1.TriggerAutoSearchRequest{IssueId: 42}))
+	require.NoError(t, err)
+	require.True(t, resp.Msg.GetGrabbed())
+	require.Equal(t, "Absolute Batman 001 (cbz)", resp.Msg.GetTitle())
+	require.Equal(t, int64(42), svc.ranIssue)
+}
+
+func TestTriggerAutoSearchReportsNothingAcceptable(t *testing.T) {
+	t.Parallel()
+	svc := &fakeSearchService{outcome: search.AutoSearchOutcome{Grabbed: false, FloorReason: "best candidate scored 54 < floor 60"}}
+	client := newSearchClient(t, svc)
+
+	resp, err := client.TriggerAutoSearch(context.Background(), connect.NewRequest(&omnibusv1.TriggerAutoSearchRequest{IssueId: 7}))
+	require.NoError(t, err)
+	require.False(t, resp.Msg.GetGrabbed())
+	require.Equal(t, "best candidate scored 54 < floor 60", resp.Msg.GetFloorReason())
 }

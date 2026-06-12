@@ -46,6 +46,25 @@ func TestPipelinePicksTopAcceptable(t *testing.T) {
 	require.Len(t, res.Ranked, 2) // both survive the filter
 }
 
+// TestPipelineUntaggedSingleIssueClearsFloor pins the calibration fix: most indexer
+// release titles carry no container-format token, so inferFormat yields "" for legitimate
+// single issues. With the old unknown-format weight (20) such a release scored 20 + ~24 +
+// 10 = 54 and was wrongly gated out below the 60 floor (the Absolute Batman #1 symptom).
+// An untagged single issue at a realistic size must now be acceptable.
+func TestPipelineUntaggedSingleIssueClearsFloor(t *testing.T) {
+	t.Parallel()
+	size := int64(36 * 1024 * 1024) // ~36MB, a plausible single-issue size (not the 30MB ideal)
+	res := search.Pipeline(
+		[]indexer.Candidate{pCand("untagged7", "7", "", size, false)},
+		pipelineTarget("7"), nil,
+		search.DefaultFilterOpts(), search.DefaultScoreOpts(), search.DefaultAcceptanceFloor,
+	)
+
+	require.True(t, res.Acceptable)
+	require.NotNil(t, res.Pick)
+	require.Equal(t, "untagged7", res.Pick.Candidate.ReleaseKey)
+}
+
 func TestPipelineRankedPopulatedEvenWhenNotAcceptable(t *testing.T) {
 	t.Parallel()
 	// A lone pdf pack of unknown size scores below the default floor (40 + 15 + 0 = 55).

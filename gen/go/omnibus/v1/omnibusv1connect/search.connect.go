@@ -52,7 +52,8 @@ type SearchServiceClient interface {
 	// SearchIssue runs the filter/score/floor pipeline for a Wanted issue and records a
 	// searched timeline event. It returns the ranked candidates regardless of acceptability.
 	SearchIssue(context.Context, *connect.Request[v1.SearchIssueRequest]) (*connect.Response[v1.SearchIssueResponse], error)
-	// TriggerAutoSearch enqueues an auto-search job for an issue (workers land in Plan 06).
+	// TriggerAutoSearch runs an on-demand search-and-auto-grab for an issue immediately,
+	// bypassing the River auto-search queue. The pipeline runs inline in the request.
 	TriggerAutoSearch(context.Context, *connect.Request[v1.TriggerAutoSearchRequest]) (*connect.Response[v1.TriggerAutoSearchResponse], error)
 	// SelectCandidate grabs a chosen candidate: writes candidate-selected, then hands off
 	// (submit + Snatched + snatched event). Rejects a release_key not produced for the issue.
@@ -132,7 +133,8 @@ type SearchServiceHandler interface {
 	// SearchIssue runs the filter/score/floor pipeline for a Wanted issue and records a
 	// searched timeline event. It returns the ranked candidates regardless of acceptability.
 	SearchIssue(context.Context, *connect.Request[v1.SearchIssueRequest]) (*connect.Response[v1.SearchIssueResponse], error)
-	// TriggerAutoSearch enqueues an auto-search job for an issue (workers land in Plan 06).
+	// TriggerAutoSearch runs an on-demand search-and-auto-grab for an issue immediately,
+	// bypassing the River auto-search queue. The pipeline runs inline in the request.
 	TriggerAutoSearch(context.Context, *connect.Request[v1.TriggerAutoSearchRequest]) (*connect.Response[v1.TriggerAutoSearchResponse], error)
 	// SelectCandidate grabs a chosen candidate: writes candidate-selected, then hands off
 	// (submit + Snatched + snatched event). Rejects a release_key not produced for the issue.
