@@ -54,7 +54,20 @@ type IssueDetail struct {
 	CoverDate        string
 	StoreDate        string
 	CoverURL         string
-	Arcs             []ArcRef
+	// Description is the issue summary (CV's deck when present, else description).
+	Description string
+	// CVLastUpdated is CV's date_last_updated marker for the issue.
+	CVLastUpdated string
+	Credits       []Credit
+	Arcs          []ArcRef
+}
+
+// Credit is a single normalized creator credit attached to an issue. Role is the
+// normalized role (writer, penciller, ...); ComicvinePersonID is CV's person id.
+type Credit struct {
+	Role              string
+	Name              string
+	ComicvinePersonID int64
 }
 
 // MetadataProvider is the swappable metadata source. Methods returning raw
@@ -69,6 +82,10 @@ type MetadataProvider interface {
 	// ListIssues returns one page (offset, 100 per page) of issues for a volume,
 	// whether more pages remain, and the raw payload for caching.
 	ListIssues(ctx context.Context, volumeID int64, offset int) (issues []IssueDetail, hasMore bool, raw []byte, err error)
+	// GetIssue returns a single issue's DETAIL by its ComicVine issue id. Unlike
+	// ListIssues, this hits the per-issue resource endpoint, which is the only source
+	// of person_credits.
+	GetIssue(ctx context.Context, cvIssueID int64) (IssueDetail, error)
 	// GetCover fetches cover image bytes from a provider image URL.
 	GetCover(ctx context.Context, url string) ([]byte, error)
 }

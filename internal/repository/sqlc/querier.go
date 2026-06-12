@@ -11,14 +11,36 @@ import (
 type Querier interface {
 	CountIssuesBySeries(ctx context.Context, seriesID int64) (int64, error)
 	CoverExists(ctx context.Context, arg CoverExistsParams) (bool, error)
+	// Idempotent upsert on the existing UNIQUE(provider, release_key, issue_id) index:
+	// a duplicate grab of the same release for the same issue updates in place (T-4-02).
+	CreateDownload(ctx context.Context, arg CreateDownloadParams) (Download, error)
+	CreateIndexer(ctx context.Context, arg CreateIndexerParams) (Indexer, error)
+	DeleteIndexer(ctx context.Context, id int64) error
+	// Removes all credit rows for an issue, so Replace can rebuild them idempotently.
+	DeleteIssueCredits(ctx context.Context, issueID int64) error
 	GetCover(ctx context.Context, arg GetCoverParams) (GetCoverRow, error)
+	GetDownloadByID(ctx context.Context, id int64) (Download, error)
+	GetDownloadClientConfig(ctx context.Context) (DownloadClientConfig, error)
+	GetIndexer(ctx context.Context, id int64) (Indexer, error)
+	GetIssueByID(ctx context.Context, id int64) (Issue, error)
 	GetMetadataCache(ctx context.Context, cacheKey string) (MetadataCache, error)
 	GetPublisherByID(ctx context.Context, id int64) (Publisher, error)
 	GetSeriesByID(ctx context.Context, id int64) (Series, error)
 	GetSeriesByVolumeID(ctx context.Context, comicvineVolumeID int64) (Series, error)
 	GetUserConfig(ctx context.Context, key string) (UserConfig, error)
+	// Records a no-result auto-search attempt; the growing count spaces retries and
+	// eventually crosses the cap so the issue goes cold (D-09).
+	IncrementSearchAttempts(ctx context.Context, id int64) error
+	// Inserts one normalized credit; duplicate (issue_id, role, name) rows are no-ops.
+	InsertIssueCredit(ctx context.Context, arg InsertIssueCreditParams) error
+	InsertIssueEvent(ctx context.Context, arg InsertIssueEventParams) (IssueEvent, error)
 	LinkArcIssue(ctx context.Context, arg LinkArcIssueParams) error
 	ListArcsBySeries(ctx context.Context, seriesID int64) ([]StoryArc, error)
+	ListDownloadsByIssue(ctx context.Context, issueID int64) ([]Download, error)
+	ListEnabledIndexers(ctx context.Context) ([]Indexer, error)
+	ListIndexers(ctx context.Context) ([]Indexer, error)
+	ListIssueCredits(ctx context.Context, issueID int64) ([]IssueCredit, error)
+	ListIssueEventsByIssue(ctx context.Context, issueID int64) ([]IssueEvent, error)
 	ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Issue, error)
 	ListSeries(ctx context.Context, arg ListSeriesParams) ([]Series, error)
 	// Active series never refreshed (NULL) or last refreshed before the cutoff, oldest
@@ -26,9 +48,16 @@ type Querier interface {
 	// series are excluded: they are not being watched for freshness.
 	ListStaleSeries(ctx context.Context, arg ListStaleSeriesParams) ([]Series, error)
 	ListUserConfig(ctx context.Context) ([]UserConfig, error)
+	// Bounded batch of Wanted issues eligible for auto-search: fewest search_attempts
+	// first (then oldest), excluding issues that have reached the attempt cap (cold).
+	// The cap is passed as the upper bound (D-08/D-09).
+	ListWantedForAutoSearch(ctx context.Context, arg ListWantedForAutoSearchParams) ([]Issue, error)
+	// All currently-Wanted issues with their normalized sort/qual, for RSS feed matching.
+	ListWantedForMatch(ctx context.Context) ([]Issue, error)
 	// Idempotent on cache_key (UNIQUE); refreshes payload + freshness markers.
 	PutMetadataCache(ctx context.Context, arg PutMetadataCacheParams) error
 	SetUserConfig(ctx context.Context, arg SetUserConfigParams) error
+	UpdateIndexer(ctx context.Context, arg UpdateIndexerParams) (Indexer, error)
 	UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusParams) error
 	UpdateSeriesCounts(ctx context.Context, arg UpdateSeriesCountsParams) error
 	UpdateSeriesLastRefreshed(ctx context.Context, arg UpdateSeriesLastRefreshedParams) error
@@ -37,6 +66,7 @@ type Querier interface {
 	UpsertArc(ctx context.Context, arg UpsertArcParams) (StoryArc, error)
 	// Idempotent upsert of a cover blob keyed on (entity_type, entity_id).
 	UpsertCover(ctx context.Context, arg UpsertCoverParams) error
+	UpsertDownloadClientConfig(ctx context.Context, arg UpsertDownloadClientConfigParams) (DownloadClientConfig, error)
 	// Idempotent upsert keyed on the immutable comicvine_issue_id.
 	UpsertIssue(ctx context.Context, arg UpsertIssueParams) (Issue, error)
 	// Idempotent on name (UNIQUE); records the CV publisher id when known.

@@ -23,6 +23,12 @@ type IssueUpsert struct {
 	CoverDate        string
 	StoreDate        string
 	ReleaseDate      string
+	Description      string
+	ImageURL         string
+	CVLastUpdated    string
+	IssueType        string
+	AltIssueNumber   string
+	PageCount        int64
 	Status           string
 	CreatedAt        string
 }
@@ -30,9 +36,18 @@ type IssueUpsert struct {
 // IssueRepository persists issues, pinned to comicvine_issue_id.
 type IssueRepository interface {
 	Upsert(ctx context.Context, in IssueUpsert) (Issue, error)
+	GetByID(ctx context.Context, id int64) (Issue, error)
 	ListBySeries(ctx context.Context, seriesID int64) ([]Issue, error)
 	CountBySeries(ctx context.Context, seriesID int64) (int64, error)
 	UpdateStatus(ctx context.Context, id int64, status string, searchAttempts int32) error
+	// ListWantedForAutoSearch returns a bounded batch of Wanted issues eligible for
+	// auto-search (fewest search_attempts first, then oldest), excluding issues at or
+	// above the attempt cap (cold). batch bounds the result (D-08/D-09).
+	ListWantedForAutoSearch(ctx context.Context, attemptCap, batch int32) ([]Issue, error)
+	// IncrementSearchAttempts records a no-result auto-search attempt (D-09 backoff).
+	IncrementSearchAttempts(ctx context.Context, id int64) error
+	// ListWantedForMatch returns all currently-Wanted issues for RSS feed matching.
+	ListWantedForMatch(ctx context.Context) ([]Issue, error)
 }
 
 type issueRepository struct {
@@ -56,9 +71,28 @@ func (r *issueRepository) Upsert(ctx context.Context, in IssueUpsert) (Issue, er
 		CoverDate:        nullString(in.CoverDate),
 		StoreDate:        nullString(in.StoreDate),
 		ReleaseDate:      nullString(in.ReleaseDate),
+		Description:      nullString(in.Description),
+		ImageUrl:         nullString(in.ImageURL),
+		CvLastUpdated:    nullString(in.CVLastUpdated),
+		IssueType:        defaultIssueType(in.IssueType),
+		AltIssueNumber:   nullString(in.AltIssueNumber),
+		PageCount:        nullInt64(in.PageCount),
 		Status:           in.Status,
 		CreatedAt:        in.CreatedAt,
 	})
+}
+
+// defaultIssueType maps an empty issue-type to the schema default so the NOT NULL
+// CHECK column is always satisfied even when a caller leaves the field unset.
+func defaultIssueType(t string) string {
+	if t == "" {
+		return "standard"
+	}
+	return t
+}
+
+func (r *issueRepository) GetByID(ctx context.Context, id int64) (Issue, error) {
+	return r.read.GetIssueByID(ctx, id)
 }
 
 func (r *issueRepository) ListBySeries(ctx context.Context, seriesID int64) ([]Issue, error) {
@@ -75,4 +109,19 @@ func (r *issueRepository) UpdateStatus(ctx context.Context, id int64, status str
 		SearchAttempts: int64(searchAttempts),
 		ID:             id,
 	})
+}
+
+func (r *issueRepository) ListWantedForAutoSearch(ctx context.Context, attemptCap, batch int32) ([]Issue, error) {
+	return r.read.ListWantedForAutoSearch(ctx, sqlc.ListWantedForAutoSearchParams{
+		SearchAttempts: int64(attemptCap),
+		Limit:          int64(batch),
+	})
+}
+
+func (r *issueRepository) IncrementSearchAttempts(ctx context.Context, id int64) error {
+	return r.write.IncrementSearchAttempts(ctx, id)
+}
+
+func (r *issueRepository) ListWantedForMatch(ctx context.Context) ([]Issue, error) {
+	return r.read.ListWantedForMatch(ctx)
 }

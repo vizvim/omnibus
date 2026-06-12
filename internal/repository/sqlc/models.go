@@ -39,6 +39,15 @@ type Download struct {
 	UpdatedAt    string
 }
 
+type DownloadClientConfig struct {
+	ID        int64
+	Url       string
+	ApiKey    sql.NullString
+	Category  string
+	CreatedAt string
+	UpdatedAt string
+}
+
 type DownloadHistory struct {
 	ID         int64
 	IssueID    int64
@@ -47,6 +56,20 @@ type DownloadHistory struct {
 	Result     string
 	Detail     sql.NullString
 	OccurredAt string
+}
+
+type Indexer struct {
+	ID         int64
+	Name       string
+	Kind       string
+	BaseUrl    string
+	ApiKey     sql.NullString
+	Enabled    int64
+	Categories sql.NullString
+	Priority   int64
+	UseForRss  int64
+	CreatedAt  string
+	UpdatedAt  string
 }
 
 type Issue struct {
@@ -60,10 +83,23 @@ type Issue struct {
 	CoverDate        sql.NullString
 	StoreDate        sql.NullString
 	ReleaseDate      sql.NullString
+	Description      sql.NullString
+	ImageUrl         sql.NullString
+	CvLastUpdated    sql.NullString
+	IssueType        string
+	AltIssueNumber   sql.NullString
+	PageCount        sql.NullInt64
 	Status           string
 	SearchAttempts   int64
 	Location         sql.NullString
 	CreatedAt        string
+}
+
+type IssueCredit struct {
+	IssueID    int64
+	Role       string
+	Name       string
+	CvPersonID int64
 }
 
 type IssueEvent struct {

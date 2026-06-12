@@ -33,6 +33,13 @@ export const listSeries = SeriesService.method.listSeries;
 export const getSeries = SeriesService.method.getSeries;
 
 /**
+ * GetIssue returns the rich per-issue detail (summary, credits, dates) on demand.
+ *
+ * @generated from rpc omnibus.v1.SeriesService.GetIssue
+ */
+export const getIssue = SeriesService.method.getIssue;
+
+/**
  * UpdateSeriesSettings updates per-series settings (e.g. watch status).
  *
  * @generated from rpc omnibus.v1.SeriesService.UpdateSeriesSettings

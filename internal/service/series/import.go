@@ -54,6 +54,12 @@ func (s *Service) runImport(ctx context.Context, ser repository.Series, vol meta
 				Title:            iss.Title,
 				CoverDate:        iss.CoverDate,
 				StoreDate:        iss.StoreDate,
+				Description:      iss.Description,
+				ImageURL:         iss.CoverURL,
+				CVLastUpdated:    iss.CVLastUpdated,
+				IssueType:        DeriveIssueType(iss.IssueNumber, iss.Title, len(issues)),
+				AltIssueNumber:   "",
+				PageCount:        0,
 				Status:           string(StatusWanted),
 				CreatedAt:        nowISO(),
 			})
@@ -62,6 +68,22 @@ func (s *Service) runImport(ctx context.Context, ser repository.Series, vol meta
 				continue
 			}
 			imported++
+
+			// Replace the issue's creator credits (idempotent on re-import). Normalize
+			// each provider role here so the provider stays free of service logic.
+			if cerr := s.repos.IssueCredits.Replace(ctx, stored.ID, toRepoCredits(iss.Credits)); cerr != nil {
+				s.logger.Warn("replace issue credits", slog.Int64("issue_id", stored.ID), slog.Any("error", cerr))
+			}
+
+			// Immediate enqueue on Wanted (D-10): an issue stored in the Wanted state gets
+			// a one-off auto-search job. Re-imports of already-grabbed issues keep their
+			// non-Wanted status (the upsert does not reset status), so only genuinely-Wanted
+			// issues enqueue; duplicates collapse via the job's per-issue uniqueness.
+			if s.enqueuer != nil && stored.Status == string(StatusWanted) {
+				if eerr := s.enqueuer.EnqueueSearchIssue(ctx, stored.ID); eerr != nil {
+					s.logger.Warn("enqueue auto-search", slog.Int64("issue_id", stored.ID), slog.Any("error", eerr))
+				}
+			}
 
 			if iss.CoverURL != "" {
 				if derr := s.downloadCover(ctx, "issues", stored.ID, iss.CoverURL); derr != nil {
@@ -85,6 +107,34 @@ func (s *Service) runImport(ctx context.Context, ser repository.Series, vol meta
 	s.logger.Info("series import complete",
 		slog.Int64("series_id", ser.ID), slog.Int("issues", imported))
 	return nil
+}
+
+// toRepoCredits maps provider credits to repository credits, normalizing each role to
+// its canonical form and de-duplicating on the (role, name) key that backs the
+// issue_credits primary key so Replace inserts a clean, conflict-free set.
+func toRepoCredits(in []metadata.Credit) []repository.IssueCredit {
+	if len(in) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(in))
+	out := make([]repository.IssueCredit, 0, len(in))
+	for _, c := range in {
+		role := NormalizeRole(c.Role)
+		if role == "" || c.Name == "" {
+			continue
+		}
+		key := role + "\x00" + c.Name
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, repository.IssueCredit{
+			Role:       role,
+			Name:       c.Name,
+			CVPersonID: c.ComicvinePersonID,
+		})
+	}
+	return out
 }
 
 // downloadCover fetches cover bytes via the gateway (paced + SSRF-guarded) and stores

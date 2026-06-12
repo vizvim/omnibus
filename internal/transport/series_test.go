@@ -49,7 +49,7 @@ func newClient(t *testing.T) (omnibusv1connect.SeriesServiceClient, *series.Serv
 	// that the engine runs — exercising the same path app.go uses.
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewImportWorker(svc))
-	jobsClient, err := jobs.New(ctx, d.Write, d.Read, 2, 0, logger, workers)
+	jobsClient, err := jobs.New(ctx, d.Write, d.Read, 2, 0, 0, 0, logger, workers)
 	require.NoError(t, err)
 	svc.SetEnqueuer(jobsClient)
 	require.NoError(t, jobsClient.Start(ctx))
@@ -104,6 +104,42 @@ func TestRPCListAndAddAndGet(t *testing.T) {
 	}
 }
 
+func TestRPCGetIssue(t *testing.T) {
+	t.Parallel()
+	client, _ := newClient(t)
+	ctx := context.Background()
+
+	addResp, err := client.AddSeries(ctx, connect.NewRequest(&omnibusv1.AddSeriesRequest{ComicvineVolumeId: 4050}))
+	require.NoError(t, err)
+	seriesID := addResp.Msg.GetSeries().GetId()
+
+	// Wait for the durable import to land issues, then grab one issue id.
+	var issueID int64
+	require.Eventually(t, func() bool {
+		gr, gerr := client.GetSeries(ctx, connect.NewRequest(&omnibusv1.GetSeriesRequest{SeriesId: seriesID}))
+		if gerr != nil || len(gr.Msg.GetIssues()) < 4 {
+			return false
+		}
+		issueID = gr.Msg.GetIssues()[0].GetId()
+		return true
+	}, 5*time.Second, 25*time.Millisecond)
+
+	detResp, err := client.GetIssue(ctx, connect.NewRequest(&omnibusv1.GetIssueRequest{IssueId: issueID}))
+	require.NoError(t, err)
+	detail := detResp.Msg.GetIssue()
+	require.NotNil(t, detail)
+	require.Equal(t, issueID, detail.GetIssue().GetId())
+	// issue_type is populated by the importer (defaults to "standard") and mirrored
+	// onto both the base issue and the detail.
+	require.NotEmpty(t, detail.GetIssueType())
+	require.Equal(t, detail.GetIssueType(), detail.GetIssue().GetIssueType())
+	// cover_url, when present, points at the backend route, never comicvine.com.
+	if cu := detail.GetIssue().GetCoverUrl(); cu != "" {
+		require.Contains(t, cu, "/covers/")
+		require.NotContains(t, cu, "comicvine")
+	}
+}
+
 func TestRPCInputValidation(t *testing.T) {
 	t.Parallel()
 	client, _ := newClient(t)
@@ -122,6 +158,10 @@ func TestRPCInputValidation(t *testing.T) {
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 
 	_, err = client.RefreshSeries(ctx, connect.NewRequest(&omnibusv1.RefreshSeriesRequest{SeriesId: 0}))
+	require.Error(t, err)
+	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+
+	_, err = client.GetIssue(ctx, connect.NewRequest(&omnibusv1.GetIssueRequest{IssueId: 0}))
 	require.Error(t, err)
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 }

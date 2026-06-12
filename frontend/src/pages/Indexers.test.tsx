@@ -1,0 +1,111 @@
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import { App } from "../App";
+import { makeIndexerTransport, renderWithProviders } from "../test/render";
+
+describe("indexers page", () => {
+  it("renders the empty state when there are no indexers", async () => {
+    const transport = makeIndexerTransport({ listIndexers: () => ({ indexers: [] }) });
+    renderWithProviders(<App initialRoute="indexers" />, transport);
+
+    await waitFor(() => {
+      expect(screen.getByText(/no indexers configured/i)).toBeInTheDocument();
+    });
+  });
+
+  it("renders the API key input as a password field in the add form", async () => {
+    const transport = makeIndexerTransport({ listIndexers: () => ({ indexers: [] }) });
+    renderWithProviders(<App initialRoute="indexers" />, transport);
+
+    await waitFor(() => {
+      expect(screen.getByText(/no indexers configured/i)).toBeInTheDocument();
+    });
+
+    // Open the add form (there are two "Add indexer" buttons — header + empty-state CTA).
+    fireEvent.click(screen.getAllByRole("button", { name: /add indexer/i })[0]);
+
+    const apiKey = screen.getByLabelText(/api key/i);
+    expect(apiKey).toHaveAttribute("type", "password");
+  });
+
+  it("lists indexers with an enabled badge", async () => {
+    const transport = makeIndexerTransport({
+      listIndexers: () => ({
+        indexers: [
+          {
+            id: 1n,
+            name: "My Newznab",
+            kind: "newznab",
+            baseUrl: "http://nzb.test",
+            enabled: true,
+            categories: "7030",
+            priority: 0,
+            useForRss: true,
+            createdAt: "2026-01-01T00:00:00Z",
+            updatedAt: "2026-01-01T00:00:00Z",
+          },
+        ],
+      }),
+    });
+    renderWithProviders(<App initialRoute="indexers" />, transport);
+
+    await waitFor(() => {
+      expect(screen.getByText("My Newznab")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Enabled")).toBeInTheDocument();
+  });
+
+  const oneIndexer = {
+    indexers: [
+      {
+        id: 1n,
+        name: "My Newznab",
+        kind: "newznab",
+        baseUrl: "http://nzb.test",
+        enabled: true,
+        categories: "7030",
+        priority: 0,
+        useForRss: true,
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+      },
+    ],
+  };
+
+  it("shows a connected indicator when the Test probe succeeds", async () => {
+    const transport = makeIndexerTransport({
+      listIndexers: () => oneIndexer,
+      testIndexer: () => ({ ok: true, detail: "connected" }),
+    });
+    renderWithProviders(<App initialRoute="indexers" />, transport);
+
+    await waitFor(() => {
+      expect(screen.getByText("My Newznab")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^test$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/connected/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows the failure detail when the Test probe fails", async () => {
+    const transport = makeIndexerTransport({
+      listIndexers: () => oneIndexer,
+      testIndexer: () => ({ ok: false, detail: "401 unauthorized" }),
+    });
+    renderWithProviders(<App initialRoute="indexers" />, transport);
+
+    await waitFor(() => {
+      expect(screen.getByText("My Newznab")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^test$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/401 unauthorized/i)).toBeInTheDocument();
+    });
+  });
+});

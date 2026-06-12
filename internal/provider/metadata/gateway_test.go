@@ -24,6 +24,7 @@ type countingProvider struct {
 	mu          sync.Mutex
 	getVolume   int
 	listIssues  int
+	getIssue    int
 	searchCalls int
 }
 
@@ -46,6 +47,13 @@ func (c *countingProvider) ListIssues(ctx context.Context, id int64, off int) ([
 	c.listIssues++
 	c.mu.Unlock()
 	return c.inner.ListIssues(ctx, id, off)
+}
+
+func (c *countingProvider) GetIssue(ctx context.Context, id int64) (metadata.IssueDetail, error) {
+	c.mu.Lock()
+	c.getIssue++
+	c.mu.Unlock()
+	return c.inner.GetIssue(ctx, id)
 }
 
 func (c *countingProvider) GetCover(ctx context.Context, u string) ([]byte, error) {
@@ -83,6 +91,26 @@ func TestGatewayCacheHitCallsProviderOnce(t *testing.T) {
 
 	require.Equal(t, 1, cp.getVolume, "second GetVolume served from cache")
 	require.Equal(t, int64(4050), v.ComicvineVolumeID)
+}
+
+func TestGatewayGetIssueCachesAndPreservesCredits(t *testing.T) {
+	t.Parallel()
+	fake, err := metadata.NewFakeProvider("testdata/fixtures")
+	require.NoError(t, err)
+	cp := &countingProvider{inner: fake}
+	gw := newGateway(t, cp, rate.NewLimiter(rate.Inf, 1), &bytes.Buffer{})
+	ctx := context.Background()
+
+	first, err := gw.GetIssue(ctx, 1001)
+	require.NoError(t, err)
+	require.NotEmpty(t, first.Credits, "DETAIL fetch carries credits")
+
+	// Second call is served from cache; the round-tripped envelope preserves credits.
+	second, err := gw.GetIssue(ctx, 1001)
+	require.NoError(t, err)
+	require.Equal(t, 1, cp.getIssue, "second GetIssue served from cache")
+	require.ElementsMatch(t, first.Credits, second.Credits)
+	require.Equal(t, first.Description, second.Description)
 }
 
 func TestGatewayLimiterGatesProvider(t *testing.T) {
@@ -146,6 +174,112 @@ func TestGatewayConditionalRefresh(t *testing.T) {
 	_, err = gw.GetVolume(ctx, 4050)
 	require.NoError(t, err)
 	require.Equal(t, 2, cp.getVolume, "stale (TTL=0) entry triggers refresh each call")
+}
+
+func TestGatewaySearchCachesAndRoundTrips(t *testing.T) {
+	t.Parallel()
+	fake, err := metadata.NewFakeProvider("testdata/fixtures")
+	require.NoError(t, err)
+	cp := &countingProvider{inner: fake}
+	gw := newGateway(t, cp, rate.NewLimiter(rate.Inf, 1), &bytes.Buffer{})
+	ctx := context.Background()
+
+	first, err := gw.SearchSeries(ctx, "Daredevil")
+	require.NoError(t, err)
+	require.Len(t, first, 2)
+
+	// Second call served from the cache (encodeSearchEnvelope round-trips through
+	// decodeSearch): the provider is hit only once.
+	second, err := gw.SearchSeries(ctx, "Daredevil")
+	require.NoError(t, err)
+	require.Equal(t, 1, cp.searchCalls, "second search served from cache")
+	require.Equal(t, first, second)
+}
+
+func TestGatewayGetCoverPaces(t *testing.T) {
+	t.Parallel()
+	fake, err := metadata.NewFakeProvider("testdata/fixtures")
+	require.NoError(t, err)
+	gw := newGateway(t, fake, rate.NewLimiter(rate.Inf, 1), &bytes.Buffer{})
+
+	data, err := gw.GetCover(context.Background(), "https://comicvine.gamespot.com/x.jpg")
+	require.NoError(t, err)
+	require.NotEmpty(t, data)
+}
+
+func TestGatewayCachedSourceUpdatedAt(t *testing.T) {
+	t.Parallel()
+	fake, err := metadata.NewFakeProvider("testdata/fixtures")
+	require.NoError(t, err)
+	gw := newGateway(t, fake, rate.NewLimiter(rate.Inf, 1), &bytes.Buffer{})
+	ctx := context.Background()
+
+	// Before any fetch, no marker is cached.
+	_, ok := gw.CachedSourceUpdatedAt(ctx, 4050)
+	require.False(t, ok)
+
+	// After GetVolume caches the volume (with its date_last_updated marker), it reads back.
+	_, err = gw.GetVolume(ctx, 4050)
+	require.NoError(t, err)
+	marker, ok := gw.CachedSourceUpdatedAt(ctx, 4050)
+	require.True(t, ok)
+	require.NotEmpty(t, marker)
+}
+
+func TestFakeGetCoverReturnsBytes(t *testing.T) {
+	t.Parallel()
+	fake, err := metadata.NewFakeProvider("testdata/fixtures")
+	require.NoError(t, err)
+	data, err := fake.GetCover(context.Background(), "anything")
+	require.NoError(t, err)
+	require.NotEmpty(t, data)
+}
+
+func TestGatewayListIssuesServesFromCache(t *testing.T) {
+	t.Parallel()
+	fake, err := metadata.NewFakeProvider("testdata/fixtures")
+	require.NoError(t, err)
+	cp := &countingProvider{inner: fake}
+	gw := newGateway(t, cp, rate.NewLimiter(rate.Inf, 1), &bytes.Buffer{})
+	ctx := context.Background()
+
+	first, _, err := gw.ListIssues(ctx, 4050, 0)
+	require.NoError(t, err)
+	require.NotEmpty(t, first)
+
+	// Second call served from cache (decodeIssues round-trip): provider hit once.
+	second, _, err := gw.ListIssues(ctx, 4050, 0)
+	require.NoError(t, err)
+	require.Equal(t, 1, cp.listIssues, "second ListIssues served from cache")
+	require.Len(t, second, len(first))
+}
+
+// errProvider is a MetadataProvider whose GetIssue always errors, to drive the gateway's
+// GetIssue error path.
+type errIssueProvider struct{ metadata.MetadataProvider }
+
+func (errIssueProvider) GetIssue(context.Context, int64) (metadata.IssueDetail, error) {
+	return metadata.IssueDetail{}, context.DeadlineExceeded
+}
+
+func TestGatewayGetIssuePropagatesProviderError(t *testing.T) {
+	t.Parallel()
+	fake, err := metadata.NewFakeProvider("testdata/fixtures")
+	require.NoError(t, err)
+	gw := newGateway(t, errIssueProvider{fake}, rate.NewLimiter(rate.Inf, 1), &bytes.Buffer{})
+
+	_, err = gw.GetIssue(context.Background(), 1001)
+	require.Error(t, err)
+}
+
+func TestFakeListIssuesEmptyAfterFirstPage(t *testing.T) {
+	t.Parallel()
+	fake, err := metadata.NewFakeProvider("testdata/fixtures")
+	require.NoError(t, err)
+	issues, hasMore, _, err := fake.ListIssues(context.Background(), 4050, 100)
+	require.NoError(t, err)
+	require.False(t, hasMore)
+	require.Empty(t, issues)
 }
 
 func TestGatewayEmitsLogs(t *testing.T) {

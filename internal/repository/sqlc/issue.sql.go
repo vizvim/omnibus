@@ -21,8 +21,51 @@ func (q *Queries) CountIssuesBySeries(ctx context.Context, seriesID int64) (int6
 	return count, err
 }
 
+const getIssueByID = `-- name: GetIssueByID :one
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at FROM issues WHERE id = ?
+`
+
+func (q *Queries) GetIssueByID(ctx context.Context, id int64) (Issue, error) {
+	row := q.db.QueryRowContext(ctx, getIssueByID, id)
+	var i Issue
+	err := row.Scan(
+		&i.ID,
+		&i.SeriesID,
+		&i.ComicvineIssueID,
+		&i.IssueNumberRaw,
+		&i.IssueNumberSort,
+		&i.IssueNumberQual,
+		&i.Title,
+		&i.CoverDate,
+		&i.StoreDate,
+		&i.ReleaseDate,
+		&i.Description,
+		&i.ImageUrl,
+		&i.CvLastUpdated,
+		&i.IssueType,
+		&i.AltIssueNumber,
+		&i.PageCount,
+		&i.Status,
+		&i.SearchAttempts,
+		&i.Location,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const incrementSearchAttempts = `-- name: IncrementSearchAttempts :exec
+UPDATE issues SET search_attempts = search_attempts + 1 WHERE id = ?
+`
+
+// Records a no-result auto-search attempt; the growing count spaces retries and
+// eventually crosses the cap so the issue goes cold (D-09).
+func (q *Queries) IncrementSearchAttempts(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, incrementSearchAttempts, id)
+	return err
+}
+
 const listIssuesBySeries = `-- name: ListIssuesBySeries :many
-SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, status, search_attempts, location, created_at FROM issues
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at FROM issues
 WHERE series_id = ?
 ORDER BY issue_number_sort, COALESCE(issue_number_qual, '')
 `
@@ -47,6 +90,122 @@ func (q *Queries) ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Iss
 			&i.CoverDate,
 			&i.StoreDate,
 			&i.ReleaseDate,
+			&i.Description,
+			&i.ImageUrl,
+			&i.CvLastUpdated,
+			&i.IssueType,
+			&i.AltIssueNumber,
+			&i.PageCount,
+			&i.Status,
+			&i.SearchAttempts,
+			&i.Location,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWantedForAutoSearch = `-- name: ListWantedForAutoSearch :many
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at FROM issues
+WHERE status = 'Wanted' AND search_attempts < ?
+ORDER BY search_attempts ASC, created_at ASC
+LIMIT ?
+`
+
+type ListWantedForAutoSearchParams struct {
+	SearchAttempts int64
+	Limit          int64
+}
+
+// Bounded batch of Wanted issues eligible for auto-search: fewest search_attempts
+// first (then oldest), excluding issues that have reached the attempt cap (cold).
+// The cap is passed as the upper bound (D-08/D-09).
+func (q *Queries) ListWantedForAutoSearch(ctx context.Context, arg ListWantedForAutoSearchParams) ([]Issue, error) {
+	rows, err := q.db.QueryContext(ctx, listWantedForAutoSearch, arg.SearchAttempts, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Issue{}
+	for rows.Next() {
+		var i Issue
+		if err := rows.Scan(
+			&i.ID,
+			&i.SeriesID,
+			&i.ComicvineIssueID,
+			&i.IssueNumberRaw,
+			&i.IssueNumberSort,
+			&i.IssueNumberQual,
+			&i.Title,
+			&i.CoverDate,
+			&i.StoreDate,
+			&i.ReleaseDate,
+			&i.Description,
+			&i.ImageUrl,
+			&i.CvLastUpdated,
+			&i.IssueType,
+			&i.AltIssueNumber,
+			&i.PageCount,
+			&i.Status,
+			&i.SearchAttempts,
+			&i.Location,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWantedForMatch = `-- name: ListWantedForMatch :many
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at FROM issues
+WHERE status = 'Wanted'
+ORDER BY series_id, issue_number_sort
+`
+
+// All currently-Wanted issues with their normalized sort/qual, for RSS feed matching.
+func (q *Queries) ListWantedForMatch(ctx context.Context) ([]Issue, error) {
+	rows, err := q.db.QueryContext(ctx, listWantedForMatch)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Issue{}
+	for rows.Next() {
+		var i Issue
+		if err := rows.Scan(
+			&i.ID,
+			&i.SeriesID,
+			&i.ComicvineIssueID,
+			&i.IssueNumberRaw,
+			&i.IssueNumberSort,
+			&i.IssueNumberQual,
+			&i.Title,
+			&i.CoverDate,
+			&i.StoreDate,
+			&i.ReleaseDate,
+			&i.Description,
+			&i.ImageUrl,
+			&i.CvLastUpdated,
+			&i.IssueType,
+			&i.AltIssueNumber,
+			&i.PageCount,
 			&i.Status,
 			&i.SearchAttempts,
 			&i.Location,
@@ -84,9 +243,10 @@ const upsertIssue = `-- name: UpsertIssue :one
 INSERT INTO issues (
   series_id, comicvine_issue_id, issue_number_raw, issue_number_sort,
   issue_number_qual, title, cover_date, store_date, release_date,
-  status, created_at
+  description, image_url, cv_last_updated, issue_type, alt_issue_number,
+  page_count, status, created_at
 ) VALUES (
-  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 ON CONFLICT(comicvine_issue_id) DO UPDATE SET
   issue_number_raw  = excluded.issue_number_raw,
@@ -95,8 +255,14 @@ ON CONFLICT(comicvine_issue_id) DO UPDATE SET
   title             = excluded.title,
   cover_date        = excluded.cover_date,
   store_date        = excluded.store_date,
-  release_date      = excluded.release_date
-RETURNING id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, status, search_attempts, location, created_at
+  release_date      = excluded.release_date,
+  description       = excluded.description,
+  image_url         = excluded.image_url,
+  cv_last_updated   = excluded.cv_last_updated,
+  issue_type        = excluded.issue_type,
+  alt_issue_number  = excluded.alt_issue_number,
+  page_count        = excluded.page_count
+RETURNING id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at
 `
 
 type UpsertIssueParams struct {
@@ -109,6 +275,12 @@ type UpsertIssueParams struct {
 	CoverDate        sql.NullString
 	StoreDate        sql.NullString
 	ReleaseDate      sql.NullString
+	Description      sql.NullString
+	ImageUrl         sql.NullString
+	CvLastUpdated    sql.NullString
+	IssueType        string
+	AltIssueNumber   sql.NullString
+	PageCount        sql.NullInt64
 	Status           string
 	CreatedAt        string
 }
@@ -125,6 +297,12 @@ func (q *Queries) UpsertIssue(ctx context.Context, arg UpsertIssueParams) (Issue
 		arg.CoverDate,
 		arg.StoreDate,
 		arg.ReleaseDate,
+		arg.Description,
+		arg.ImageUrl,
+		arg.CvLastUpdated,
+		arg.IssueType,
+		arg.AltIssueNumber,
+		arg.PageCount,
 		arg.Status,
 		arg.CreatedAt,
 	)
@@ -140,6 +318,12 @@ func (q *Queries) UpsertIssue(ctx context.Context, arg UpsertIssueParams) (Issue
 		&i.CoverDate,
 		&i.StoreDate,
 		&i.ReleaseDate,
+		&i.Description,
+		&i.ImageUrl,
+		&i.CvLastUpdated,
+		&i.IssueType,
+		&i.AltIssueNumber,
+		&i.PageCount,
 		&i.Status,
 		&i.SearchAttempts,
 		&i.Location,

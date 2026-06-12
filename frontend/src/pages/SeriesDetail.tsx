@@ -1,33 +1,27 @@
 import { useMutation, useQuery } from "@connectrpc/connect-query";
+import { Fragment, useState } from "react";
 
+import { CandidateList } from "../components/CandidateList";
 import { EmptyState } from "../components/EmptyState";
+import { IssueDetailPanel } from "../components/IssueDetailPanel";
+import { IssueTimeline } from "../components/IssueTimeline";
 import { IssueTile } from "../components/IssueTile";
 import { SyncingBadge } from "../components/SyncingBadge";
 import {
   getSeries,
   refreshSeries,
 } from "../gen/omnibus/v1/series-SeriesService_connectquery";
-
-// relativeTime formats an ISO timestamp as a short "x ago" string. Minimal by design —
-// no date library (UI-SPEC: no new dependencies). Returns "" for an empty/invalid input.
-function relativeTime(iso: string): string {
-  if (!iso) return "";
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return "";
-  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
-  if (seconds < 60) return "just now";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
-}
+import { relativeTime } from "../lib/time";
 
 // SeriesDetail renders the GetSeries header + issue grid. While the series is still
 // importing (have < total) it polls GetSeries on an interval so issues + covers appear
 // as they land, then stops polling once caught up (D-06).
 export function SeriesDetail({ seriesId }: { seriesId: bigint }) {
+  // The selected issue exposes the per-issue Candidates + Timeline panels. searchActive
+  // gates the SearchIssue query so it only runs after the user clicks "Search".
+  const [selectedIssueId, setSelectedIssueId] = useState<bigint | null>(null);
+  const [searchActive, setSearchActive] = useState(false);
+
   const detail = useQuery(
     getSeries,
     { seriesId },
@@ -117,7 +111,52 @@ export function SeriesDetail({ seriesId }: { seriesId: bigint }) {
         <h2 className="text-xl font-semibold">Issues</h2>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
           {issues.map((issue) => (
-            <IssueTile key={issue.id.toString()} issue={issue} />
+            <Fragment key={issue.id.toString()}>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedIssueId(issue.id);
+                  setSearchActive(false);
+                }}
+                aria-pressed={selectedIssueId === issue.id}
+                className={`rounded text-left ${
+                  selectedIssueId === issue.id ? "ring-2 ring-blue-600" : ""
+                }`}
+              >
+                <IssueTile issue={issue} />
+              </button>
+
+              {selectedIssueId === issue.id ? (
+                // Expand the selected-issue detail inline, full-width, directly under the
+                // clicked tile. col-span-full makes it occupy a whole grid row.
+                <section className="col-span-full flex flex-col gap-6">
+                  <IssueDetailPanel issueId={issue.id} />
+
+                  <section className="flex flex-col gap-4">
+                    <div className="flex items-center gap-4">
+                      <h2 className="text-xl font-semibold">Candidates</h2>
+                      <button
+                        type="button"
+                        onClick={() => setSearchActive(true)}
+                        className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                      >
+                        Search
+                      </button>
+                    </div>
+                    <CandidateList
+                      issueId={issue.id}
+                      enabled={searchActive}
+                      onGrabbed={() => void detail.refetch()}
+                    />
+                  </section>
+
+                  <section className="flex flex-col gap-4">
+                    <h2 className="text-xl font-semibold">Timeline</h2>
+                    <IssueTimeline issueId={issue.id} />
+                  </section>
+                </section>
+              ) : null}
+            </Fragment>
           ))}
         </div>
       </section>

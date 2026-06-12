@@ -137,6 +137,34 @@ func (g *Gateway) ListIssues(ctx context.Context, volumeID int64, offset int) ([
 	return issues, hasMore, nil
 }
 
+// GetIssue paces and caches a single-issue DETAIL fetch. This is the credit-bearing
+// endpoint (the LIST endpoint omits person_credits), used for lazy, one-time credit
+// population. The cached raw payload is re-decoded on a hit.
+func (g *Gateway) GetIssue(ctx context.Context, cvIssueID int64) (IssueDetail, error) {
+	key := fmt.Sprintf("issue:4000-%d", cvIssueID)
+	if raw, ok := g.freshCache(ctx, key); ok {
+		detail, err := decodeIssueDetail(raw)
+		if err != nil {
+			return IssueDetail{}, err
+		}
+		return detail, nil
+	}
+	if err := g.wait(ctx, key); err != nil {
+		return IssueDetail{}, err
+	}
+
+	detail, err := g.provider.GetIssue(ctx, cvIssueID)
+	if err != nil {
+		return IssueDetail{}, err
+	}
+	if raw, encErr := encodeIssueEnvelope(detail); encErr != nil {
+		g.logger.Warn("encode issue cache", slog.Int64("cv_issue_id", cvIssueID), slog.Any("error", encErr))
+	} else {
+		g.put(ctx, key, raw, detail.CVLastUpdated)
+	}
+	return detail, nil
+}
+
 // GetCover paces and fetches a cover image (not cached in the metadata_cache — cover
 // bytes are stored on disk by the import in 02-04).
 func (g *Gateway) GetCover(ctx context.Context, url string) ([]byte, error) {

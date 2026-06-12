@@ -35,11 +35,12 @@ type Client struct {
 // schema migration (via rivermigrate, NOT golang-migrate) before the client is
 // returned, so River's tables exist and stay distinct from the application migrations.
 // workers is the registry of River workers to run; pass the number of concurrent
-// worker goroutines via maxWorkers (single-user app → low). sweepInterval, when > 0,
-// registers the stale-only refresh sweep (SweepArgs) as a River native periodic job at
-// that interval (it does NOT run on start, to avoid a ComicVine burst right after boot).
+// worker goroutines via maxWorkers (single-user app → low). Each of sweepInterval,
+// autoSearchInterval, and rssPollInterval, when > 0, registers a River native periodic
+// job (the stale-refresh sweep, the auto-search sweep, and the RSS poll respectively) at
+// that interval. None run on start, to avoid a burst of external calls right after boot.
 // The returned client is not yet started — call Start to begin working jobs.
-func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, sweepInterval time.Duration, logger *slog.Logger, workers *river.Workers) (*Client, error) {
+func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, sweepInterval, autoSearchInterval, rssPollInterval time.Duration, logger *slog.Logger, workers *river.Workers) (*Client, error) {
 	if maxWorkers < 1 {
 		maxWorkers = 1
 	}
@@ -63,6 +64,22 @@ func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, sweepInte
 		periodicJobs = append(periodicJobs, river.NewPeriodicJob(
 			river.PeriodicInterval(sweepInterval),
 			func() (river.JobArgs, *river.InsertOpts) { return SweepArgs{}, nil },
+			&river.PeriodicJobOpts{RunOnStart: false},
+		))
+	}
+	if autoSearchInterval > 0 {
+		// The scheduled auto-search sweep (SRCH-07). RunOnStart false (no boot burst).
+		periodicJobs = append(periodicJobs, river.NewPeriodicJob(
+			river.PeriodicInterval(autoSearchInterval),
+			func() (river.JobArgs, *river.InsertOpts) { return AutoSearchSweepArgs{}, nil },
+			&river.PeriodicJobOpts{RunOnStart: false},
+		))
+	}
+	if rssPollInterval > 0 {
+		// The scheduled RSS auto-grab poll (SRCH-08). RunOnStart false.
+		periodicJobs = append(periodicJobs, river.NewPeriodicJob(
+			river.PeriodicInterval(rssPollInterval),
+			func() (river.JobArgs, *river.InsertOpts) { return RSSPollArgs{}, nil },
 			&river.PeriodicJobOpts{RunOnStart: false},
 		))
 	}
@@ -124,6 +141,18 @@ func (c *Client) EnqueueRefresh(ctx context.Context, seriesID, comicvineVolumeID
 	}, nil)
 	if err != nil {
 		return fmt.Errorf("enqueue refresh for series %d: %w", seriesID, err)
+	}
+	return nil
+}
+
+// EnqueueSearchIssue durably enqueues a one-off auto-search job for an issue. Duplicate
+// enqueues for the same issue collapse via the job's uniqueness opts (see
+// SearchIssueArgs.InsertOpts), so the immediate-enqueue-on-Wanted burst (D-10) does not
+// stack redundant searches. The bounded River worker pool absorbs the fan-out.
+func (c *Client) EnqueueSearchIssue(ctx context.Context, issueID int64) error {
+	_, err := c.river.Insert(ctx, SearchIssueArgs{IssueID: issueID}, nil)
+	if err != nil {
+		return fmt.Errorf("enqueue search for issue %d: %w", issueID, err)
 	}
 	return nil
 }

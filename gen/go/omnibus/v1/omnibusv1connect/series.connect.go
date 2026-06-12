@@ -43,6 +43,8 @@ const (
 	SeriesServiceListSeriesProcedure = "/omnibus.v1.SeriesService/ListSeries"
 	// SeriesServiceGetSeriesProcedure is the fully-qualified name of the SeriesService's GetSeries RPC.
 	SeriesServiceGetSeriesProcedure = "/omnibus.v1.SeriesService/GetSeries"
+	// SeriesServiceGetIssueProcedure is the fully-qualified name of the SeriesService's GetIssue RPC.
+	SeriesServiceGetIssueProcedure = "/omnibus.v1.SeriesService/GetIssue"
 	// SeriesServiceUpdateSeriesSettingsProcedure is the fully-qualified name of the SeriesService's
 	// UpdateSeriesSettings RPC.
 	SeriesServiceUpdateSeriesSettingsProcedure = "/omnibus.v1.SeriesService/UpdateSeriesSettings"
@@ -61,6 +63,8 @@ type SeriesServiceClient interface {
 	ListSeries(context.Context, *connect.Request[v1.ListSeriesRequest]) (*connect.Response[v1.ListSeriesResponse], error)
 	// GetSeries returns a series with its issues, publisher, and story arcs.
 	GetSeries(context.Context, *connect.Request[v1.GetSeriesRequest]) (*connect.Response[v1.GetSeriesResponse], error)
+	// GetIssue returns the rich per-issue detail (summary, credits, dates) on demand.
+	GetIssue(context.Context, *connect.Request[v1.GetIssueRequest]) (*connect.Response[v1.GetIssueResponse], error)
 	// UpdateSeriesSettings updates per-series settings (e.g. watch status).
 	UpdateSeriesSettings(context.Context, *connect.Request[v1.UpdateSeriesSettingsRequest]) (*connect.Response[v1.UpdateSeriesSettingsResponse], error)
 	// RefreshSeries enqueues a durable, unique conditional metadata refresh for a
@@ -103,6 +107,12 @@ func NewSeriesServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(seriesServiceMethods.ByName("GetSeries")),
 			connect.WithClientOptions(opts...),
 		),
+		getIssue: connect.NewClient[v1.GetIssueRequest, v1.GetIssueResponse](
+			httpClient,
+			baseURL+SeriesServiceGetIssueProcedure,
+			connect.WithSchema(seriesServiceMethods.ByName("GetIssue")),
+			connect.WithClientOptions(opts...),
+		),
 		updateSeriesSettings: connect.NewClient[v1.UpdateSeriesSettingsRequest, v1.UpdateSeriesSettingsResponse](
 			httpClient,
 			baseURL+SeriesServiceUpdateSeriesSettingsProcedure,
@@ -124,6 +134,7 @@ type seriesServiceClient struct {
 	addSeries            *connect.Client[v1.AddSeriesRequest, v1.AddSeriesResponse]
 	listSeries           *connect.Client[v1.ListSeriesRequest, v1.ListSeriesResponse]
 	getSeries            *connect.Client[v1.GetSeriesRequest, v1.GetSeriesResponse]
+	getIssue             *connect.Client[v1.GetIssueRequest, v1.GetIssueResponse]
 	updateSeriesSettings *connect.Client[v1.UpdateSeriesSettingsRequest, v1.UpdateSeriesSettingsResponse]
 	refreshSeries        *connect.Client[v1.RefreshSeriesRequest, v1.RefreshSeriesResponse]
 }
@@ -148,6 +159,11 @@ func (c *seriesServiceClient) GetSeries(ctx context.Context, req *connect.Reques
 	return c.getSeries.CallUnary(ctx, req)
 }
 
+// GetIssue calls omnibus.v1.SeriesService.GetIssue.
+func (c *seriesServiceClient) GetIssue(ctx context.Context, req *connect.Request[v1.GetIssueRequest]) (*connect.Response[v1.GetIssueResponse], error) {
+	return c.getIssue.CallUnary(ctx, req)
+}
+
 // UpdateSeriesSettings calls omnibus.v1.SeriesService.UpdateSeriesSettings.
 func (c *seriesServiceClient) UpdateSeriesSettings(ctx context.Context, req *connect.Request[v1.UpdateSeriesSettingsRequest]) (*connect.Response[v1.UpdateSeriesSettingsResponse], error) {
 	return c.updateSeriesSettings.CallUnary(ctx, req)
@@ -168,6 +184,8 @@ type SeriesServiceHandler interface {
 	ListSeries(context.Context, *connect.Request[v1.ListSeriesRequest]) (*connect.Response[v1.ListSeriesResponse], error)
 	// GetSeries returns a series with its issues, publisher, and story arcs.
 	GetSeries(context.Context, *connect.Request[v1.GetSeriesRequest]) (*connect.Response[v1.GetSeriesResponse], error)
+	// GetIssue returns the rich per-issue detail (summary, credits, dates) on demand.
+	GetIssue(context.Context, *connect.Request[v1.GetIssueRequest]) (*connect.Response[v1.GetIssueResponse], error)
 	// UpdateSeriesSettings updates per-series settings (e.g. watch status).
 	UpdateSeriesSettings(context.Context, *connect.Request[v1.UpdateSeriesSettingsRequest]) (*connect.Response[v1.UpdateSeriesSettingsResponse], error)
 	// RefreshSeries enqueues a durable, unique conditional metadata refresh for a
@@ -206,6 +224,12 @@ func NewSeriesServiceHandler(svc SeriesServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(seriesServiceMethods.ByName("GetSeries")),
 		connect.WithHandlerOptions(opts...),
 	)
+	seriesServiceGetIssueHandler := connect.NewUnaryHandler(
+		SeriesServiceGetIssueProcedure,
+		svc.GetIssue,
+		connect.WithSchema(seriesServiceMethods.ByName("GetIssue")),
+		connect.WithHandlerOptions(opts...),
+	)
 	seriesServiceUpdateSeriesSettingsHandler := connect.NewUnaryHandler(
 		SeriesServiceUpdateSeriesSettingsProcedure,
 		svc.UpdateSeriesSettings,
@@ -228,6 +252,8 @@ func NewSeriesServiceHandler(svc SeriesServiceHandler, opts ...connect.HandlerOp
 			seriesServiceListSeriesHandler.ServeHTTP(w, r)
 		case SeriesServiceGetSeriesProcedure:
 			seriesServiceGetSeriesHandler.ServeHTTP(w, r)
+		case SeriesServiceGetIssueProcedure:
+			seriesServiceGetIssueHandler.ServeHTTP(w, r)
 		case SeriesServiceUpdateSeriesSettingsProcedure:
 			seriesServiceUpdateSeriesSettingsHandler.ServeHTTP(w, r)
 		case SeriesServiceRefreshSeriesProcedure:
@@ -255,6 +281,10 @@ func (UnimplementedSeriesServiceHandler) ListSeries(context.Context, *connect.Re
 
 func (UnimplementedSeriesServiceHandler) GetSeries(context.Context, *connect.Request[v1.GetSeriesRequest]) (*connect.Response[v1.GetSeriesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("omnibus.v1.SeriesService.GetSeries is not implemented"))
+}
+
+func (UnimplementedSeriesServiceHandler) GetIssue(context.Context, *connect.Request[v1.GetIssueRequest]) (*connect.Response[v1.GetIssueResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("omnibus.v1.SeriesService.GetIssue is not implemented"))
 }
 
 func (UnimplementedSeriesServiceHandler) UpdateSeriesSettings(context.Context, *connect.Request[v1.UpdateSeriesSettingsRequest]) (*connect.Response[v1.UpdateSeriesSettingsResponse], error) {

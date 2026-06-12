@@ -25,9 +25,14 @@ import (
 	"github.com/vizvim/omnibus/internal/config"
 	"github.com/vizvim/omnibus/internal/db"
 	"github.com/vizvim/omnibus/internal/jobs"
+	"github.com/vizvim/omnibus/internal/provider/download"
+	indexerprovider "github.com/vizvim/omnibus/internal/provider/indexer"
 	"github.com/vizvim/omnibus/internal/provider/metadata"
 	"github.com/vizvim/omnibus/internal/repository"
+	"github.com/vizvim/omnibus/internal/service/downloadclient"
+	"github.com/vizvim/omnibus/internal/service/indexer"
 	jobsservice "github.com/vizvim/omnibus/internal/service/jobs"
+	"github.com/vizvim/omnibus/internal/service/search"
 	"github.com/vizvim/omnibus/internal/service/series"
 	"github.com/vizvim/omnibus/internal/transport"
 )
@@ -75,23 +80,67 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		StalenessThreshold: time.Duration(cfg.StalenessThresholdDays) * 24 * time.Hour,
 	})
 
+	// DownloadProviders: SABnzbd config is now DB-backed and runtime-editable via
+	// DownloadClientService (supersedes D-16). On first boot, seed the DB row from
+	// OMNIBUS_SABNZBD_* so existing deployments keep working; thereafter the DB is the
+	// source of truth and the provider resolves config from it on each Submit. An empty
+	// resolved URL yields a Submit that fails loudly (ErrSabnzbdNotConfigured). No polling
+	// loop is started here — tracking is Phase 5.
+	if seedErr := seedSabnzbdConfig(ctx, repos, cfg, logger); seedErr != nil {
+		_ = database.Close()
+		return fmt.Errorf("seed download client config: %w", seedErr)
+	}
+	// Build the SABnzbd provider once from a DB-backed resolver so the same instance fronts
+	// both NZB submits (search service) and the connectivity probe (download client Test).
+	sabProvider := download.NewSABnzbdProviderWithResolver(sabnzbdResolver(repos))
+	downloadProviders := newDownloadProviders(sabProvider)
+
+	// SearchService converges the indexer gateway (Plan 02), the filter/score pipeline
+	// (Plan 03), and the grab handoff (Plan 04) behind manual-search RPCs, and owns the
+	// auto-search/RSS job bodies (Plan 06). Built before the jobs client so it can be the
+	// AutoSearchRunner/RSSPollRunner; the client is injected back as its enqueuer below.
+	indexerGateway := indexerprovider.NewGateway(logger, 0)
+	searchSvc := search.New(search.Deps{
+		Gateway:           indexerGateway,
+		Repos:             repos,
+		DownloadProviders: downloadProviders,
+		Logger:            logger,
+		AttemptCap:        cfg.SearchAttemptCap,
+		AutoSearchBatch:   cfg.AutoSearchBatchSize,
+	})
+
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewImportWorker(svc))
 	river.AddWorker(workers, jobs.NewRefreshWorker(svc))
 	river.AddWorker(workers, jobs.NewSweepWorker(svc))
+	river.AddWorker(workers, jobs.NewAutoSearchSweepWorker(searchSvc))
+	river.AddWorker(workers, jobs.NewSearchIssueWorker(searchSvc))
+	river.AddWorker(workers, jobs.NewRSSPollWorker(searchSvc))
 
 	sweepInterval := time.Duration(cfg.RefreshIntervalHours) * time.Hour
-	riverClient, err := jobs.New(ctx, database.Write, database.Read, cfg.RiverWorkers, sweepInterval, logger, workers)
+	autoSearchInterval := time.Duration(cfg.AutoSearchIntervalHours) * time.Hour
+	rssPollInterval := time.Duration(cfg.RSSPollIntervalMinutes) * time.Minute
+	riverClient, err := jobs.New(ctx, database.Write, database.Read, cfg.RiverWorkers, sweepInterval, autoSearchInterval, rssPollInterval, logger, workers)
 	if err != nil {
 		_ = database.Close()
 		return fmt.Errorf("build jobs client: %w", err)
 	}
+	// Resolve the service<->jobs cycle: both services receive the client as their enqueuer.
 	svc.SetEnqueuer(riverClient)
+	searchSvc.SetEnqueuer(riverClient)
 
 	// JobService reads run history from River's tables (via the jobs client).
 	jobSvc := jobsservice.New(riverClient)
 
-	srv, err := newServer(cfg, logger, svc, jobSvc, repos.Cover)
+	// IndexerService owns DB-backed indexer CRUD (ADR 0007 domain segmentation).
+	indexerSvc := indexer.New(indexer.Deps{Repos: repos, Logger: logger})
+
+	// DownloadClientService owns the singleton DB-backed SABnzbd config (ADR 0007),
+	// editable at runtime (supersedes D-16). The same SAB provider is injected as the
+	// connectivity prober so Test probes the live, DB-resolved config.
+	downloadClientSvc := downloadclient.New(downloadclient.Deps{Repos: repos, Logger: logger, Prober: sabProvider})
+
+	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, searchSvc, repos.Cover)
 	if err != nil {
 		_ = database.Close()
 		return err
@@ -150,7 +199,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 // newServer builds the h2c-wrapped HTTP server hosting the SeriesService + JobService
 // Connect handlers (with slog + otel interceptors) and the cover handler serving blobs
 // from SQLite, with CORS scoped to the Vite dev origin.
-func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, covers transport.CoverStore) (*http.Server, error) {
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, indexerSvc *indexer.Service, downloadClientSvc *downloadclient.Service, searchSvc *search.Service, covers transport.CoverStore) (*http.Server, error) {
 	interceptors, err := transport.NewInterceptors(logger)
 	if err != nil {
 		return nil, fmt.Errorf("build interceptors: %w", err)
@@ -167,6 +216,18 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 	jobHandler := transport.NewJobHandler(jobSvc)
 	jobPath, jobH := omnibusv1connect.NewJobServiceHandler(jobHandler, connect.WithInterceptors(interceptors...))
 	mux.Handle("/api"+jobPath, http.StripPrefix("/api", jobH))
+
+	indexerHandler := transport.NewIndexerHandler(indexerSvc)
+	indexerPath, indexerH := omnibusv1connect.NewIndexerServiceHandler(indexerHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+indexerPath, http.StripPrefix("/api", indexerH))
+
+	downloadClientHandler := transport.NewDownloadClientHandler(downloadClientSvc)
+	downloadClientPath, downloadClientH := omnibusv1connect.NewDownloadClientServiceHandler(downloadClientHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+downloadClientPath, http.StripPrefix("/api", downloadClientH))
+
+	searchHandler := transport.NewSearchHandler(searchSvc)
+	searchPath, searchH := omnibusv1connect.NewSearchServiceHandler(searchHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+searchPath, http.StripPrefix("/api", searchH))
 
 	mux.Handle("/covers/", transport.NewCoverHandler(covers))
 
@@ -189,6 +250,69 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 		Handler:           h2c.NewHandler(corsHandler, &http2.Server{}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}, nil
+}
+
+// sabnzbdResolver builds the DB-backed SABnzbd config resolver. SABnzbd config is now
+// DB-backed and runtime-editable (supersedes D-16): URL/API key/category are resolved from
+// repos.DownloadClient on each Submit/probe, so an empty stored URL yields a Submit that
+// returns ErrSabnzbdNotConfigured (and a Test that reports "not configured").
+func sabnzbdResolver(repos *repository.Repositories) download.SABnzbdConfigResolver {
+	return func(ctx context.Context) (download.SABnzbdConfig, error) {
+		row, err := repos.DownloadClient.Get(ctx)
+		if err != nil {
+			if errors.Is(err, repository.ErrNoDownloadClientConfig) {
+				// No row yet: an empty config makes Submit fail loudly.
+				return download.SABnzbdConfig{}, nil
+			}
+			return download.SABnzbdConfig{}, err
+		}
+		return download.SABnzbdConfig{
+			BaseURL:  row.URL,
+			APIKey:   row.APIKey,
+			Category: row.Category,
+		}, nil
+	}
+}
+
+// newDownloadProviders constructs the DownloadProviders keyed by Kind, ready to inject
+// into the search service. The SABnzbd provider is passed in (so the same instance also
+// fronts the connectivity probe). GetComics DDL needs no secret. No polling is started
+// here (Phase 5).
+func newDownloadProviders(sab download.DownloadProvider) map[string]download.DownloadProvider {
+	return map[string]download.DownloadProvider{
+		"sabnzbd":   sab,
+		"getcomics": download.NewGetComicsDDLProvider("https://getcomics.org"),
+	}
+}
+
+// seedSabnzbdConfig seeds the singleton download_client_config row from OMNIBUS_SABNZBD_*
+// on first boot so existing deployments keep working after SAB config moved into the DB
+// (supersedes D-16). It only seeds when the DB row is empty/absent AND cfg.SabnzbdURL is
+// non-empty — it never overwrites a user-set DB row.
+func seedSabnzbdConfig(ctx context.Context, repos *repository.Repositories, cfg config.Config, logger *slog.Logger) error {
+	row, err := repos.DownloadClient.Get(ctx)
+	if err != nil && !errors.Is(err, repository.ErrNoDownloadClientConfig) {
+		return err
+	}
+	if row.URL != "" {
+		// DB already has a user-set config; never overwrite it.
+		return nil
+	}
+	if cfg.SabnzbdURL == "" {
+		// Nothing to seed from.
+		return nil
+	}
+	nowISO := time.Now().UTC().Format(time.RFC3339)
+	if _, err := repos.DownloadClient.Upsert(ctx, repository.DownloadClientConfigUpsert{
+		URL:      cfg.SabnzbdURL,
+		APIKey:   cfg.SabnzbdAPIKey,
+		Category: cfg.SabnzbdCategory,
+	}, nowISO); err != nil {
+		return err
+	}
+	logger.Info("seeded download client config from OMNIBUS_SABNZBD_* on first boot",
+		slog.String("sabnzbd_url", cfg.SabnzbdURL))
+	return nil
 }
 
 // parseRate maps the OMNIBUS_COMICVINE_RATE config (a Go duration like "2s") to the

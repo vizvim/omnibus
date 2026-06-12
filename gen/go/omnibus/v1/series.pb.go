@@ -157,6 +157,7 @@ type Issue struct {
 	CoverDate            string                 `protobuf:"bytes,8,opt,name=cover_date,json=coverDate,proto3" json:"cover_date,omitempty"`
 	Status               IssueStatus            `protobuf:"varint,9,opt,name=status,proto3,enum=omnibus.v1.IssueStatus" json:"status,omitempty"`
 	CoverUrl             string                 `protobuf:"bytes,10,opt,name=cover_url,json=coverUrl,proto3" json:"cover_url,omitempty"`
+	IssueType            string                 `protobuf:"bytes,11,opt,name=issue_type,json=issueType,proto3" json:"issue_type,omitempty"` // standard/annual/one-shot — surfaced as a grid badge.
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -261,6 +262,177 @@ func (x *Issue) GetCoverUrl() string {
 	return ""
 }
 
+func (x *Issue) GetIssueType() string {
+	if x != nil {
+		return x.IssueType
+	}
+	return ""
+}
+
+// Credit is a single normalized creator credit for an issue (role + name), ordered
+// by (role, name) when returned in an IssueDetail.
+type Credit struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Role              string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"` // normalized: writer|penciller|inker|colorist|letterer|editor|cover|<other>
+	Name              string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	ComicvinePersonId int64                  `protobuf:"varint,3,opt,name=comicvine_person_id,json=comicvinePersonId,proto3" json:"comicvine_person_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *Credit) Reset() {
+	*x = Credit{}
+	mi := &file_omnibus_v1_series_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Credit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Credit) ProtoMessage() {}
+
+func (x *Credit) ProtoReflect() protoreflect.Message {
+	mi := &file_omnibus_v1_series_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Credit.ProtoReflect.Descriptor instead.
+func (*Credit) Descriptor() ([]byte, []int) {
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *Credit) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *Credit) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Credit) GetComicvinePersonId() int64 {
+	if x != nil {
+		return x.ComicvinePersonId
+	}
+	return 0
+}
+
+// IssueDetail is the rich per-issue view fetched on demand (separate from the
+// lightweight issue list), carrying the summary, creator credits, and extra dates.
+type IssueDetail struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Issue          *Issue                 `protobuf:"bytes,1,opt,name=issue,proto3" json:"issue,omitempty"`             // the base fields (reuse, incl. cover_url)
+	Description    string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"` // summary
+	IssueType      string                 `protobuf:"bytes,3,opt,name=issue_type,json=issueType,proto3" json:"issue_type,omitempty"`
+	AltIssueNumber string                 `protobuf:"bytes,4,opt,name=alt_issue_number,json=altIssueNumber,proto3" json:"alt_issue_number,omitempty"`
+	PageCount      int32                  `protobuf:"varint,5,opt,name=page_count,json=pageCount,proto3" json:"page_count,omitempty"`
+	StoreDate      string                 `protobuf:"bytes,6,opt,name=store_date,json=storeDate,proto3" json:"store_date,omitempty"`
+	CvLastUpdated  string                 `protobuf:"bytes,7,opt,name=cv_last_updated,json=cvLastUpdated,proto3" json:"cv_last_updated,omitempty"`
+	Credits        []*Credit              `protobuf:"bytes,8,rep,name=credits,proto3" json:"credits,omitempty"` // ordered by role, name
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *IssueDetail) Reset() {
+	*x = IssueDetail{}
+	mi := &file_omnibus_v1_series_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueDetail) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueDetail) ProtoMessage() {}
+
+func (x *IssueDetail) ProtoReflect() protoreflect.Message {
+	mi := &file_omnibus_v1_series_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueDetail.ProtoReflect.Descriptor instead.
+func (*IssueDetail) Descriptor() ([]byte, []int) {
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *IssueDetail) GetIssue() *Issue {
+	if x != nil {
+		return x.Issue
+	}
+	return nil
+}
+
+func (x *IssueDetail) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *IssueDetail) GetIssueType() string {
+	if x != nil {
+		return x.IssueType
+	}
+	return ""
+}
+
+func (x *IssueDetail) GetAltIssueNumber() string {
+	if x != nil {
+		return x.AltIssueNumber
+	}
+	return ""
+}
+
+func (x *IssueDetail) GetPageCount() int32 {
+	if x != nil {
+		return x.PageCount
+	}
+	return 0
+}
+
+func (x *IssueDetail) GetStoreDate() string {
+	if x != nil {
+		return x.StoreDate
+	}
+	return ""
+}
+
+func (x *IssueDetail) GetCvLastUpdated() string {
+	if x != nil {
+		return x.CvLastUpdated
+	}
+	return ""
+}
+
+func (x *IssueDetail) GetCredits() []*Credit {
+	if x != nil {
+		return x.Credits
+	}
+	return nil
+}
+
 // StoryArc is a named arc a series participates in.
 type StoryArc struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -273,7 +445,7 @@ type StoryArc struct {
 
 func (x *StoryArc) Reset() {
 	*x = StoryArc{}
-	mi := &file_omnibus_v1_series_proto_msgTypes[2]
+	mi := &file_omnibus_v1_series_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -285,7 +457,7 @@ func (x *StoryArc) String() string {
 func (*StoryArc) ProtoMessage() {}
 
 func (x *StoryArc) ProtoReflect() protoreflect.Message {
-	mi := &file_omnibus_v1_series_proto_msgTypes[2]
+	mi := &file_omnibus_v1_series_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -298,7 +470,7 @@ func (x *StoryArc) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StoryArc.ProtoReflect.Descriptor instead.
 func (*StoryArc) Descriptor() ([]byte, []int) {
-	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{2}
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *StoryArc) GetId() int64 {
@@ -331,7 +503,7 @@ type SearchComicVineRequest struct {
 
 func (x *SearchComicVineRequest) Reset() {
 	*x = SearchComicVineRequest{}
-	mi := &file_omnibus_v1_series_proto_msgTypes[3]
+	mi := &file_omnibus_v1_series_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -343,7 +515,7 @@ func (x *SearchComicVineRequest) String() string {
 func (*SearchComicVineRequest) ProtoMessage() {}
 
 func (x *SearchComicVineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_omnibus_v1_series_proto_msgTypes[3]
+	mi := &file_omnibus_v1_series_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -356,7 +528,7 @@ func (x *SearchComicVineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchComicVineRequest.ProtoReflect.Descriptor instead.
 func (*SearchComicVineRequest) Descriptor() ([]byte, []int) {
-	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{3}
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SearchComicVineRequest) GetQuery() string {
@@ -375,7 +547,7 @@ type SearchComicVineResponse struct {
 
 func (x *SearchComicVineResponse) Reset() {
 	*x = SearchComicVineResponse{}
-	mi := &file_omnibus_v1_series_proto_msgTypes[4]
+	mi := &file_omnibus_v1_series_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -387,7 +559,7 @@ func (x *SearchComicVineResponse) String() string {
 func (*SearchComicVineResponse) ProtoMessage() {}
 
 func (x *SearchComicVineResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_omnibus_v1_series_proto_msgTypes[4]
+	mi := &file_omnibus_v1_series_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -400,7 +572,7 @@ func (x *SearchComicVineResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchComicVineResponse.ProtoReflect.Descriptor instead.
 func (*SearchComicVineResponse) Descriptor() ([]byte, []int) {
-	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{4}
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *SearchComicVineResponse) GetCandidates() []*Series {
@@ -419,7 +591,7 @@ type AddSeriesRequest struct {
 
 func (x *AddSeriesRequest) Reset() {
 	*x = AddSeriesRequest{}
-	mi := &file_omnibus_v1_series_proto_msgTypes[5]
+	mi := &file_omnibus_v1_series_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -431,7 +603,7 @@ func (x *AddSeriesRequest) String() string {
 func (*AddSeriesRequest) ProtoMessage() {}
 
 func (x *AddSeriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_omnibus_v1_series_proto_msgTypes[5]
+	mi := &file_omnibus_v1_series_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -444,7 +616,7 @@ func (x *AddSeriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddSeriesRequest.ProtoReflect.Descriptor instead.
 func (*AddSeriesRequest) Descriptor() ([]byte, []int) {
-	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{5}
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *AddSeriesRequest) GetComicvineVolumeId() int64 {
@@ -463,7 +635,7 @@ type AddSeriesResponse struct {
 
 func (x *AddSeriesResponse) Reset() {
 	*x = AddSeriesResponse{}
-	mi := &file_omnibus_v1_series_proto_msgTypes[6]
+	mi := &file_omnibus_v1_series_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -475,7 +647,7 @@ func (x *AddSeriesResponse) String() string {
 func (*AddSeriesResponse) ProtoMessage() {}
 
 func (x *AddSeriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_omnibus_v1_series_proto_msgTypes[6]
+	mi := &file_omnibus_v1_series_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -488,7 +660,7 @@ func (x *AddSeriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddSeriesResponse.ProtoReflect.Descriptor instead.
 func (*AddSeriesResponse) Descriptor() ([]byte, []int) {
-	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{6}
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *AddSeriesResponse) GetSeries() *Series {
@@ -508,7 +680,7 @@ type ListSeriesRequest struct {
 
 func (x *ListSeriesRequest) Reset() {
 	*x = ListSeriesRequest{}
-	mi := &file_omnibus_v1_series_proto_msgTypes[7]
+	mi := &file_omnibus_v1_series_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -520,7 +692,7 @@ func (x *ListSeriesRequest) String() string {
 func (*ListSeriesRequest) ProtoMessage() {}
 
 func (x *ListSeriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_omnibus_v1_series_proto_msgTypes[7]
+	mi := &file_omnibus_v1_series_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -533,7 +705,7 @@ func (x *ListSeriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSeriesRequest.ProtoReflect.Descriptor instead.
 func (*ListSeriesRequest) Descriptor() ([]byte, []int) {
-	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{7}
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListSeriesRequest) GetPage() int32 {
@@ -559,7 +731,7 @@ type ListSeriesResponse struct {
 
 func (x *ListSeriesResponse) Reset() {
 	*x = ListSeriesResponse{}
-	mi := &file_omnibus_v1_series_proto_msgTypes[8]
+	mi := &file_omnibus_v1_series_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -571,7 +743,7 @@ func (x *ListSeriesResponse) String() string {
 func (*ListSeriesResponse) ProtoMessage() {}
 
 func (x *ListSeriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_omnibus_v1_series_proto_msgTypes[8]
+	mi := &file_omnibus_v1_series_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -584,7 +756,7 @@ func (x *ListSeriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSeriesResponse.ProtoReflect.Descriptor instead.
 func (*ListSeriesResponse) Descriptor() ([]byte, []int) {
-	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{8}
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ListSeriesResponse) GetSeries() []*Series {
@@ -603,7 +775,7 @@ type GetSeriesRequest struct {
 
 func (x *GetSeriesRequest) Reset() {
 	*x = GetSeriesRequest{}
-	mi := &file_omnibus_v1_series_proto_msgTypes[9]
+	mi := &file_omnibus_v1_series_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -615,7 +787,7 @@ func (x *GetSeriesRequest) String() string {
 func (*GetSeriesRequest) ProtoMessage() {}
 
 func (x *GetSeriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_omnibus_v1_series_proto_msgTypes[9]
+	mi := &file_omnibus_v1_series_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -628,7 +800,7 @@ func (x *GetSeriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSeriesRequest.ProtoReflect.Descriptor instead.
 func (*GetSeriesRequest) Descriptor() ([]byte, []int) {
-	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{9}
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GetSeriesRequest) GetSeriesId() int64 {
@@ -650,7 +822,7 @@ type GetSeriesResponse struct {
 
 func (x *GetSeriesResponse) Reset() {
 	*x = GetSeriesResponse{}
-	mi := &file_omnibus_v1_series_proto_msgTypes[10]
+	mi := &file_omnibus_v1_series_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -662,7 +834,7 @@ func (x *GetSeriesResponse) String() string {
 func (*GetSeriesResponse) ProtoMessage() {}
 
 func (x *GetSeriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_omnibus_v1_series_proto_msgTypes[10]
+	mi := &file_omnibus_v1_series_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -675,7 +847,7 @@ func (x *GetSeriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSeriesResponse.ProtoReflect.Descriptor instead.
 func (*GetSeriesResponse) Descriptor() ([]byte, []int) {
-	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{10}
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetSeriesResponse) GetSeries() *Series {
@@ -706,6 +878,94 @@ func (x *GetSeriesResponse) GetStoryArcs() []*StoryArc {
 	return nil
 }
 
+type GetIssueRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IssueId       int64                  `protobuf:"varint,1,opt,name=issue_id,json=issueId,proto3" json:"issue_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIssueRequest) Reset() {
+	*x = GetIssueRequest{}
+	mi := &file_omnibus_v1_series_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIssueRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIssueRequest) ProtoMessage() {}
+
+func (x *GetIssueRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_omnibus_v1_series_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIssueRequest.ProtoReflect.Descriptor instead.
+func (*GetIssueRequest) Descriptor() ([]byte, []int) {
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *GetIssueRequest) GetIssueId() int64 {
+	if x != nil {
+		return x.IssueId
+	}
+	return 0
+}
+
+type GetIssueResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Issue         *IssueDetail           `protobuf:"bytes,1,opt,name=issue,proto3" json:"issue,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIssueResponse) Reset() {
+	*x = GetIssueResponse{}
+	mi := &file_omnibus_v1_series_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIssueResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIssueResponse) ProtoMessage() {}
+
+func (x *GetIssueResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_omnibus_v1_series_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIssueResponse.ProtoReflect.Descriptor instead.
+func (*GetIssueResponse) Descriptor() ([]byte, []int) {
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *GetIssueResponse) GetIssue() *IssueDetail {
+	if x != nil {
+		return x.Issue
+	}
+	return nil
+}
+
 type UpdateSeriesSettingsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SeriesId      int64                  `protobuf:"varint,1,opt,name=series_id,json=seriesId,proto3" json:"series_id,omitempty"`
@@ -716,7 +976,7 @@ type UpdateSeriesSettingsRequest struct {
 
 func (x *UpdateSeriesSettingsRequest) Reset() {
 	*x = UpdateSeriesSettingsRequest{}
-	mi := &file_omnibus_v1_series_proto_msgTypes[11]
+	mi := &file_omnibus_v1_series_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -728,7 +988,7 @@ func (x *UpdateSeriesSettingsRequest) String() string {
 func (*UpdateSeriesSettingsRequest) ProtoMessage() {}
 
 func (x *UpdateSeriesSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_omnibus_v1_series_proto_msgTypes[11]
+	mi := &file_omnibus_v1_series_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -741,7 +1001,7 @@ func (x *UpdateSeriesSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSeriesSettingsRequest.ProtoReflect.Descriptor instead.
 func (*UpdateSeriesSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{11}
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *UpdateSeriesSettingsRequest) GetSeriesId() int64 {
@@ -767,7 +1027,7 @@ type UpdateSeriesSettingsResponse struct {
 
 func (x *UpdateSeriesSettingsResponse) Reset() {
 	*x = UpdateSeriesSettingsResponse{}
-	mi := &file_omnibus_v1_series_proto_msgTypes[12]
+	mi := &file_omnibus_v1_series_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -779,7 +1039,7 @@ func (x *UpdateSeriesSettingsResponse) String() string {
 func (*UpdateSeriesSettingsResponse) ProtoMessage() {}
 
 func (x *UpdateSeriesSettingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_omnibus_v1_series_proto_msgTypes[12]
+	mi := &file_omnibus_v1_series_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -792,7 +1052,7 @@ func (x *UpdateSeriesSettingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSeriesSettingsResponse.ProtoReflect.Descriptor instead.
 func (*UpdateSeriesSettingsResponse) Descriptor() ([]byte, []int) {
-	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{12}
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *UpdateSeriesSettingsResponse) GetSeries() *Series {
@@ -811,7 +1071,7 @@ type RefreshSeriesRequest struct {
 
 func (x *RefreshSeriesRequest) Reset() {
 	*x = RefreshSeriesRequest{}
-	mi := &file_omnibus_v1_series_proto_msgTypes[13]
+	mi := &file_omnibus_v1_series_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -823,7 +1083,7 @@ func (x *RefreshSeriesRequest) String() string {
 func (*RefreshSeriesRequest) ProtoMessage() {}
 
 func (x *RefreshSeriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_omnibus_v1_series_proto_msgTypes[13]
+	mi := &file_omnibus_v1_series_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -836,7 +1096,7 @@ func (x *RefreshSeriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshSeriesRequest.ProtoReflect.Descriptor instead.
 func (*RefreshSeriesRequest) Descriptor() ([]byte, []int) {
-	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{13}
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *RefreshSeriesRequest) GetSeriesId() int64 {
@@ -855,7 +1115,7 @@ type RefreshSeriesResponse struct {
 
 func (x *RefreshSeriesResponse) Reset() {
 	*x = RefreshSeriesResponse{}
-	mi := &file_omnibus_v1_series_proto_msgTypes[14]
+	mi := &file_omnibus_v1_series_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -867,7 +1127,7 @@ func (x *RefreshSeriesResponse) String() string {
 func (*RefreshSeriesResponse) ProtoMessage() {}
 
 func (x *RefreshSeriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_omnibus_v1_series_proto_msgTypes[14]
+	mi := &file_omnibus_v1_series_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -880,7 +1140,7 @@ func (x *RefreshSeriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshSeriesResponse.ProtoReflect.Descriptor instead.
 func (*RefreshSeriesResponse) Descriptor() ([]byte, []int) {
-	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{14}
+	return file_omnibus_v1_series_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *RefreshSeriesResponse) GetSeries() *Series {
@@ -909,7 +1169,7 @@ const file_omnibus_v1_series_proto_rawDesc = "" +
 	"\vhave_issues\x18\t \x01(\x05R\n" +
 	"haveIssues\x12*\n" +
 	"\x11last_refreshed_at\x18\n" +
-	" \x01(\tR\x0flastRefreshedAt\"\xea\x02\n" +
+	" \x01(\tR\x0flastRefreshedAt\"\x89\x03\n" +
 	"\x05Issue\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1b\n" +
 	"\tseries_id\x18\x02 \x01(\x03R\bseriesId\x12,\n" +
@@ -922,7 +1182,25 @@ const file_omnibus_v1_series_proto_rawDesc = "" +
 	"cover_date\x18\b \x01(\tR\tcoverDate\x12/\n" +
 	"\x06status\x18\t \x01(\x0e2\x17.omnibus.v1.IssueStatusR\x06status\x12\x1b\n" +
 	"\tcover_url\x18\n" +
-	" \x01(\tR\bcoverUrl\"X\n" +
+	" \x01(\tR\bcoverUrl\x12\x1d\n" +
+	"\n" +
+	"issue_type\x18\v \x01(\tR\tissueType\"`\n" +
+	"\x06Credit\x12\x12\n" +
+	"\x04role\x18\x01 \x01(\tR\x04role\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12.\n" +
+	"\x13comicvine_person_id\x18\x03 \x01(\x03R\x11comicvinePersonId\"\xb5\x02\n" +
+	"\vIssueDetail\x12'\n" +
+	"\x05issue\x18\x01 \x01(\v2\x11.omnibus.v1.IssueR\x05issue\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x1d\n" +
+	"\n" +
+	"issue_type\x18\x03 \x01(\tR\tissueType\x12(\n" +
+	"\x10alt_issue_number\x18\x04 \x01(\tR\x0ealtIssueNumber\x12\x1d\n" +
+	"\n" +
+	"page_count\x18\x05 \x01(\x05R\tpageCount\x12\x1d\n" +
+	"\n" +
+	"store_date\x18\x06 \x01(\tR\tstoreDate\x12&\n" +
+	"\x0fcv_last_updated\x18\a \x01(\tR\rcvLastUpdated\x12,\n" +
+	"\acredits\x18\b \x03(\v2\x12.omnibus.v1.CreditR\acredits\"X\n" +
 	"\bStoryArc\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12(\n" +
 	"\x10comicvine_arc_id\x18\x02 \x01(\x03R\x0ecomicvineArcId\x12\x12\n" +
@@ -949,7 +1227,11 @@ const file_omnibus_v1_series_proto_rawDesc = "" +
 	"\x06issues\x18\x02 \x03(\v2\x11.omnibus.v1.IssueR\x06issues\x12\x1c\n" +
 	"\tpublisher\x18\x03 \x01(\tR\tpublisher\x123\n" +
 	"\n" +
-	"story_arcs\x18\x04 \x03(\v2\x14.omnibus.v1.StoryArcR\tstoryArcs\"R\n" +
+	"story_arcs\x18\x04 \x03(\v2\x14.omnibus.v1.StoryArcR\tstoryArcs\",\n" +
+	"\x0fGetIssueRequest\x12\x19\n" +
+	"\bissue_id\x18\x01 \x01(\x03R\aissueId\"A\n" +
+	"\x10GetIssueResponse\x12-\n" +
+	"\x05issue\x18\x01 \x01(\v2\x17.omnibus.v1.IssueDetailR\x05issue\"R\n" +
 	"\x1bUpdateSeriesSettingsRequest\x12\x1b\n" +
 	"\tseries_id\x18\x01 \x01(\x03R\bseriesId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\"J\n" +
@@ -958,13 +1240,14 @@ const file_omnibus_v1_series_proto_rawDesc = "" +
 	"\x14RefreshSeriesRequest\x12\x1b\n" +
 	"\tseries_id\x18\x01 \x01(\x03R\bseriesId\"C\n" +
 	"\x15RefreshSeriesResponse\x12*\n" +
-	"\x06series\x18\x01 \x01(\v2\x12.omnibus.v1.SeriesR\x06series2\x8d\x04\n" +
+	"\x06series\x18\x01 \x01(\v2\x12.omnibus.v1.SeriesR\x06series2\xd4\x04\n" +
 	"\rSeriesService\x12Z\n" +
 	"\x0fSearchComicVine\x12\".omnibus.v1.SearchComicVineRequest\x1a#.omnibus.v1.SearchComicVineResponse\x12H\n" +
 	"\tAddSeries\x12\x1c.omnibus.v1.AddSeriesRequest\x1a\x1d.omnibus.v1.AddSeriesResponse\x12K\n" +
 	"\n" +
 	"ListSeries\x12\x1d.omnibus.v1.ListSeriesRequest\x1a\x1e.omnibus.v1.ListSeriesResponse\x12H\n" +
-	"\tGetSeries\x12\x1c.omnibus.v1.GetSeriesRequest\x1a\x1d.omnibus.v1.GetSeriesResponse\x12i\n" +
+	"\tGetSeries\x12\x1c.omnibus.v1.GetSeriesRequest\x1a\x1d.omnibus.v1.GetSeriesResponse\x12E\n" +
+	"\bGetIssue\x12\x1b.omnibus.v1.GetIssueRequest\x1a\x1c.omnibus.v1.GetIssueResponse\x12i\n" +
 	"\x14UpdateSeriesSettings\x12'.omnibus.v1.UpdateSeriesSettingsRequest\x1a(.omnibus.v1.UpdateSeriesSettingsResponse\x12T\n" +
 	"\rRefreshSeries\x12 .omnibus.v1.RefreshSeriesRequest\x1a!.omnibus.v1.RefreshSeriesResponseB7Z5github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1b\x06proto3"
 
@@ -980,52 +1263,61 @@ func file_omnibus_v1_series_proto_rawDescGZIP() []byte {
 	return file_omnibus_v1_series_proto_rawDescData
 }
 
-var file_omnibus_v1_series_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_omnibus_v1_series_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_omnibus_v1_series_proto_goTypes = []any{
 	(*Series)(nil),                       // 0: omnibus.v1.Series
 	(*Issue)(nil),                        // 1: omnibus.v1.Issue
-	(*StoryArc)(nil),                     // 2: omnibus.v1.StoryArc
-	(*SearchComicVineRequest)(nil),       // 3: omnibus.v1.SearchComicVineRequest
-	(*SearchComicVineResponse)(nil),      // 4: omnibus.v1.SearchComicVineResponse
-	(*AddSeriesRequest)(nil),             // 5: omnibus.v1.AddSeriesRequest
-	(*AddSeriesResponse)(nil),            // 6: omnibus.v1.AddSeriesResponse
-	(*ListSeriesRequest)(nil),            // 7: omnibus.v1.ListSeriesRequest
-	(*ListSeriesResponse)(nil),           // 8: omnibus.v1.ListSeriesResponse
-	(*GetSeriesRequest)(nil),             // 9: omnibus.v1.GetSeriesRequest
-	(*GetSeriesResponse)(nil),            // 10: omnibus.v1.GetSeriesResponse
-	(*UpdateSeriesSettingsRequest)(nil),  // 11: omnibus.v1.UpdateSeriesSettingsRequest
-	(*UpdateSeriesSettingsResponse)(nil), // 12: omnibus.v1.UpdateSeriesSettingsResponse
-	(*RefreshSeriesRequest)(nil),         // 13: omnibus.v1.RefreshSeriesRequest
-	(*RefreshSeriesResponse)(nil),        // 14: omnibus.v1.RefreshSeriesResponse
-	(IssueStatus)(0),                     // 15: omnibus.v1.IssueStatus
+	(*Credit)(nil),                       // 2: omnibus.v1.Credit
+	(*IssueDetail)(nil),                  // 3: omnibus.v1.IssueDetail
+	(*StoryArc)(nil),                     // 4: omnibus.v1.StoryArc
+	(*SearchComicVineRequest)(nil),       // 5: omnibus.v1.SearchComicVineRequest
+	(*SearchComicVineResponse)(nil),      // 6: omnibus.v1.SearchComicVineResponse
+	(*AddSeriesRequest)(nil),             // 7: omnibus.v1.AddSeriesRequest
+	(*AddSeriesResponse)(nil),            // 8: omnibus.v1.AddSeriesResponse
+	(*ListSeriesRequest)(nil),            // 9: omnibus.v1.ListSeriesRequest
+	(*ListSeriesResponse)(nil),           // 10: omnibus.v1.ListSeriesResponse
+	(*GetSeriesRequest)(nil),             // 11: omnibus.v1.GetSeriesRequest
+	(*GetSeriesResponse)(nil),            // 12: omnibus.v1.GetSeriesResponse
+	(*GetIssueRequest)(nil),              // 13: omnibus.v1.GetIssueRequest
+	(*GetIssueResponse)(nil),             // 14: omnibus.v1.GetIssueResponse
+	(*UpdateSeriesSettingsRequest)(nil),  // 15: omnibus.v1.UpdateSeriesSettingsRequest
+	(*UpdateSeriesSettingsResponse)(nil), // 16: omnibus.v1.UpdateSeriesSettingsResponse
+	(*RefreshSeriesRequest)(nil),         // 17: omnibus.v1.RefreshSeriesRequest
+	(*RefreshSeriesResponse)(nil),        // 18: omnibus.v1.RefreshSeriesResponse
+	(IssueStatus)(0),                     // 19: omnibus.v1.IssueStatus
 }
 var file_omnibus_v1_series_proto_depIdxs = []int32{
-	15, // 0: omnibus.v1.Issue.status:type_name -> omnibus.v1.IssueStatus
-	0,  // 1: omnibus.v1.SearchComicVineResponse.candidates:type_name -> omnibus.v1.Series
-	0,  // 2: omnibus.v1.AddSeriesResponse.series:type_name -> omnibus.v1.Series
-	0,  // 3: omnibus.v1.ListSeriesResponse.series:type_name -> omnibus.v1.Series
-	0,  // 4: omnibus.v1.GetSeriesResponse.series:type_name -> omnibus.v1.Series
-	1,  // 5: omnibus.v1.GetSeriesResponse.issues:type_name -> omnibus.v1.Issue
-	2,  // 6: omnibus.v1.GetSeriesResponse.story_arcs:type_name -> omnibus.v1.StoryArc
-	0,  // 7: omnibus.v1.UpdateSeriesSettingsResponse.series:type_name -> omnibus.v1.Series
-	0,  // 8: omnibus.v1.RefreshSeriesResponse.series:type_name -> omnibus.v1.Series
-	3,  // 9: omnibus.v1.SeriesService.SearchComicVine:input_type -> omnibus.v1.SearchComicVineRequest
-	5,  // 10: omnibus.v1.SeriesService.AddSeries:input_type -> omnibus.v1.AddSeriesRequest
-	7,  // 11: omnibus.v1.SeriesService.ListSeries:input_type -> omnibus.v1.ListSeriesRequest
-	9,  // 12: omnibus.v1.SeriesService.GetSeries:input_type -> omnibus.v1.GetSeriesRequest
-	11, // 13: omnibus.v1.SeriesService.UpdateSeriesSettings:input_type -> omnibus.v1.UpdateSeriesSettingsRequest
-	13, // 14: omnibus.v1.SeriesService.RefreshSeries:input_type -> omnibus.v1.RefreshSeriesRequest
-	4,  // 15: omnibus.v1.SeriesService.SearchComicVine:output_type -> omnibus.v1.SearchComicVineResponse
-	6,  // 16: omnibus.v1.SeriesService.AddSeries:output_type -> omnibus.v1.AddSeriesResponse
-	8,  // 17: omnibus.v1.SeriesService.ListSeries:output_type -> omnibus.v1.ListSeriesResponse
-	10, // 18: omnibus.v1.SeriesService.GetSeries:output_type -> omnibus.v1.GetSeriesResponse
-	12, // 19: omnibus.v1.SeriesService.UpdateSeriesSettings:output_type -> omnibus.v1.UpdateSeriesSettingsResponse
-	14, // 20: omnibus.v1.SeriesService.RefreshSeries:output_type -> omnibus.v1.RefreshSeriesResponse
-	15, // [15:21] is the sub-list for method output_type
-	9,  // [9:15] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	19, // 0: omnibus.v1.Issue.status:type_name -> omnibus.v1.IssueStatus
+	1,  // 1: omnibus.v1.IssueDetail.issue:type_name -> omnibus.v1.Issue
+	2,  // 2: omnibus.v1.IssueDetail.credits:type_name -> omnibus.v1.Credit
+	0,  // 3: omnibus.v1.SearchComicVineResponse.candidates:type_name -> omnibus.v1.Series
+	0,  // 4: omnibus.v1.AddSeriesResponse.series:type_name -> omnibus.v1.Series
+	0,  // 5: omnibus.v1.ListSeriesResponse.series:type_name -> omnibus.v1.Series
+	0,  // 6: omnibus.v1.GetSeriesResponse.series:type_name -> omnibus.v1.Series
+	1,  // 7: omnibus.v1.GetSeriesResponse.issues:type_name -> omnibus.v1.Issue
+	4,  // 8: omnibus.v1.GetSeriesResponse.story_arcs:type_name -> omnibus.v1.StoryArc
+	3,  // 9: omnibus.v1.GetIssueResponse.issue:type_name -> omnibus.v1.IssueDetail
+	0,  // 10: omnibus.v1.UpdateSeriesSettingsResponse.series:type_name -> omnibus.v1.Series
+	0,  // 11: omnibus.v1.RefreshSeriesResponse.series:type_name -> omnibus.v1.Series
+	5,  // 12: omnibus.v1.SeriesService.SearchComicVine:input_type -> omnibus.v1.SearchComicVineRequest
+	7,  // 13: omnibus.v1.SeriesService.AddSeries:input_type -> omnibus.v1.AddSeriesRequest
+	9,  // 14: omnibus.v1.SeriesService.ListSeries:input_type -> omnibus.v1.ListSeriesRequest
+	11, // 15: omnibus.v1.SeriesService.GetSeries:input_type -> omnibus.v1.GetSeriesRequest
+	13, // 16: omnibus.v1.SeriesService.GetIssue:input_type -> omnibus.v1.GetIssueRequest
+	15, // 17: omnibus.v1.SeriesService.UpdateSeriesSettings:input_type -> omnibus.v1.UpdateSeriesSettingsRequest
+	17, // 18: omnibus.v1.SeriesService.RefreshSeries:input_type -> omnibus.v1.RefreshSeriesRequest
+	6,  // 19: omnibus.v1.SeriesService.SearchComicVine:output_type -> omnibus.v1.SearchComicVineResponse
+	8,  // 20: omnibus.v1.SeriesService.AddSeries:output_type -> omnibus.v1.AddSeriesResponse
+	10, // 21: omnibus.v1.SeriesService.ListSeries:output_type -> omnibus.v1.ListSeriesResponse
+	12, // 22: omnibus.v1.SeriesService.GetSeries:output_type -> omnibus.v1.GetSeriesResponse
+	14, // 23: omnibus.v1.SeriesService.GetIssue:output_type -> omnibus.v1.GetIssueResponse
+	16, // 24: omnibus.v1.SeriesService.UpdateSeriesSettings:output_type -> omnibus.v1.UpdateSeriesSettingsResponse
+	18, // 25: omnibus.v1.SeriesService.RefreshSeries:output_type -> omnibus.v1.RefreshSeriesResponse
+	19, // [19:26] is the sub-list for method output_type
+	12, // [12:19] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_omnibus_v1_series_proto_init() }
@@ -1040,7 +1332,7 @@ func file_omnibus_v1_series_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_omnibus_v1_series_proto_rawDesc), len(file_omnibus_v1_series_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

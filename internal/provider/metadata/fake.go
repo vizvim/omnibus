@@ -17,6 +17,10 @@ type FakeProvider struct {
 	volumeRaw []byte
 	issues    []IssueDetail
 	issuesRaw []byte
+	// issueDetail is the single-issue DETAIL (with credits) returned by GetIssue. It is
+	// loaded from the optional issue_detail.json fixture; absent that, a small built-in
+	// detail with credits is used so tests exercising lazy credit population have data.
+	issueDetail IssueDetail
 	// cover is the byte payload returned by GetCover for any (valid) URL.
 	cover []byte
 }
@@ -56,6 +60,27 @@ func NewFakeProvider(dir string) (*FakeProvider, error) {
 		return nil, err
 	}
 
+	// Optional single-issue DETAIL fixture (carries person_credits, which the LIST
+	// fixture does not). When absent, fall back to a built-in detail so tests that
+	// exercise lazy credit population still have credits to assert on.
+	if detailBody, derr := os.ReadFile(filepath.Join(dir, "issue_detail.json")); derr == nil {
+		f.issueDetail, err = decodeIssueDetail(detailBody)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		f.issueDetail = IssueDetail{
+			ComicvineIssueID: 1001,
+			IssueNumber:      "1",
+			Title:            "Fake Issue One",
+			Description:      "<p>A <b>fake</b> issue &amp; its summary.</p>",
+			Credits: []Credit{
+				{Role: "writer", Name: "Brian K. Vaughan", ComicvinePersonID: 5001},
+				{Role: "penciler", Name: "Fiona Staples", ComicvinePersonID: 5002},
+			},
+		}
+	}
+
 	return f, nil
 }
 
@@ -76,6 +101,14 @@ func (f *FakeProvider) ListIssues(_ context.Context, _ int64, offset int) ([]Iss
 		return nil, false, []byte("[]"), nil
 	}
 	return f.issues, false, f.issuesRaw, nil
+}
+
+// GetIssue returns the fixture single-issue DETAIL (with credits). The supplied id is
+// reflected onto the returned detail so callers see a matching ComicvineIssueID.
+func (f *FakeProvider) GetIssue(_ context.Context, cvIssueID int64) (IssueDetail, error) {
+	d := f.issueDetail
+	d.ComicvineIssueID = cvIssueID
+	return d, nil
 }
 
 // GetCover returns a fixed fake image (no network, no SSRF concern in the fake).

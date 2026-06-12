@@ -16,6 +16,9 @@ type Gateway interface {
 	SearchSeries(ctx context.Context, query string) ([]metadata.SeriesResult, error)
 	GetVolume(ctx context.Context, volumeID int64) (metadata.VolumeDetail, error)
 	ListIssues(ctx context.Context, volumeID int64, offset int) ([]metadata.IssueDetail, bool, error)
+	// GetIssue fetches a single issue's DETAIL (the only source of creator credits) by
+	// its ComicVine issue id — used for lazy, one-time credit population.
+	GetIssue(ctx context.Context, cvIssueID int64) (metadata.IssueDetail, error)
 	GetCover(ctx context.Context, url string) ([]byte, error)
 	// CachedSourceUpdatedAt returns the cached CV date_last_updated marker for a
 	// volume (empty/false if absent) — the conditional-refresh comparison point.
@@ -29,6 +32,10 @@ type Gateway interface {
 type Enqueuer interface {
 	EnqueueImport(ctx context.Context, seriesID, comicvineVolumeID int64) error
 	EnqueueRefresh(ctx context.Context, seriesID, comicvineVolumeID int64) error
+	// EnqueueSearchIssue enqueues a one-off auto-search when an issue becomes Wanted
+	// (D-10). Duplicate enqueues collapse via the job's per-issue uniqueness, so calling
+	// it on every imported Wanted issue is idempotent and bounded by River's worker pool.
+	EnqueueSearchIssue(ctx context.Context, issueID int64) error
 }
 
 // Deps are the Service's injected collaborators.
@@ -253,6 +260,69 @@ func (s *Service) GetSeries(ctx context.Context, seriesID int64) (View, error) {
 		Issues:    issues,
 		Publisher: publisher,
 		StoryArcs: arcs,
+	}, nil
+}
+
+// GetIssue returns the rich per-issue detail: the base issue plus its summary,
+// extra dates, and creator credits (already ordered by role,name in the query).
+func (s *Service) GetIssue(ctx context.Context, issueID int64) (IssueDetail, error) {
+	row, err := s.repos.Issue.GetByID(ctx, issueID)
+	if err != nil {
+		return IssueDetail{}, fmt.Errorf("get issue %d: %w", issueID, err)
+	}
+	creditRows, err := s.repos.IssueCredits.ListByIssue(ctx, issueID)
+	if err != nil {
+		return IssueDetail{}, fmt.Errorf("list credits for issue %d: %w", issueID, err)
+	}
+
+	description := row.Description.String
+
+	// Lazy, one-time credit population: the import fetches issues via the LIST endpoint,
+	// which omits person_credits, so issue_credits starts empty. When no credits are
+	// cached yet and we know the ComicVine issue id, fetch the per-issue DETAIL (the
+	// credit-bearing endpoint), persist the credits, and prefer its richer description.
+	// Any provider error is non-fatal: GetIssue must still succeed (the panel renders
+	// without credits rather than erroring), and the fetch is retried next call.
+	if len(creditRows) == 0 && row.ComicvineIssueID > 0 && s.gw != nil {
+		if detail, ferr := s.gw.GetIssue(ctx, row.ComicvineIssueID); ferr != nil {
+			s.logger.Warn("lazy issue credit fetch",
+				slog.Int64("issue_id", issueID),
+				slog.Int64("cv_issue_id", row.ComicvineIssueID),
+				slog.Any("error", ferr))
+		} else {
+			mapped := toRepoCredits(detail.Credits)
+			if rerr := s.repos.IssueCredits.Replace(ctx, issueID, mapped); rerr != nil {
+				s.logger.Warn("persist lazy issue credits",
+					slog.Int64("issue_id", issueID), slog.Any("error", rerr))
+			} else if refreshed, lerr := s.repos.IssueCredits.ListByIssue(ctx, issueID); lerr == nil {
+				creditRows = refreshed
+			}
+			// Prefer the fetched description when it carries content (it is typically the
+			// richer DETAIL summary the LIST import did not have).
+			if d := detail.Description; d != "" {
+				description = d
+			}
+		}
+	}
+
+	credits := make([]Credit, 0, len(creditRows))
+	for _, c := range creditRows {
+		credits = append(credits, Credit{
+			Role:              c.Role,
+			Name:              c.Name,
+			ComicvinePersonID: c.CVPersonID,
+		})
+	}
+
+	return IssueDetail{
+		Issue:          issueFromRow(row, s.coverPresent(ctx, "issues", row.ID)),
+		Description:    stripHTML(description),
+		IssueType:      row.IssueType,
+		AltIssueNumber: row.AltIssueNumber.String,
+		PageCount:      toInt32(row.PageCount.Int64),
+		StoreDate:      row.StoreDate.String,
+		CVLastUpdated:  row.CvLastUpdated.String,
+		Credits:        credits,
 	}, nil
 }
 

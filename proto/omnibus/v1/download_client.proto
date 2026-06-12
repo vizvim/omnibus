@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package omnibus.v1;
+
+option go_package = "github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1";
+
+// DownloadClientConfig is the masked, DB-backed SABnzbd download-client configuration
+// view. The api_key is intentionally absent: it is write-only and masked, never returned
+// in a response — exactly like the Indexer message (D-17 / T-4-01 / T-ul5-01). It is
+// accepted only on the update request message.
+message DownloadClientConfig {
+  string url = 1;
+  string category = 2;
+  // configured is true once a non-empty url has been stored.
+  bool configured = 3;
+}
+
+message GetDownloadClientConfigRequest {}
+
+message GetDownloadClientConfigResponse {
+  DownloadClientConfig config = 1;
+}
+
+message UpdateDownloadClientConfigRequest {
+  string url = 1;
+  // api_key may be empty to leave the stored key unchanged (exactly like UpdateIndexer).
+  string api_key = 2; // write-only; stored but never returned
+  string category = 3;
+}
+
+message UpdateDownloadClientConfigResponse {
+  DownloadClientConfig config = 1;
+}
+
+message TestDownloadClientConfigRequest {}
+
+// TestDownloadClientConfigResponse carries the connectivity-probe outcome. A failed probe
+// is a normal response (ok=false + a concise detail), never an RPC error. The api_key is
+// never echoed (T-uzn-01): detail is concise status text only.
+message TestDownloadClientConfigResponse {
+  bool ok = 1;
+  string detail = 2;
+}
+
+// DownloadClientService owns the singleton DB-backed SABnzbd download-client config
+// (supersedes D-16: SAB config now persists in the DB and is editable at runtime). It is
+// a domain-segmented service (ADR 0007), separate from IndexerService.
+service DownloadClientService {
+  // GetDownloadClientConfig returns the current config (api_key never included).
+  rpc GetDownloadClientConfig(GetDownloadClientConfigRequest) returns (GetDownloadClientConfigResponse);
+  // UpdateDownloadClientConfig edits the config; an empty api_key leaves the stored key unchanged.
+  rpc UpdateDownloadClientConfig(UpdateDownloadClientConfigRequest) returns (UpdateDownloadClientConfigResponse);
+  // TestDownloadClientConfig runs a real connectivity probe against the configured SABnzbd
+  // client. A failed probe returns ok=false + detail, never an RPC error.
+  rpc TestDownloadClientConfig(TestDownloadClientConfigRequest) returns (TestDownloadClientConfigResponse);
+}

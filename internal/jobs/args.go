@@ -60,3 +60,53 @@ func (SweepArgs) InsertOpts() river.InsertOpts {
 		UniqueOpts: river.UniqueOpts{},
 	}
 }
+
+// AutoSearchSweepArgs are the (empty) arguments for the scheduled auto-search sweep,
+// registered as a River periodic job. Like the refresh sweep, it is unique by kind so an
+// overlapping tick collapses into the in-flight one.
+type AutoSearchSweepArgs struct{}
+
+// Kind uniquely identifies the auto-search sweep job type, stable across deploys.
+func (AutoSearchSweepArgs) Kind() string { return "auto_search_sweep" }
+
+// InsertOpts makes the auto-search sweep unique by kind (no overlapping ticks).
+func (AutoSearchSweepArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{
+		Queue:      river.QueueDefault,
+		UniqueOpts: river.UniqueOpts{},
+	}
+}
+
+// SearchIssueArgs are the arguments for a one-off auto-search of a single issue. IssueID
+// is tagged river:"unique" so duplicate enqueues for the same issue collapse into the
+// in-flight job (D-10) — the immediate-enqueue-on-Wanted burst is absorbed by River's
+// bounded pool without stacking redundant searches.
+type SearchIssueArgs struct {
+	IssueID int64 `json:"issue_id" river:"unique"`
+}
+
+// Kind uniquely identifies the one-off search job type, stable across deploys.
+func (SearchIssueArgs) Kind() string { return "search_issue" }
+
+// InsertOpts enforces per-issue uniqueness (see SearchIssueArgs doc).
+func (SearchIssueArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{
+		Queue:      river.QueueDefault,
+		UniqueOpts: river.UniqueOpts{ByArgs: true},
+	}
+}
+
+// RSSPollArgs are the (empty) arguments for the scheduled RSS poll, registered as a
+// River periodic job. Unique by kind so overlapping ticks collapse.
+type RSSPollArgs struct{}
+
+// Kind uniquely identifies the RSS poll job type, stable across deploys.
+func (RSSPollArgs) Kind() string { return "rss_poll" }
+
+// InsertOpts makes the RSS poll unique by kind (no overlapping ticks).
+func (RSSPollArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{
+		Queue:      river.QueueDefault,
+		UniqueOpts: river.UniqueOpts{},
+	}
+}

@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file omnibus/v1/series.proto.
  */
 export const file_omnibus_v1_series: GenFile = /*@__PURE__*/
-  fileDesc("ChdvbW5pYnVzL3YxL3Nlcmllcy5wcm90bxIKb21uaWJ1cy52MSLPAQoGU2VyaWVzEgoKAmlkGAEgASgDEhsKE2NvbWljdmluZV92b2x1bWVfaWQYAiABKAMSDAoEbmFtZRgDIAEoCRISCgpzdGFydF95ZWFyGAQgASgFEhEKCXB1Ymxpc2hlchgFIAEoCRIOCgZzdGF0dXMYBiABKAkSEQoJY292ZXJfdXJsGAcgASgJEhQKDHRvdGFsX2lzc3VlcxgIIAEoBRITCgtoYXZlX2lzc3VlcxgJIAEoBRIZChFsYXN0X3JlZnJlc2hlZF9hdBgKIAEoCSLyAQoFSXNzdWUSCgoCaWQYASABKAMSEQoJc2VyaWVzX2lkGAIgASgDEhoKEmNvbWljdmluZV9pc3N1ZV9pZBgDIAEoAxIUCgxpc3N1ZV9udW1iZXIYBCABKAkSGQoRaXNzdWVfbnVtYmVyX3NvcnQYBSABKAESHgoWaXNzdWVfbnVtYmVyX3F1YWxpZmllchgGIAEoCRINCgV0aXRsZRgHIAEoCRISCgpjb3Zlcl9kYXRlGAggASgJEicKBnN0YXR1cxgJIAEoDjIXLm9tbmlidXMudjEuSXNzdWVTdGF0dXMSEQoJY292ZXJfdXJsGAogASgJIj4KCFN0b3J5QXJjEgoKAmlkGAEgASgDEhgKEGNvbWljdmluZV9hcmNfaWQYAiABKAMSDAoEbmFtZRgDIAEoCSInChZTZWFyY2hDb21pY1ZpbmVSZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJIkEKF1NlYXJjaENvbWljVmluZVJlc3BvbnNlEiYKCmNhbmRpZGF0ZXMYASADKAsyEi5vbW5pYnVzLnYxLlNlcmllcyIvChBBZGRTZXJpZXNSZXF1ZXN0EhsKE2NvbWljdmluZV92b2x1bWVfaWQYASABKAMiNwoRQWRkU2VyaWVzUmVzcG9uc2USIgoGc2VyaWVzGAEgASgLMhIub21uaWJ1cy52MS5TZXJpZXMiMQoRTGlzdFNlcmllc1JlcXVlc3QSDAoEcGFnZRgBIAEoBRIOCgZmaWx0ZXIYAiABKAkiOAoSTGlzdFNlcmllc1Jlc3BvbnNlEiIKBnNlcmllcxgBIAMoCzISLm9tbmlidXMudjEuU2VyaWVzIiUKEEdldFNlcmllc1JlcXVlc3QSEQoJc2VyaWVzX2lkGAEgASgDIpcBChFHZXRTZXJpZXNSZXNwb25zZRIiCgZzZXJpZXMYASABKAsyEi5vbW5pYnVzLnYxLlNlcmllcxIhCgZpc3N1ZXMYAiADKAsyES5vbW5pYnVzLnYxLklzc3VlEhEKCXB1Ymxpc2hlchgDIAEoCRIoCgpzdG9yeV9hcmNzGAQgAygLMhQub21uaWJ1cy52MS5TdG9yeUFyYyJAChtVcGRhdGVTZXJpZXNTZXR0aW5nc1JlcXVlc3QSEQoJc2VyaWVzX2lkGAEgASgDEg4KBnN0YXR1cxgCIAEoCSJCChxVcGRhdGVTZXJpZXNTZXR0aW5nc1Jlc3BvbnNlEiIKBnNlcmllcxgBIAEoCzISLm9tbmlidXMudjEuU2VyaWVzIikKFFJlZnJlc2hTZXJpZXNSZXF1ZXN0EhEKCXNlcmllc19pZBgBIAEoAyI7ChVSZWZyZXNoU2VyaWVzUmVzcG9uc2USIgoGc2VyaWVzGAEgASgLMhIub21uaWJ1cy52MS5TZXJpZXMyjQQKDVNlcmllc1NlcnZpY2USWgoPU2VhcmNoQ29taWNWaW5lEiIub21uaWJ1cy52MS5TZWFyY2hDb21pY1ZpbmVSZXF1ZXN0GiMub21uaWJ1cy52MS5TZWFyY2hDb21pY1ZpbmVSZXNwb25zZRJICglBZGRTZXJpZXMSHC5vbW5pYnVzLnYxLkFkZFNlcmllc1JlcXVlc3QaHS5vbW5pYnVzLnYxLkFkZFNlcmllc1Jlc3BvbnNlEksKCkxpc3RTZXJpZXMSHS5vbW5pYnVzLnYxLkxpc3RTZXJpZXNSZXF1ZXN0Gh4ub21uaWJ1cy52MS5MaXN0U2VyaWVzUmVzcG9uc2USSAoJR2V0U2VyaWVzEhwub21uaWJ1cy52MS5HZXRTZXJpZXNSZXF1ZXN0Gh0ub21uaWJ1cy52MS5HZXRTZXJpZXNSZXNwb25zZRJpChRVcGRhdGVTZXJpZXNTZXR0aW5ncxInLm9tbmlidXMudjEuVXBkYXRlU2VyaWVzU2V0dGluZ3NSZXF1ZXN0Gigub21uaWJ1cy52MS5VcGRhdGVTZXJpZXNTZXR0aW5nc1Jlc3BvbnNlElQKDVJlZnJlc2hTZXJpZXMSIC5vbW5pYnVzLnYxLlJlZnJlc2hTZXJpZXNSZXF1ZXN0GiEub21uaWJ1cy52MS5SZWZyZXNoU2VyaWVzUmVzcG9uc2VCN1o1Z2l0aHViLmNvbS92aXp2aW0vb21uaWJ1cy9nZW4vZ28vb21uaWJ1cy92MTtvbW5pYnVzdjFiBnByb3RvMw", [file_omnibus_v1_common]);
+  fileDesc("ChdvbW5pYnVzL3YxL3Nlcmllcy5wcm90bxIKb21uaWJ1cy52MSLPAQoGU2VyaWVzEgoKAmlkGAEgASgDEhsKE2NvbWljdmluZV92b2x1bWVfaWQYAiABKAMSDAoEbmFtZRgDIAEoCRISCgpzdGFydF95ZWFyGAQgASgFEhEKCXB1Ymxpc2hlchgFIAEoCRIOCgZzdGF0dXMYBiABKAkSEQoJY292ZXJfdXJsGAcgASgJEhQKDHRvdGFsX2lzc3VlcxgIIAEoBRITCgtoYXZlX2lzc3VlcxgJIAEoBRIZChFsYXN0X3JlZnJlc2hlZF9hdBgKIAEoCSKGAgoFSXNzdWUSCgoCaWQYASABKAMSEQoJc2VyaWVzX2lkGAIgASgDEhoKEmNvbWljdmluZV9pc3N1ZV9pZBgDIAEoAxIUCgxpc3N1ZV9udW1iZXIYBCABKAkSGQoRaXNzdWVfbnVtYmVyX3NvcnQYBSABKAESHgoWaXNzdWVfbnVtYmVyX3F1YWxpZmllchgGIAEoCRINCgV0aXRsZRgHIAEoCRISCgpjb3Zlcl9kYXRlGAggASgJEicKBnN0YXR1cxgJIAEoDjIXLm9tbmlidXMudjEuSXNzdWVTdGF0dXMSEQoJY292ZXJfdXJsGAogASgJEhIKCmlzc3VlX3R5cGUYCyABKAkiQQoGQ3JlZGl0EgwKBHJvbGUYASABKAkSDAoEbmFtZRgCIAEoCRIbChNjb21pY3ZpbmVfcGVyc29uX2lkGAMgASgDItgBCgtJc3N1ZURldGFpbBIgCgVpc3N1ZRgBIAEoCzIRLm9tbmlidXMudjEuSXNzdWUSEwoLZGVzY3JpcHRpb24YAiABKAkSEgoKaXNzdWVfdHlwZRgDIAEoCRIYChBhbHRfaXNzdWVfbnVtYmVyGAQgASgJEhIKCnBhZ2VfY291bnQYBSABKAUSEgoKc3RvcmVfZGF0ZRgGIAEoCRIXCg9jdl9sYXN0X3VwZGF0ZWQYByABKAkSIwoHY3JlZGl0cxgIIAMoCzISLm9tbmlidXMudjEuQ3JlZGl0Ij4KCFN0b3J5QXJjEgoKAmlkGAEgASgDEhgKEGNvbWljdmluZV9hcmNfaWQYAiABKAMSDAoEbmFtZRgDIAEoCSInChZTZWFyY2hDb21pY1ZpbmVSZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJIkEKF1NlYXJjaENvbWljVmluZVJlc3BvbnNlEiYKCmNhbmRpZGF0ZXMYASADKAsyEi5vbW5pYnVzLnYxLlNlcmllcyIvChBBZGRTZXJpZXNSZXF1ZXN0EhsKE2NvbWljdmluZV92b2x1bWVfaWQYASABKAMiNwoRQWRkU2VyaWVzUmVzcG9uc2USIgoGc2VyaWVzGAEgASgLMhIub21uaWJ1cy52MS5TZXJpZXMiMQoRTGlzdFNlcmllc1JlcXVlc3QSDAoEcGFnZRgBIAEoBRIOCgZmaWx0ZXIYAiABKAkiOAoSTGlzdFNlcmllc1Jlc3BvbnNlEiIKBnNlcmllcxgBIAMoCzISLm9tbmlidXMudjEuU2VyaWVzIiUKEEdldFNlcmllc1JlcXVlc3QSEQoJc2VyaWVzX2lkGAEgASgDIpcBChFHZXRTZXJpZXNSZXNwb25zZRIiCgZzZXJpZXMYASABKAsyEi5vbW5pYnVzLnYxLlNlcmllcxIhCgZpc3N1ZXMYAiADKAsyES5vbW5pYnVzLnYxLklzc3VlEhEKCXB1Ymxpc2hlchgDIAEoCRIoCgpzdG9yeV9hcmNzGAQgAygLMhQub21uaWJ1cy52MS5TdG9yeUFyYyIjCg9HZXRJc3N1ZVJlcXVlc3QSEAoIaXNzdWVfaWQYASABKAMiOgoQR2V0SXNzdWVSZXNwb25zZRImCgVpc3N1ZRgBIAEoCzIXLm9tbmlidXMudjEuSXNzdWVEZXRhaWwiQAobVXBkYXRlU2VyaWVzU2V0dGluZ3NSZXF1ZXN0EhEKCXNlcmllc19pZBgBIAEoAxIOCgZzdGF0dXMYAiABKAkiQgocVXBkYXRlU2VyaWVzU2V0dGluZ3NSZXNwb25zZRIiCgZzZXJpZXMYASABKAsyEi5vbW5pYnVzLnYxLlNlcmllcyIpChRSZWZyZXNoU2VyaWVzUmVxdWVzdBIRCglzZXJpZXNfaWQYASABKAMiOwoVUmVmcmVzaFNlcmllc1Jlc3BvbnNlEiIKBnNlcmllcxgBIAEoCzISLm9tbmlidXMudjEuU2VyaWVzMtQECg1TZXJpZXNTZXJ2aWNlEloKD1NlYXJjaENvbWljVmluZRIiLm9tbmlidXMudjEuU2VhcmNoQ29taWNWaW5lUmVxdWVzdBojLm9tbmlidXMudjEuU2VhcmNoQ29taWNWaW5lUmVzcG9uc2USSAoJQWRkU2VyaWVzEhwub21uaWJ1cy52MS5BZGRTZXJpZXNSZXF1ZXN0Gh0ub21uaWJ1cy52MS5BZGRTZXJpZXNSZXNwb25zZRJLCgpMaXN0U2VyaWVzEh0ub21uaWJ1cy52MS5MaXN0U2VyaWVzUmVxdWVzdBoeLm9tbmlidXMudjEuTGlzdFNlcmllc1Jlc3BvbnNlEkgKCUdldFNlcmllcxIcLm9tbmlidXMudjEuR2V0U2VyaWVzUmVxdWVzdBodLm9tbmlidXMudjEuR2V0U2VyaWVzUmVzcG9uc2USRQoIR2V0SXNzdWUSGy5vbW5pYnVzLnYxLkdldElzc3VlUmVxdWVzdBocLm9tbmlidXMudjEuR2V0SXNzdWVSZXNwb25zZRJpChRVcGRhdGVTZXJpZXNTZXR0aW5ncxInLm9tbmlidXMudjEuVXBkYXRlU2VyaWVzU2V0dGluZ3NSZXF1ZXN0Gigub21uaWJ1cy52MS5VcGRhdGVTZXJpZXNTZXR0aW5nc1Jlc3BvbnNlElQKDVJlZnJlc2hTZXJpZXMSIC5vbW5pYnVzLnYxLlJlZnJlc2hTZXJpZXNSZXF1ZXN0GiEub21uaWJ1cy52MS5SZWZyZXNoU2VyaWVzUmVzcG9uc2VCN1o1Z2l0aHViLmNvbS92aXp2aW0vb21uaWJ1cy9nZW4vZ28vb21uaWJ1cy92MTtvbW5pYnVzdjFiBnByb3RvMw", [file_omnibus_v1_common]);
 
 /**
  * Series is a watched comic volume, pinned to its immutable ComicVine volume id.
@@ -142,6 +142,13 @@ export type Issue = Message<"omnibus.v1.Issue"> & {
    * @generated from field: string cover_url = 10;
    */
   coverUrl: string;
+
+  /**
+   * standard/annual/one-shot — surfaced as a grid badge.
+   *
+   * @generated from field: string issue_type = 11;
+   */
+  issueType: string;
 };
 
 /**
@@ -150,6 +157,99 @@ export type Issue = Message<"omnibus.v1.Issue"> & {
  */
 export const IssueSchema: GenMessage<Issue> = /*@__PURE__*/
   messageDesc(file_omnibus_v1_series, 1);
+
+/**
+ * Credit is a single normalized creator credit for an issue (role + name), ordered
+ * by (role, name) when returned in an IssueDetail.
+ *
+ * @generated from message omnibus.v1.Credit
+ */
+export type Credit = Message<"omnibus.v1.Credit"> & {
+  /**
+   * normalized: writer|penciller|inker|colorist|letterer|editor|cover|<other>
+   *
+   * @generated from field: string role = 1;
+   */
+  role: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: int64 comicvine_person_id = 3;
+   */
+  comicvinePersonId: bigint;
+};
+
+/**
+ * Describes the message omnibus.v1.Credit.
+ * Use `create(CreditSchema)` to create a new message.
+ */
+export const CreditSchema: GenMessage<Credit> = /*@__PURE__*/
+  messageDesc(file_omnibus_v1_series, 2);
+
+/**
+ * IssueDetail is the rich per-issue view fetched on demand (separate from the
+ * lightweight issue list), carrying the summary, creator credits, and extra dates.
+ *
+ * @generated from message omnibus.v1.IssueDetail
+ */
+export type IssueDetail = Message<"omnibus.v1.IssueDetail"> & {
+  /**
+   * the base fields (reuse, incl. cover_url)
+   *
+   * @generated from field: omnibus.v1.Issue issue = 1;
+   */
+  issue?: Issue | undefined;
+
+  /**
+   * summary
+   *
+   * @generated from field: string description = 2;
+   */
+  description: string;
+
+  /**
+   * @generated from field: string issue_type = 3;
+   */
+  issueType: string;
+
+  /**
+   * @generated from field: string alt_issue_number = 4;
+   */
+  altIssueNumber: string;
+
+  /**
+   * @generated from field: int32 page_count = 5;
+   */
+  pageCount: number;
+
+  /**
+   * @generated from field: string store_date = 6;
+   */
+  storeDate: string;
+
+  /**
+   * @generated from field: string cv_last_updated = 7;
+   */
+  cvLastUpdated: string;
+
+  /**
+   * ordered by role, name
+   *
+   * @generated from field: repeated omnibus.v1.Credit credits = 8;
+   */
+  credits: Credit[];
+};
+
+/**
+ * Describes the message omnibus.v1.IssueDetail.
+ * Use `create(IssueDetailSchema)` to create a new message.
+ */
+export const IssueDetailSchema: GenMessage<IssueDetail> = /*@__PURE__*/
+  messageDesc(file_omnibus_v1_series, 3);
 
 /**
  * StoryArc is a named arc a series participates in.
@@ -178,7 +278,7 @@ export type StoryArc = Message<"omnibus.v1.StoryArc"> & {
  * Use `create(StoryArcSchema)` to create a new message.
  */
 export const StoryArcSchema: GenMessage<StoryArc> = /*@__PURE__*/
-  messageDesc(file_omnibus_v1_series, 2);
+  messageDesc(file_omnibus_v1_series, 4);
 
 /**
  * @generated from message omnibus.v1.SearchComicVineRequest
@@ -195,7 +295,7 @@ export type SearchComicVineRequest = Message<"omnibus.v1.SearchComicVineRequest"
  * Use `create(SearchComicVineRequestSchema)` to create a new message.
  */
 export const SearchComicVineRequestSchema: GenMessage<SearchComicVineRequest> = /*@__PURE__*/
-  messageDesc(file_omnibus_v1_series, 3);
+  messageDesc(file_omnibus_v1_series, 5);
 
 /**
  * @generated from message omnibus.v1.SearchComicVineResponse
@@ -212,7 +312,7 @@ export type SearchComicVineResponse = Message<"omnibus.v1.SearchComicVineRespons
  * Use `create(SearchComicVineResponseSchema)` to create a new message.
  */
 export const SearchComicVineResponseSchema: GenMessage<SearchComicVineResponse> = /*@__PURE__*/
-  messageDesc(file_omnibus_v1_series, 4);
+  messageDesc(file_omnibus_v1_series, 6);
 
 /**
  * @generated from message omnibus.v1.AddSeriesRequest
@@ -229,7 +329,7 @@ export type AddSeriesRequest = Message<"omnibus.v1.AddSeriesRequest"> & {
  * Use `create(AddSeriesRequestSchema)` to create a new message.
  */
 export const AddSeriesRequestSchema: GenMessage<AddSeriesRequest> = /*@__PURE__*/
-  messageDesc(file_omnibus_v1_series, 5);
+  messageDesc(file_omnibus_v1_series, 7);
 
 /**
  * @generated from message omnibus.v1.AddSeriesResponse
@@ -246,7 +346,7 @@ export type AddSeriesResponse = Message<"omnibus.v1.AddSeriesResponse"> & {
  * Use `create(AddSeriesResponseSchema)` to create a new message.
  */
 export const AddSeriesResponseSchema: GenMessage<AddSeriesResponse> = /*@__PURE__*/
-  messageDesc(file_omnibus_v1_series, 6);
+  messageDesc(file_omnibus_v1_series, 8);
 
 /**
  * @generated from message omnibus.v1.ListSeriesRequest
@@ -268,7 +368,7 @@ export type ListSeriesRequest = Message<"omnibus.v1.ListSeriesRequest"> & {
  * Use `create(ListSeriesRequestSchema)` to create a new message.
  */
 export const ListSeriesRequestSchema: GenMessage<ListSeriesRequest> = /*@__PURE__*/
-  messageDesc(file_omnibus_v1_series, 7);
+  messageDesc(file_omnibus_v1_series, 9);
 
 /**
  * @generated from message omnibus.v1.ListSeriesResponse
@@ -285,7 +385,7 @@ export type ListSeriesResponse = Message<"omnibus.v1.ListSeriesResponse"> & {
  * Use `create(ListSeriesResponseSchema)` to create a new message.
  */
 export const ListSeriesResponseSchema: GenMessage<ListSeriesResponse> = /*@__PURE__*/
-  messageDesc(file_omnibus_v1_series, 8);
+  messageDesc(file_omnibus_v1_series, 10);
 
 /**
  * @generated from message omnibus.v1.GetSeriesRequest
@@ -302,7 +402,7 @@ export type GetSeriesRequest = Message<"omnibus.v1.GetSeriesRequest"> & {
  * Use `create(GetSeriesRequestSchema)` to create a new message.
  */
 export const GetSeriesRequestSchema: GenMessage<GetSeriesRequest> = /*@__PURE__*/
-  messageDesc(file_omnibus_v1_series, 9);
+  messageDesc(file_omnibus_v1_series, 11);
 
 /**
  * @generated from message omnibus.v1.GetSeriesResponse
@@ -334,7 +434,41 @@ export type GetSeriesResponse = Message<"omnibus.v1.GetSeriesResponse"> & {
  * Use `create(GetSeriesResponseSchema)` to create a new message.
  */
 export const GetSeriesResponseSchema: GenMessage<GetSeriesResponse> = /*@__PURE__*/
-  messageDesc(file_omnibus_v1_series, 10);
+  messageDesc(file_omnibus_v1_series, 12);
+
+/**
+ * @generated from message omnibus.v1.GetIssueRequest
+ */
+export type GetIssueRequest = Message<"omnibus.v1.GetIssueRequest"> & {
+  /**
+   * @generated from field: int64 issue_id = 1;
+   */
+  issueId: bigint;
+};
+
+/**
+ * Describes the message omnibus.v1.GetIssueRequest.
+ * Use `create(GetIssueRequestSchema)` to create a new message.
+ */
+export const GetIssueRequestSchema: GenMessage<GetIssueRequest> = /*@__PURE__*/
+  messageDesc(file_omnibus_v1_series, 13);
+
+/**
+ * @generated from message omnibus.v1.GetIssueResponse
+ */
+export type GetIssueResponse = Message<"omnibus.v1.GetIssueResponse"> & {
+  /**
+   * @generated from field: omnibus.v1.IssueDetail issue = 1;
+   */
+  issue?: IssueDetail | undefined;
+};
+
+/**
+ * Describes the message omnibus.v1.GetIssueResponse.
+ * Use `create(GetIssueResponseSchema)` to create a new message.
+ */
+export const GetIssueResponseSchema: GenMessage<GetIssueResponse> = /*@__PURE__*/
+  messageDesc(file_omnibus_v1_series, 14);
 
 /**
  * @generated from message omnibus.v1.UpdateSeriesSettingsRequest
@@ -358,7 +492,7 @@ export type UpdateSeriesSettingsRequest = Message<"omnibus.v1.UpdateSeriesSettin
  * Use `create(UpdateSeriesSettingsRequestSchema)` to create a new message.
  */
 export const UpdateSeriesSettingsRequestSchema: GenMessage<UpdateSeriesSettingsRequest> = /*@__PURE__*/
-  messageDesc(file_omnibus_v1_series, 11);
+  messageDesc(file_omnibus_v1_series, 15);
 
 /**
  * @generated from message omnibus.v1.UpdateSeriesSettingsResponse
@@ -375,7 +509,7 @@ export type UpdateSeriesSettingsResponse = Message<"omnibus.v1.UpdateSeriesSetti
  * Use `create(UpdateSeriesSettingsResponseSchema)` to create a new message.
  */
 export const UpdateSeriesSettingsResponseSchema: GenMessage<UpdateSeriesSettingsResponse> = /*@__PURE__*/
-  messageDesc(file_omnibus_v1_series, 12);
+  messageDesc(file_omnibus_v1_series, 16);
 
 /**
  * @generated from message omnibus.v1.RefreshSeriesRequest
@@ -392,7 +526,7 @@ export type RefreshSeriesRequest = Message<"omnibus.v1.RefreshSeriesRequest"> & 
  * Use `create(RefreshSeriesRequestSchema)` to create a new message.
  */
 export const RefreshSeriesRequestSchema: GenMessage<RefreshSeriesRequest> = /*@__PURE__*/
-  messageDesc(file_omnibus_v1_series, 13);
+  messageDesc(file_omnibus_v1_series, 17);
 
 /**
  * @generated from message omnibus.v1.RefreshSeriesResponse
@@ -409,7 +543,7 @@ export type RefreshSeriesResponse = Message<"omnibus.v1.RefreshSeriesResponse"> 
  * Use `create(RefreshSeriesResponseSchema)` to create a new message.
  */
 export const RefreshSeriesResponseSchema: GenMessage<RefreshSeriesResponse> = /*@__PURE__*/
-  messageDesc(file_omnibus_v1_series, 14);
+  messageDesc(file_omnibus_v1_series, 18);
 
 /**
  * SeriesService owns series/issue/publisher/arc read+write, covering the
@@ -457,6 +591,16 @@ export const SeriesService: GenService<{
     methodKind: "unary";
     input: typeof GetSeriesRequestSchema;
     output: typeof GetSeriesResponseSchema;
+  },
+  /**
+   * GetIssue returns the rich per-issue detail (summary, credits, dates) on demand.
+   *
+   * @generated from rpc omnibus.v1.SeriesService.GetIssue
+   */
+  getIssue: {
+    methodKind: "unary";
+    input: typeof GetIssueRequestSchema;
+    output: typeof GetIssueResponseSchema;
   },
   /**
    * UpdateSeriesSettings updates per-series settings (e.g. watch status).
