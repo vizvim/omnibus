@@ -13,9 +13,17 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/net/html"
 )
+
+// ddlStallWindow bounds how long streamMirror will wait for the next chunk of bytes from a
+// mirror before aborting the stream as stalled (WR-01). A slow-loris mirror that trickles
+// bytes under a valid Content-Length would otherwise block the serialized "ddl" queue
+// (MaxWorkers:1) indefinitely. This is a per-read liveness bound, not an overall deadline.
+const ddlStallWindow = 60 * time.Second
 
 // ErrMirrorExhaustion is returned by Fetch when no candidate mirror on the GetComics post
 // page yields a usable file (all mirrors 4xx/5xx/unreachable or report no Content-Length).
@@ -231,7 +239,12 @@ func (p *GetComicsDDLProvider) streamMirror(ctx context.Context, mirrorURL, dir 
 	if _, err := safeMirrorURL(mirrorURL); err != nil {
 		return "", fmt.Errorf("reject mirror url: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mirrorURL, http.NoBody)
+	// A per-mirror cancellable context backs the stall watchdog (WR-01): if the stream goes
+	// silent for ddlStallWindow, the watchdog cancels streamCtx, unblocking io.Copy with a
+	// context error instead of hanging the serialized ddl queue forever.
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	req, err := http.NewRequestWithContext(streamCtx, http.MethodGet, mirrorURL, http.NoBody)
 	if err != nil {
 		return "", fmt.Errorf("build mirror request: %w", err)
 	}
@@ -261,9 +274,15 @@ func (p *GetComicsDDLProvider) streamMirror(ctx context.Context, mirrorURL, dir 
 		return "", fmt.Errorf("create intermediate file: %w", err)
 	}
 	pr := &progressReader{r: resp.Body, total: total, onTick: progress}
-	if _, cerr := io.Copy(f, pr); cerr != nil {
+	stopWatchdog := startStallWatchdog(pr, ddlStallWindow, cancel)
+	_, cerr := io.Copy(f, pr)
+	stopWatchdog()
+	if cerr != nil {
 		_ = f.Close()
-		_ = os.Remove(dst) // do not leave a partial file behind on a failed stream
+		_ = os.Remove(dst) // do not leave a partial file behind on a failed/stalled stream
+		if streamCtx.Err() != nil {
+			return "", fmt.Errorf("stream mirror %q stalled (no bytes for %s): %w", mirrorURL, ddlStallWindow, streamCtx.Err())
+		}
 		return "", fmt.Errorf("stream mirror %q: %w", mirrorURL, cerr)
 	}
 	if cerr := f.Close(); cerr != nil {
@@ -430,12 +449,16 @@ func nodeText(n *html.Node) string {
 }
 
 // progressReader wraps an io.Reader to emit (bytesRead, total) progress as bytes flow through
-// io.Copy. It never buffers — it counts as the underlying stream is read.
+// io.Copy. It never buffers — it counts as the underlying stream is read. lastRead records the
+// time of the most recent non-zero read so the stall watchdog (WR-01) can detect a silent
+// mirror; it is guarded by mu because the watchdog reads it from another goroutine.
 type progressReader struct {
-	r      io.Reader
-	total  int64
-	read   int64
-	onTick func(done, total int64)
+	r        io.Reader
+	total    int64
+	read     int64
+	onTick   func(done, total int64)
+	mu       sync.Mutex
+	lastRead time.Time
 }
 
 // Read counts bytes and emits progress (when an onTick callback is set) as the stream flows.
@@ -443,9 +466,49 @@ func (pr *progressReader) Read(b []byte) (int, error) {
 	n, err := pr.r.Read(b)
 	if n > 0 {
 		pr.read += int64(n)
+		pr.mu.Lock()
+		pr.lastRead = time.Now()
+		pr.mu.Unlock()
 		if pr.onTick != nil {
 			pr.onTick(pr.read, pr.total)
 		}
 	}
 	return n, err
+}
+
+// sinceLastRead reports how long it has been since the last non-zero read (for the watchdog).
+func (pr *progressReader) sinceLastRead(now time.Time) time.Duration {
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+	return now.Sub(pr.lastRead)
+}
+
+// startStallWatchdog launches a goroutine that calls cancel() if pr sees no byte progress for
+// window (WR-01). It returns a stop func the caller must invoke once io.Copy returns. The
+// watchdog primes lastRead so the first window is measured from stream start.
+func startStallWatchdog(pr *progressReader, window time.Duration, cancel context.CancelFunc) func() {
+	pr.mu.Lock()
+	pr.lastRead = time.Now()
+	pr.mu.Unlock()
+
+	done := make(chan struct{})
+	var once sync.Once
+	stop := func() { once.Do(func() { close(done) }) }
+
+	go func() {
+		ticker := time.NewTicker(window / 2)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case t := <-ticker.C:
+				if pr.sinceLastRead(t) >= window {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	return stop
 }
