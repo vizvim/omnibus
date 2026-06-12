@@ -174,21 +174,10 @@ func (s *Service) RunDDLFetch(ctx context.Context, downloadID int64) error {
 
 	// Stream the file. The clientRef is the post URL the resolver re-fetches for mirror links.
 	// Progress is surfaced on the per-issue timeline by reusing the poll loop's progress path
-	// (Queued->Downloading + a download-progress event on first observed progress, DL-08).
-	var emittedStart bool
-	path, ferr := fetcher.Fetch(ctx, row.ClientRef, func(done, total int64) {
-		if emittedStart || total <= 0 {
-			return
-		}
-		emittedStart = true
-		pct := float64(done) / float64(total) * 100
-		if perr := s.onProgress(ctx, row, download.PollResult{
-			Status: download.PollInProgress, ProgressPct: pct,
-		}); perr != nil {
-			s.logger.Warn("ddl progress event failed (non-fatal)",
-				slog.Int64("download_id", downloadID), slog.Any("error", perr))
-		}
-	})
+	// (Queued->Downloading on the first tick, then periodic download-progress + updated_at bumps
+	// so a multi-GB DDL shows real movement and stays liveness-observable, DL-08 / WR-02 / WR-03).
+	prog := s.newDDLProgressEmitter(ctx, row, downloadID)
+	path, ferr := fetcher.Fetch(ctx, row.ClientRef, prog)
 	if ferr != nil {
 		if errors.Is(ferr, download.ErrMirrorExhaustion) {
 			// Mirror exhaustion is a handled failure (D-04): route into the shared failure path
@@ -216,6 +205,59 @@ func (s *Service) RunDDLFetch(ctx context.Context, downloadID int64) error {
 	return s.onCompleted(ctx, cur, download.PollResult{
 		Status: download.PollCompleted, StoragePath: path,
 	})
+}
+
+// ddlProgressMinInterval throttles DDL progress emission by elapsed wall time and
+// ddlProgressMinPctDelta by percentage advance: a tick is emitted when EITHER threshold is
+// crossed (or it is the first tick). This keeps a multi-GB stream's timeline meaningful without
+// writing an event per buffer (WR-02 / WR-03).
+const (
+	ddlProgressMinInterval = 5 * time.Second
+	ddlProgressMinPctDelta = 1.0
+)
+
+// newDDLProgressEmitter returns an onProgress(done, total) callback for the DDL Fetch stream
+// that emits periodic, throttled progress to the per-issue timeline (WR-02 / WR-03). The first
+// observed progress drives the Queued->Downloading flip + initial event; subsequent ticks are
+// emitted when at least ddlProgressMinInterval has elapsed OR the percentage advanced by at
+// least ddlProgressMinPctDelta, each bumping updated_at so liveness is observable. The callback
+// is invoked serially from the streaming reader, so no locking is needed for its closed-over
+// state. A nil/zero total tick is ignored (percentage is undefined).
+func (s *Service) newDDLProgressEmitter(ctx context.Context, row repository.DownloadRow, downloadID int64) func(done, total int64) {
+	var (
+		started   bool
+		lastEmit  time.Time
+		lastPct   float64
+		curStatus = row.Status
+	)
+	return func(done, total int64) {
+		if total <= 0 {
+			return
+		}
+		pct := float64(done) / float64(total) * 100
+		now := s.now()
+		if started && now.Sub(lastEmit) < ddlProgressMinInterval && pct-lastPct < ddlProgressMinPctDelta {
+			return
+		}
+		started = true
+		lastEmit = now
+		lastPct = pct
+
+		// Reflect the live row status so the second+ ticks go through the "already Downloading"
+		// updated_at bump rather than re-attempting the Queued->Downloading flip.
+		emitRow := row
+		emitRow.Status = curStatus
+		if perr := s.onProgress(ctx, emitRow, download.PollResult{
+			Status: download.PollInProgress, ProgressPct: pct,
+		}); perr != nil {
+			s.logger.Warn("ddl progress event failed (non-fatal)",
+				slog.Int64("download_id", downloadID), slog.Any("error", perr))
+			return
+		}
+		// After the first successful emit the row is Downloading; keep that for later ticks so
+		// onProgress takes the bump-only path (and so a real pct>0 keeps updated_at fresh).
+		curStatus = string(series.DownloadDownloading)
+	}
 }
 
 // pollOne reconciles a single active download row.
