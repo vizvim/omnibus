@@ -34,6 +34,7 @@ import (
 	jobsservice "github.com/vizvim/omnibus/internal/service/jobs"
 	"github.com/vizvim/omnibus/internal/service/search"
 	"github.com/vizvim/omnibus/internal/service/series"
+	"github.com/vizvim/omnibus/internal/service/tracking"
 	"github.com/vizvim/omnibus/internal/transport"
 )
 
@@ -46,6 +47,10 @@ const (
 	attemptCap = 5
 	// metadataTTL is the metadata_cache freshness window.
 	metadataTTL = 24 * time.Hour
+	// downloadPollInterval is the cadence of the periodic download-status poll (DL-03/04/08).
+	// Hardcoded constant rather than a config knob (D-13 lean-config posture, Claude's
+	// discretion). Short enough to feel live, light enough for a single-user box.
+	downloadPollInterval = 20 * time.Second
 )
 
 // Run starts the server and blocks until ctx is canceled (e.g. SIGINT/SIGTERM) or a
@@ -109,6 +114,16 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		AutoSearchBatch:   cfg.AutoSearchBatchSize,
 	})
 
+	// TrackingService owns the download-status poll loop (DL-03/04/08): it polls active
+	// downloads via the SAB Tracker, surfaces progress/terminal state on the timeline,
+	// records history, and detects failures (explicit + stall). It is the PollRunner the
+	// periodic DownloadPoll job delegates to. Only SAB has a Tracker this phase.
+	trackingSvc := tracking.New(tracking.Deps{
+		Repos:    repos,
+		Trackers: map[string]download.Tracker{"sabnzbd": sabProvider},
+		Logger:   logger,
+	})
+
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewImportWorker(svc))
 	river.AddWorker(workers, jobs.NewRefreshWorker(svc))
@@ -116,11 +131,12 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	river.AddWorker(workers, jobs.NewAutoSearchSweepWorker(searchSvc))
 	river.AddWorker(workers, jobs.NewSearchIssueWorker(searchSvc))
 	river.AddWorker(workers, jobs.NewRSSPollWorker(searchSvc))
+	river.AddWorker(workers, jobs.NewDownloadPollWorker(trackingSvc))
 
 	sweepInterval := time.Duration(cfg.RefreshIntervalHours) * time.Hour
 	autoSearchInterval := time.Duration(cfg.AutoSearchIntervalHours) * time.Hour
 	rssPollInterval := time.Duration(cfg.RSSPollIntervalMinutes) * time.Minute
-	riverClient, err := jobs.New(ctx, database.Write, database.Read, cfg.RiverWorkers, sweepInterval, autoSearchInterval, rssPollInterval, logger, workers)
+	riverClient, err := jobs.New(ctx, database.Write, database.Read, cfg.RiverWorkers, sweepInterval, autoSearchInterval, rssPollInterval, downloadPollInterval, logger, workers)
 	if err != nil {
 		_ = database.Close()
 		return fmt.Errorf("build jobs client: %w", err)

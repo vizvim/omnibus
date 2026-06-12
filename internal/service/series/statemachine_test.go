@@ -64,3 +64,38 @@ func TestTransitionReturnsError(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, series.StatusSnatched, next)
 }
+
+func TestDownloadTransition(t *testing.T) {
+	t.Parallel()
+
+	legal := []struct{ from, to series.DownloadStatus }{
+		{series.DownloadQueued, series.DownloadDownloading},
+		{series.DownloadQueued, series.DownloadCompleted},
+		{series.DownloadQueued, series.DownloadFailed},
+		{series.DownloadQueued, series.DownloadBlacklisted},
+		{series.DownloadDownloading, series.DownloadCompleted},
+		{series.DownloadDownloading, series.DownloadFailed},
+		{series.DownloadDownloading, series.DownloadBlacklisted},
+		{series.DownloadFailed, series.DownloadBlacklisted},
+	}
+	for _, tc := range legal {
+		require.True(t, series.CanTransitionDownload(tc.from, tc.to), "%s -> %s should be legal", tc.from, tc.to)
+		got, err := series.TransitionDownload(tc.from, tc.to)
+		require.NoError(t, err)
+		require.Equal(t, tc.to, got)
+	}
+
+	illegal := []struct{ from, to series.DownloadStatus }{
+		{series.DownloadCompleted, series.DownloadDownloading},
+		{series.DownloadCompleted, series.DownloadFailed},
+		{series.DownloadFailed, series.DownloadDownloading},
+		{series.DownloadFailed, series.DownloadCompleted},
+		{series.DownloadBlacklisted, series.DownloadQueued},
+		{series.DownloadDownloading, series.DownloadQueued},
+	}
+	for _, tc := range illegal {
+		require.False(t, series.CanTransitionDownload(tc.from, tc.to), "%s -> %s should be illegal", tc.from, tc.to)
+		_, err := series.TransitionDownload(tc.from, tc.to)
+		require.Error(t, err)
+	}
+}

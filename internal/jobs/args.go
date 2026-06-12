@@ -110,3 +110,20 @@ func (RSSPollArgs) InsertOpts() river.InsertOpts {
 		UniqueOpts: river.UniqueOpts{},
 	}
 }
+
+// DownloadPollArgs are the (empty) arguments for the periodic download-status poll
+// (DL-03/04/08), registered as a River periodic job. Unique by kind so an overlapping
+// tick (while a previous poll is still queued/running) collapses into the in-flight one.
+// A reactive EnqueueDownloadPoll can also enqueue it right after a fresh grab.
+type DownloadPollArgs struct{}
+
+// Kind uniquely identifies the download poll job type, stable across deploys.
+func (DownloadPollArgs) Kind() string { return "download_poll" }
+
+// InsertOpts makes the download poll unique by kind (no overlapping ticks).
+func (DownloadPollArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{
+		Queue:      river.QueueDefault,
+		UniqueOpts: river.UniqueOpts{},
+	}
+}

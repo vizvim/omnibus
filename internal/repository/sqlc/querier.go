@@ -31,11 +31,23 @@ type Querier interface {
 	// Records a no-result auto-search attempt; the growing count spaces retries and
 	// eventually crosses the cap so the issue goes cold (D-09).
 	IncrementSearchAttempts(ctx context.Context, id int64) error
+	// Append-only download history (DL-03): record what was grabbed, from where, the outcome,
+	// and when. Never updated or deleted; it is the audit trail of every grab + terminal flip.
+	InsertDownloadHistory(ctx context.Context, arg InsertDownloadHistoryParams) (DownloadHistory, error)
 	// Inserts one normalized credit; duplicate (issue_id, role, name) rows are no-ops.
 	InsertIssueCredit(ctx context.Context, arg InsertIssueCreditParams) error
 	InsertIssueEvent(ctx context.Context, arg InsertIssueEventParams) (IssueEvent, error)
 	LinkArcIssue(ctx context.Context, arg LinkArcIssueParams) error
+	// The active poll set: rows still in flight (Queued/Downloading) that the DownloadPoll
+	// job polls SAB for each tick. Ordered oldest-updated-first so the most stale rows are
+	// reconciled first within a bounded tick (D-01).
+	ListActiveDownloads(ctx context.Context) ([]Download, error)
 	ListArcsBySeries(ctx context.Context, seriesID int64) ([]StoryArc, error)
+	// The (provider, release_key) pairs already known-bad for an issue: rows with a
+	// Failed/Blacklisted downloads status. The replacement search excludes these so a
+	// retry cannot re-pick a release that already failed for this issue (D-12 loop-prevention:
+	// dedup against the downloads table, NOT the blacklists table).
+	ListDeadReleaseKeysForIssue(ctx context.Context, issueID int64) ([]ListDeadReleaseKeysForIssueRow, error)
 	ListDownloadsByIssue(ctx context.Context, issueID int64) ([]Download, error)
 	ListEnabledIndexers(ctx context.Context) ([]Indexer, error)
 	ListIndexers(ctx context.Context) ([]Indexer, error)
@@ -57,6 +69,9 @@ type Querier interface {
 	// Idempotent on cache_key (UNIQUE); refreshes payload + freshness markers.
 	PutMetadataCache(ctx context.Context, arg PutMetadataCacheParams) error
 	SetUserConfig(ctx context.Context, arg SetUserConfigParams) error
+	// Flip a download row status (and bump updated_at). All Phase-5 status writes route
+	// through the download-status state machine then this query, never a raw caller UPDATE.
+	UpdateDownloadStatus(ctx context.Context, arg UpdateDownloadStatusParams) (Download, error)
 	UpdateIndexer(ctx context.Context, arg UpdateIndexerParams) (Indexer, error)
 	UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusParams) error
 	UpdateSeriesCounts(ctx context.Context, arg UpdateSeriesCountsParams) error

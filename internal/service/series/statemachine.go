@@ -50,3 +50,44 @@ func Transition(from, to IssueStatus, attempts, attemptCap int) (IssueStatus, er
 	}
 	return to, nil
 }
+
+// DownloadStatus is the typed download lifecycle state, backed by the string values stored
+// in downloads.status (the CHECK constraint in 0001_init). It is distinct from IssueStatus:
+// a download row tracks one grab attempt, an issue tracks the work item.
+type DownloadStatus string
+
+// The five download statuses (downloads.status CHECK).
+const (
+	DownloadQueued      DownloadStatus = "Queued"
+	DownloadDownloading DownloadStatus = "Downloading"
+	DownloadCompleted   DownloadStatus = "Completed"
+	DownloadFailed      DownloadStatus = "Failed"
+	DownloadBlacklisted DownloadStatus = "Blacklisted"
+)
+
+// legalDownloadTransitions encodes the legal download-status edges. A grab starts Queued,
+// progresses to Downloading, and ends Completed or Failed; either active state can also
+// fail outright (explicit client failure or stall), and a user can Blacklist an active or
+// failed release. Completed is terminal. Every downloads.status flip in Phase 5 routes
+// through TransitionDownload, never a raw UPDATE downloads SET status.
+var legalDownloadTransitions = map[DownloadStatus]map[DownloadStatus]bool{
+	DownloadQueued:      {DownloadDownloading: true, DownloadCompleted: true, DownloadFailed: true, DownloadBlacklisted: true},
+	DownloadDownloading: {DownloadCompleted: true, DownloadFailed: true, DownloadBlacklisted: true},
+	DownloadFailed:      {DownloadBlacklisted: true},
+	DownloadCompleted:   {},
+	DownloadBlacklisted: {},
+}
+
+// CanTransitionDownload reports whether moving a download row from -> to is legal.
+func CanTransitionDownload(from, to DownloadStatus) bool {
+	return legalDownloadTransitions[from][to]
+}
+
+// TransitionDownload validates a download-status edge and returns the new status or an
+// error if the edge is illegal (e.g. Completed -> Downloading).
+func TransitionDownload(from, to DownloadStatus) (DownloadStatus, error) {
+	if !CanTransitionDownload(from, to) {
+		return from, fmt.Errorf("illegal download status transition %s -> %s", from, to)
+	}
+	return to, nil
+}

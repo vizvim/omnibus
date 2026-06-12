@@ -2,8 +2,9 @@ package download
 
 import "context"
 
-// FakeProvider is a network-free DownloadProvider for service tests. It records the last
-// GrabRequest and returns a canned client reference (or a configured error).
+// FakeProvider is a network-free DownloadProvider + Tracker for service tests. It records
+// the last GrabRequest and returns a canned client reference (or a configured error), and
+// serves scripted Poll results keyed by client ref so the poll job can be tested without SAB.
 type FakeProvider struct {
 	kind      string
 	clientRef string
@@ -13,9 +14,19 @@ type FakeProvider struct {
 	LastRequest GrabRequest
 	// Calls counts Submit invocations (to assert idempotency / call counts).
 	Calls int
+
+	// PollResults maps a client ref to the PollResult Poll returns for it (test seam).
+	PollResults map[string]PollResult
+	// PollErr, when set, makes Poll return it for every ref.
+	PollErr error
+	// Removed records the client refs passed to RemoveFromHistory (D-05 assertions).
+	Removed []string
 }
 
-var _ DownloadProvider = (*FakeProvider)(nil)
+var (
+	_ DownloadProvider = (*FakeProvider)(nil)
+	_ Tracker          = (*FakeProvider)(nil)
+)
 
 // NewFakeProvider builds a fake that returns clientRef from Submit.
 func NewFakeProvider(kind, clientRef string) *FakeProvider {
@@ -44,4 +55,29 @@ func (f *FakeProvider) Submit(_ context.Context, req GrabRequest) (string, error
 		return "", f.err
 	}
 	return f.clientRef, nil
+}
+
+// SetPoll scripts the PollResult Poll returns for a given client ref.
+func (f *FakeProvider) SetPoll(clientRef string, res PollResult) {
+	if f.PollResults == nil {
+		f.PollResults = map[string]PollResult{}
+	}
+	f.PollResults[clientRef] = res
+}
+
+// Poll returns the scripted result for clientRef (or PollNotReady if none is scripted).
+func (f *FakeProvider) Poll(_ context.Context, clientRef string) (PollResult, error) {
+	if f.PollErr != nil {
+		return PollResult{}, f.PollErr
+	}
+	if res, ok := f.PollResults[clientRef]; ok {
+		return res, nil
+	}
+	return PollResult{Status: PollNotReady}, nil
+}
+
+// RemoveFromHistory records the client ref it was asked to remove (D-05 assertions).
+func (f *FakeProvider) RemoveFromHistory(_ context.Context, clientRef string) error {
+	f.Removed = append(f.Removed, clientRef)
+	return nil
 }
