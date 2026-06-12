@@ -96,8 +96,12 @@ func (s *Service) runSearchIssue(ctx context.Context, issueID int64) (AutoSearch
 		return AutoSearchOutcome{}, err
 	}
 
+	bl, err := s.blacklistFor(ctx, issue.ID)
+	if err != nil {
+		return AutoSearchOutcome{}, err
+	}
 	target := IssueMatch{Sort: issue.IssueNumberSort, Qual: issue.IssueNumberQual.String}
-	result := Pipeline(cands, target, s.blacklistFor(issue.ID), s.filterOpts, s.scoreOpts, s.floor)
+	result := Pipeline(cands, target, bl, s.filterOpts, s.scoreOpts, s.floor)
 
 	if err := s.writeSearchedEvent(ctx, issueID, result); err != nil {
 		return AutoSearchOutcome{}, err

@@ -27,6 +27,18 @@ func downloadKindFor(indexerKind string) string {
 	return "getcomics"
 }
 
+// indexerKindFor is the inverse of downloadKindFor: it maps a download-provider kind
+// (as stored on a downloads row) back to the indexer kind a candidate carries in its
+// Provider field. The dead-download keys (D-12) are recorded with the download kind, but
+// the BlacklistSet is matched against candidate.Provider (the indexer kind), so the dead
+// keys must be translated before they go into the set.
+func indexerKindFor(downloadKind string) string {
+	if downloadKind == "sabnzbd" {
+		return indexer.NewznabKind
+	}
+	return downloadKind
+}
+
 // Deps are the search Service's injected collaborators.
 type Deps struct {
 	Gateway           IndexerGateway
@@ -118,8 +130,12 @@ func (s *Service) SearchIssue(ctx context.Context, issueID int64) (Result, error
 		return Result{}, err
 	}
 
+	bl, err := s.blacklistFor(ctx, issue.ID)
+	if err != nil {
+		return Result{}, err
+	}
 	target := IssueMatch{Sort: issue.IssueNumberSort, Qual: issue.IssueNumberQual.String}
-	result := Pipeline(cands, target, s.blacklistFor(issue.ID), s.filterOpts, s.scoreOpts, s.floor)
+	result := Pipeline(cands, target, bl, s.filterOpts, s.scoreOpts, s.floor)
 
 	if err := s.writeSearchedEvent(ctx, issueID, result); err != nil {
 		return Result{}, err
@@ -228,11 +244,39 @@ func buildIndexerProviders(rows []repository.IndexerRow) []indexer.IndexerProvid
 	return out
 }
 
-// blacklistFor loads the issue's blacklist set. A dedicated blacklist repository lands in
-// Phase 5; for this phase the set is empty (no candidates are blacklisted yet). The hard
-// filter accepts a nil set.
-func (s *Service) blacklistFor(_ int64) BlacklistSet {
-	return nil
+// blacklistFor builds the issue's BlacklistSet by UNIONing two sources (D-11/D-12):
+//
+//  1. user-blacklisted releases for the issue (ListForIssue, D-11), and
+//  2. dead download keys — releases already Failed/Blacklisted for the issue in the
+//     downloads table (ListDeadReleaseKeys, D-12) — translated from their stored
+//     download-provider kind back to the candidate indexer kind so they match the
+//     candidate.Provider keyspace the hard filter compares against.
+//
+// The dead-key dedup is the mandatory loop-prevention (RESEARCH Pitfall 3): it excludes a
+// release that already failed WITHOUT requiring a user blacklist row, so a replacement
+// search can never re-pick a dead release. The hard filter accepts a nil/empty set.
+func (s *Service) blacklistFor(ctx context.Context, issueID int64) (BlacklistSet, error) {
+	pairs := make([][2]string, 0)
+
+	userKeys, err := s.repos.Blacklist.ListForIssue(ctx, issueID)
+	if err != nil {
+		return nil, fmt.Errorf("list blacklist for issue %d: %w", issueID, err)
+	}
+	for _, k := range userKeys {
+		pairs = append(pairs, [2]string{k.Provider, k.ReleaseKey})
+	}
+
+	deadKeys, err := s.repos.Downloads.ListDeadReleaseKeys(ctx, issueID)
+	if err != nil {
+		return nil, fmt.Errorf("list dead release keys for issue %d: %w", issueID, err)
+	}
+	for _, k := range deadKeys {
+		// Dead keys are recorded with the download-provider kind; the BlacklistSet is keyed
+		// on the indexer kind a candidate carries, so translate before unioning (D-12).
+		pairs = append(pairs, [2]string{indexerKindFor(k.Provider), k.ReleaseKey})
+	}
+
+	return NewBlacklistSet(pairs...), nil
 }
 
 // writeSearchedEvent records a searched event carrying the floor decision + reject reasons.

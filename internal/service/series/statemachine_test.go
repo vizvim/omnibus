@@ -54,6 +54,31 @@ func TestFailedToWantedAttemptCap(t *testing.T) {
 	require.False(t, series.CanTransition(series.StatusFailed, series.StatusWanted, 4, attemptCap))
 }
 
+func TestDownloadAttemptCap(t *testing.T) {
+	t.Parallel()
+	const searchCap = 5
+	const downloadCap = 3
+
+	// Below both caps: Failed -> Wanted is allowed.
+	require.True(t, series.CanTransitionWithCaps(
+		series.StatusFailed, series.StatusWanted, 0, searchCap, 2, downloadCap))
+
+	// At/above the download cap (but below search cap): blocked by the cool-off (D-14).
+	require.False(t, series.CanTransitionWithCaps(
+		series.StatusFailed, series.StatusWanted, 0, searchCap, 3, downloadCap),
+		"at the download cap Failed->Wanted is blocked pending cool-off/manual retry")
+	require.False(t, series.CanTransitionWithCaps(
+		series.StatusFailed, series.StatusWanted, 0, searchCap, 4, downloadCap))
+
+	// At the search cap (but below download cap): also blocked (either cap parks the issue).
+	require.False(t, series.CanTransitionWithCaps(
+		series.StatusFailed, series.StatusWanted, 5, searchCap, 0, downloadCap))
+
+	// The download cap does not affect unrelated edges.
+	require.True(t, series.CanTransitionWithCaps(
+		series.StatusWanted, series.StatusSnatched, 0, searchCap, 99, downloadCap))
+}
+
 func TestTransitionReturnsError(t *testing.T) {
 	t.Parallel()
 	const attemptCap = 5

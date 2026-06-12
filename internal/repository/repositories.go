@@ -18,6 +18,7 @@ type Repositories struct {
 	IssueCredits   IssueCreditRepository
 	DownloadClient DownloadClientRepository
 	RenameConfig   RenameConfigRepository
+	Blacklist      BlacklistRepository
 }
 
 // NewRepositories constructs all repositories bound to the read/write pools.
@@ -36,5 +37,6 @@ func NewRepositories(d *db.DB) *Repositories {
 		IssueCredits:   NewIssueCreditRepository(d),
 		DownloadClient: NewDownloadClientRepository(d),
 		RenameConfig:   NewRenameConfigRepository(d),
+		Blacklist:      NewBlacklistRepository(d),
 	}
 }

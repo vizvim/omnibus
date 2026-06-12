@@ -30,13 +30,29 @@ var legalTransitions = map[IssueStatus]map[IssueStatus]bool{
 }
 
 // CanTransition reports whether moving from -> to is legal. The
-// Failed→Wanted edge is additionally gated by the attempt cap (loop prevention): once
-// attempts reach the cap, the issue stays Failed pending user action.
+// Failed→Wanted edge is additionally gated by the (search) attempt cap (loop prevention):
+// once attempts reach the cap, the issue stays Failed pending user action.
 func CanTransition(from, to IssueStatus, attempts, attemptCap int) bool {
 	if !legalTransitions[from][to] {
 		return false
 	}
 	if from == StatusFailed && to == StatusWanted && attempts >= attemptCap {
+		return false
+	}
+	return true
+}
+
+// CanTransitionWithCaps reports whether from -> to is legal under BOTH the search-attempt
+// cap and the SEPARATE download-attempt cap (D-13/D-14). The Failed→Wanted edge is blocked
+// when EITHER counter has reached its cap: a search-exhausted issue goes cold, and a
+// download-exhausted issue parks in cool-off (until a manual retry resets download_attempts).
+// Other edges are unaffected. This is the gate the replacement loop consults so a failed
+// download cannot re-search indefinitely.
+func CanTransitionWithCaps(from, to IssueStatus, searchAttempts, searchCap, downloadAttempts, downloadCap int) bool {
+	if !CanTransition(from, to, searchAttempts, searchCap) {
+		return false
+	}
+	if from == StatusFailed && to == StatusWanted && downloadAttempts >= downloadCap {
 		return false
 	}
 	return true

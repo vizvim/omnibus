@@ -70,8 +70,12 @@ func (s *Service) processRSSIssue(ctx context.Context, issueID int64, cands []in
 		return false, fmt.Errorf("load issue %d: %w", issueID, err)
 	}
 
+	bl, err := s.blacklistFor(ctx, issue.ID)
+	if err != nil {
+		return false, err
+	}
 	target := IssueMatch{Sort: issue.IssueNumberSort, Qual: issue.IssueNumberQual.String}
-	result := Pipeline(cands, target, s.blacklistFor(issue.ID), s.filterOpts, s.scoreOpts, s.floor)
+	result := Pipeline(cands, target, bl, s.filterOpts, s.scoreOpts, s.floor)
 
 	if werr := s.writeSearchedEvent(ctx, issueID, result); werr != nil {
 		return false, werr

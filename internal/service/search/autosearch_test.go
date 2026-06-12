@@ -111,6 +111,70 @@ func TestSearchAndGrabReturnsFloorReasonWhenNothingAcceptable(t *testing.T) {
 	require.NotEmpty(t, outcome.FloorReason, "non-acceptable outcome carries the floor reason")
 }
 
+// TestReplacementDedup: a release that already Failed for an issue (a dead key in the
+// downloads table) is excluded from the next search pipeline WITHOUT a blacklist row
+// (D-12 loop-prevention — dedup against downloads, not blacklists). The dead key is stored
+// with the download-provider kind ("sabnzbd"); blacklistFor translates it back to the
+// indexer kind ("newznab") so it matches the candidate the pipeline sees.
+func TestReplacementDedup(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	// The only candidate would otherwise clear the floor and be auto-grabbed.
+	svc, repos, issueID := newSearchService(t, []indexer.Candidate{
+		svcCand("newznab", "rk-cbz", "cbz", 30*1024*1024),
+	})
+
+	// Record the release as already Failed for this issue (a dead download row). The
+	// downloads table stores the download-provider kind, not the indexer kind.
+	_, err := repos.Downloads.Upsert(ctx, repository.DownloadUpsert{
+		IssueID: issueID, Provider: "sabnzbd", ReleaseKey: "rk-cbz", Status: "Failed",
+	}, "2026-01-01T00:00:00Z")
+	require.NoError(t, err)
+
+	// No blacklist row exists — the exclusion must come purely from the dead-download dedup.
+	bl, err := repos.Blacklist.ListForIssue(ctx, issueID)
+	require.NoError(t, err)
+	require.Empty(t, bl, "no blacklist row: dedup is via the downloads table (D-12)")
+
+	require.NoError(t, svc.RunSearchIssue(ctx, issueID))
+
+	iss, err := repos.Issue.GetByID(ctx, issueID)
+	require.NoError(t, err)
+	require.Equal(t, "Wanted", iss.Status, "the dead release is excluded, so nothing is grabbed")
+
+	// The searched event records the rejection reason as blacklisted (excluded).
+	events, err := repos.IssueEvents.ListByIssue(ctx, issueID)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	require.Equal(t, "searched", events[0].EventType)
+	require.Contains(t, events[0].PayloadJSON, "blacklisted")
+}
+
+// TestBlacklistIssue: a user-blacklisted release for an issue is excluded from the search
+// pipeline (D-11), even though it would otherwise clear the floor.
+func TestBlacklistIssue(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	svc, repos, issueID := newSearchService(t, []indexer.Candidate{
+		svcCand("newznab", "rk-cbz", "cbz", 30*1024*1024),
+	})
+
+	// Blacklist the only clearing candidate (stored with the indexer kind it carries).
+	require.NoError(t, repos.Blacklist.Add(ctx, repository.BlacklistAdd{
+		IssueID: issueID, Provider: "newznab", ReleaseKey: "rk-cbz", Reason: "user blacklist",
+	}, "2026-01-01T00:00:00Z"))
+
+	require.NoError(t, svc.RunSearchIssue(ctx, issueID))
+
+	iss, err := repos.Issue.GetByID(ctx, issueID)
+	require.NoError(t, err)
+	require.Equal(t, "Wanted", iss.Status, "a blacklisted release is excluded, so nothing is grabbed")
+
+	dls, err := repos.Downloads.ListByIssue(ctx, issueID)
+	require.NoError(t, err)
+	require.Empty(t, dls, "the blacklisted release is never grabbed")
+}
+
 func TestRunSearchIssueClearingCandidateAutoGrabs(t *testing.T) {
 	t.Parallel()
 	// A cbz at neutral size clears the floor and is auto-grabbed.

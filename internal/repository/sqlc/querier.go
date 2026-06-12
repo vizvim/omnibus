@@ -6,9 +6,14 @@ package sqlc
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
+	// Per-issue blacklist of a specific release (D-11): issue_id is set, series_id is NULL
+	// (series-wide blacklist is deferred). The UNIQUE(provider, release_key, issue_id)
+	// constraint makes a duplicate blacklist of the same release for the same issue a no-op.
+	AddBlacklist(ctx context.Context, arg AddBlacklistParams) error
 	CountIssuesBySeries(ctx context.Context, seriesID int64) (int64, error)
 	CoverExists(ctx context.Context, arg CoverExistsParams) (bool, error)
 	// Idempotent upsert on the existing UNIQUE(provider, release_key, issue_id) index:
@@ -28,6 +33,10 @@ type Querier interface {
 	GetSeriesByID(ctx context.Context, id int64) (Series, error)
 	GetSeriesByVolumeID(ctx context.Context, comicvineVolumeID int64) (Series, error)
 	GetUserConfig(ctx context.Context, key string) (UserConfig, error)
+	// Records a failed-grab / replacement cycle for an issue (D-13). download_attempts is
+	// SEPARATE from search_attempts: it counts dead downloads, not no-result searches. The
+	// growing count crosses the cap and parks the issue in cool-off (D-14).
+	IncrementDownloadAttempts(ctx context.Context, id int64) error
 	// Records a no-result auto-search attempt; the growing count spaces retries and
 	// eventually crosses the cap so the issue goes cold (D-09).
 	IncrementSearchAttempts(ctx context.Context, id int64) error
@@ -43,6 +52,9 @@ type Querier interface {
 	// reconciled first within a bounded tick (D-01).
 	ListActiveDownloads(ctx context.Context) ([]Download, error)
 	ListArcsBySeries(ctx context.Context, seriesID int64) ([]StoryArc, error)
+	// The (provider, release_key) pairs a user has blacklisted for an issue (D-11). The
+	// replacement search unions these with the dead download keys to build its BlacklistSet.
+	ListBlacklistForIssue(ctx context.Context, issueID sql.NullInt64) ([]ListBlacklistForIssueRow, error)
 	// The (provider, release_key) pairs already known-bad for an issue: rows with a
 	// Failed/Blacklisted downloads status. The replacement search excludes these so a
 	// retry cannot re-pick a release that already failed for this issue (D-12 loop-prevention:
@@ -64,10 +76,17 @@ type Querier interface {
 	// first (then oldest), excluding issues that have reached the attempt cap (cold).
 	// The cap is passed as the upper bound (D-08/D-09).
 	ListWantedForAutoSearch(ctx context.Context, arg ListWantedForAutoSearchParams) ([]Issue, error)
+	// A bounded batch of issues eligible for an attempt-capped replacement, mirroring the
+	// search backoff but on the SEPARATE download_attempts counter (D-13/D-14): fewest
+	// download_attempts first (then oldest), excluding issues at or above the cap (cool-off).
+	ListWantedForDownloadRetry(ctx context.Context, arg ListWantedForDownloadRetryParams) ([]Issue, error)
 	// All currently-Wanted issues with their normalized sort/qual, for RSS feed matching.
 	ListWantedForMatch(ctx context.Context) ([]Issue, error)
 	// Idempotent on cache_key (UNIQUE); refreshes payload + freshness markers.
 	PutMetadataCache(ctx context.Context, arg PutMetadataCacheParams) error
+	// Clears the download_attempts cool-off so a manual retry can re-run the pipeline
+	// immediately (DL-07 / D-14): the user's explicit retry is the intended cap reset.
+	ResetDownloadAttempts(ctx context.Context, id int64) error
 	SetUserConfig(ctx context.Context, arg SetUserConfigParams) error
 	// Flip a download row status (and bump updated_at). All Phase-5 status writes route
 	// through the download-status state machine then this query, never a raw caller UPDATE.
