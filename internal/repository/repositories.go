@@ -17,6 +17,7 @@ type Repositories struct {
 	IssueEvents    IssueEventRepository
 	IssueCredits   IssueCreditRepository
 	DownloadClient DownloadClientRepository
+	RenameConfig   RenameConfigRepository
 }
 
 // NewRepositories constructs all repositories bound to the read/write pools.
@@ -34,5 +35,6 @@ func NewRepositories(d *db.DB) *Repositories {
 		IssueEvents:    NewIssueEventRepository(d),
 		IssueCredits:   NewIssueCreditRepository(d),
 		DownloadClient: NewDownloadClientRepository(d),
+		RenameConfig:   NewRenameConfigRepository(d),
 	}
 }
