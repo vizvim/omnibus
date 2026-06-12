@@ -7,6 +7,7 @@ import type { ReactElement, ReactNode } from "react";
 import { DownloadClientService } from "../gen/omnibus/v1/download_client_pb";
 import { IndexerService } from "../gen/omnibus/v1/indexers_pb";
 import { JobService } from "../gen/omnibus/v1/jobs_pb";
+import { RenameConfigService } from "../gen/omnibus/v1/rename_config_pb";
 import { SearchService } from "../gen/omnibus/v1/search_pb";
 import { SeriesService } from "../gen/omnibus/v1/series_pb";
 
@@ -55,6 +56,19 @@ export function makeDownloadClientTransport(
 ): Transport {
   return createRouterTransport(({ service }) => {
     service(DownloadClientService, impl as never);
+  });
+}
+
+// makeSettingsTransport builds an in-memory Connect transport serving BOTH the
+// DownloadClientService and RenameConfigService method stubs, since the Settings page
+// queries both on mount.
+export function makeSettingsTransport(
+  downloadImpl: Record<string, (req: never) => unknown>,
+  renameImpl: Record<string, (req: never) => unknown> = {},
+): Transport {
+  return createRouterTransport(({ service }) => {
+    service(DownloadClientService, downloadImpl as never);
+    service(RenameConfigService, renameImpl as never);
   });
 }
 
