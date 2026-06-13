@@ -3,6 +3,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { App } from "../App";
+import { DDLConfigSchema } from "../gen/omnibus/v1/ddl_config_pb";
 import { DownloadClientConfigSchema } from "../gen/omnibus/v1/download_client_pb";
 import { RenameConfigSchema } from "../gen/omnibus/v1/rename_config_pb";
 import { makeSettingsTransport, renderWithProviders } from "../test/render";
@@ -27,6 +28,12 @@ const renameStub = {
   getRenameConfig: () => ({ config: sampleRenameConfig }),
 };
 
+const sampleDDLConfig = create(DDLConfigSchema, { enabled: false });
+
+const ddlStub = {
+  getDDLConfig: () => ({ config: sampleDDLConfig }),
+};
+
 describe("settings page", () => {
   it("renders the download client section with the current config", async () => {
     const transport = makeSettingsTransport(
@@ -34,6 +41,7 @@ describe("settings page", () => {
         getDownloadClientConfig: () => ({ config: sampleConfig }),
       },
       renameStub,
+      ddlStub,
     );
     renderWithProviders(<App initialRoute="settings" />, transport);
 
@@ -48,6 +56,7 @@ describe("settings page", () => {
         getDownloadClientConfig: () => ({ config: sampleConfig }),
       },
       renameStub,
+      ddlStub,
     );
     renderWithProviders(<App initialRoute="settings" />, transport);
 
@@ -66,6 +75,7 @@ describe("settings page", () => {
         testDownloadClientConfig: () => ({ ok: true, detail: "connected" }),
       },
       renameStub,
+      ddlStub,
     );
     renderWithProviders(<App initialRoute="settings" />, transport);
 
@@ -83,6 +93,7 @@ describe("settings page", () => {
         testDownloadClientConfig: () => ({ ok: false, detail: "not configured" }),
       },
       renameStub,
+      ddlStub,
     );
     renderWithProviders(<App initialRoute="settings" />, transport);
 
@@ -99,6 +110,7 @@ describe("settings page", () => {
         getDownloadClientConfig: () => ({ config: sampleConfig }),
       },
       renameStub,
+      ddlStub,
     );
     renderWithProviders(<App initialRoute="settings" />, transport);
 
@@ -130,6 +142,7 @@ describe("settings page", () => {
           return { config: stored };
         },
       },
+      ddlStub,
     );
     renderWithProviders(<App initialRoute="settings" />, transport);
 
@@ -143,5 +156,55 @@ describe("settings page", () => {
 
     expect(await screen.findByText("$Series/$Year")).toBeInTheDocument();
     expect(savedFolder).toBe("$Series/$Year");
+  });
+
+  it("renders the Direct Downloads section with the current DDL state", async () => {
+    const transport = makeSettingsTransport(
+      {
+        getDownloadClientConfig: () => ({ config: sampleConfig }),
+      },
+      renameStub,
+      ddlStub,
+    );
+    renderWithProviders(<App initialRoute="settings" />, transport);
+
+    expect(await screen.findByText("Direct Downloads")).toBeInTheDocument();
+    // Default-OFF DDL config renders an "Off" state in the Enable DDLs row.
+    const enableRow = await screen.findByText(/Enable DDLs:/);
+    expect(enableRow).toHaveTextContent("Off");
+  });
+
+  it("saves an edited Enable DDLs toggle via UpdateDDLConfig", async () => {
+    let savedEnabled: boolean | undefined;
+    // The stored config is stateful so a refetch after save reflects the saved value.
+    let stored = sampleDDLConfig;
+    const transport = makeSettingsTransport(
+      {
+        getDownloadClientConfig: () => ({ config: sampleConfig }),
+      },
+      renameStub,
+      {
+        getDDLConfig: () => ({ config: stored }),
+        updateDDLConfig: (req: never) => {
+          savedEnabled = (req as { enabled: boolean }).enabled;
+          stored = create(DDLConfigSchema, { enabled: savedEnabled });
+          return { config: stored };
+        },
+      },
+    );
+    renderWithProviders(<App initialRoute="settings" />, transport);
+
+    expect(await screen.findByText("Direct Downloads")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /edit ddl settings/i }));
+
+    // Toggle the Enable DDLs checkbox on, then save.
+    fireEvent.click(screen.getByRole("checkbox", { name: /enable ddls/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save ddl settings/i }));
+
+    // After save + refetch the Enable DDLs row reflects the persisted "On" state.
+    const enableRow = await screen.findByText(/Enable DDLs:/);
+    expect(enableRow).toHaveTextContent("On");
+    expect(savedEnabled).toBe(true);
   });
 });

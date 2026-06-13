@@ -2,6 +2,10 @@ import { useMutation, useQuery } from "@connectrpc/connect-query";
 import { useState } from "react";
 
 import {
+  DDLSettingsForm,
+  type DDLSettingsFormValues,
+} from "../components/DDLSettingsForm";
+import {
   DownloadClientForm,
   type DownloadClientFormValues,
 } from "../components/DownloadClientForm";
@@ -10,6 +14,10 @@ import {
   RenameSettingsForm,
   type RenameSettingsFormValues,
 } from "../components/RenameSettingsForm";
+import {
+  getDDLConfig,
+  updateDDLConfig,
+} from "../gen/omnibus/v1/ddl_config-DDLConfigService_connectquery";
 import {
   getDownloadClientConfig,
   testDownloadClientConfig,
@@ -23,6 +31,7 @@ import {
 const SAVE_ERROR = "Couldn't save the download client. Check the URL and API key, then try again.";
 const RENAME_SAVE_ERROR =
   "Couldn't save the renaming settings. Check the folder and file formats, then try again.";
+const DDL_SAVE_ERROR = "Couldn't save the DDL settings. Try again.";
 
 // Settings is the functional-minimal settings page. It currently hosts the Download
 // Client (SABnzbd) section: the DB-backed config is shown (URL + category, never the API
@@ -52,6 +61,17 @@ export function Settings() {
     },
   });
 
+  // DDL config (05-07): DB-backed, runtime-toggleable "Enable DDLs" switch gating the
+  // built-in GetComics fallback.
+  const ddlConfig = useQuery(getDDLConfig, {}, { retry: false });
+  const [editingDDL, setEditingDDL] = useState(false);
+  const ddlUpdate = useMutation(updateDDLConfig, {
+    onSuccess: () => {
+      setEditingDDL(false);
+      void ddlConfig.refetch();
+    },
+  });
+
   function submitEdit(values: DownloadClientFormValues) {
     update.mutate({
       url: values.url,
@@ -72,6 +92,10 @@ export function Settings() {
     });
   }
 
+  function submitDDLEdit(values: DDLSettingsFormValues) {
+    ddlUpdate.mutate({ enabled: values.enabled });
+  }
+
   if (config.isError) {
     return (
       <EmptyState
@@ -83,6 +107,7 @@ export function Settings() {
 
   const current = config.data?.config;
   const renameCurrent = renameConfig.data?.config;
+  const ddlCurrent = ddlConfig.data?.config;
 
   return (
     <div className="flex flex-col gap-6">
@@ -209,6 +234,44 @@ export function Settings() {
             </span>
             <span className="text-sm text-slate-600">
               Lowercase: <span>{renameCurrent?.lowercase ? "On" : "Off"}</span>
+            </span>
+          </div>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Direct Downloads</h2>
+          {!editingDDL && !ddlConfig.isError ? (
+            <button
+              type="button"
+              aria-label="Edit DDL settings"
+              onClick={() => setEditingDDL(true)}
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Edit
+            </button>
+          ) : null}
+        </div>
+
+        {ddlConfig.isError ? (
+          <p className="text-sm text-red-600">Couldn't load the DDL settings.</p>
+        ) : editingDDL ? (
+          <DDLSettingsForm
+            initial={{ enabled: ddlCurrent?.enabled ?? false }}
+            pending={ddlUpdate.isPending}
+            error={ddlUpdate.isError ? DDL_SAVE_ERROR : undefined}
+            onSubmit={submitDDLEdit}
+            onCancel={() => setEditingDDL(false)}
+          />
+        ) : (
+          <div className="flex flex-col gap-2 rounded border border-slate-200 bg-slate-50 p-4">
+            <span className="text-sm text-slate-600">
+              Enable DDLs: <span>{ddlCurrent?.enabled ? "On" : "Off"}</span>
+            </span>
+            <span className="text-sm text-slate-600">
+              GetComics is used as a fallback when no Newznab indexer has an acceptable
+              release.
             </span>
           </div>
         )}
