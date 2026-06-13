@@ -2,6 +2,7 @@ package download_test
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -158,5 +160,72 @@ func TestDDLMirrorExhaustion(t *testing.T) {
 		require.Empty(t, entries, "no partial file should remain after mirror exhaustion")
 	} else {
 		require.ErrorIs(t, derr, os.ErrNotExist)
+	}
+}
+
+// TestDDLHeaderPhaseTimeout asserts that a host which accepts the connection but never writes
+// response headers causes Fetch to fail within a bounded time instead of pinning the serialized
+// DDL queue forever. The transport's ResponseHeaderTimeout governs this phase (the stall watchdog
+// only covers the body, after headers arrive). An injected client carrying its own short-timeout
+// transport is used to keep the test fast and to prove an injected transport is honored.
+func TestDDLHeaderPhaseTimeout(t *testing.T) {
+	t.Parallel()
+
+	// A raw listener that accepts the connection and never writes a response/headers.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ln.Close() })
+
+	accepted := make(chan struct{}, 1)
+	go func() {
+		for {
+			conn, aerr := ln.Accept()
+			if aerr != nil {
+				return
+			}
+			select {
+			case accepted <- struct{}{}:
+			default:
+			}
+			// Hold the connection open without ever sending headers.
+			t.Cleanup(func() { _ = conn.Close() })
+		}
+	}()
+
+	// Inject a client whose own transport carries a short response-header timeout so the test is
+	// fast. Because the client supplies a Transport, the provider must NOT clobber it.
+	injected := &http.Client{
+		Transport: &http.Transport{
+			DialContext:           (&net.Dialer{Timeout: time.Second}).DialContext,
+			ResponseHeaderTimeout: 250 * time.Millisecond,
+			TLSHandshakeTimeout:   time.Second,
+		},
+	}
+
+	p := download.NewGetComicsDDLProvider("http://"+ln.Addr().String(),
+		download.WithDDLHTTPClient(injected),
+		download.WithDDLDataPath(t.TempDir()),
+		download.WithDDLAllowPrivateHosts(),
+	)
+
+	postURL := "http://" + ln.Addr().String() + "/post"
+	done := make(chan error, 1)
+	go func() {
+		_, ferr := p.Fetch(context.Background(), postURL, nil)
+		done <- ferr
+	}()
+
+	select {
+	case <-accepted:
+		// good: the listener saw the connection.
+	case <-time.After(5 * time.Second):
+		t.Fatal("listener never accepted the connection")
+	}
+
+	select {
+	case ferr := <-done:
+		require.Error(t, ferr, "a header-phase hang must surface as an error, not a nil result")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Fetch hung past the header-phase timeout instead of failing fast")
 	}
 }

@@ -20,10 +20,23 @@ import (
 )
 
 // ddlStallWindow bounds how long streamMirror will wait for the next chunk of bytes from a
-// mirror before aborting the stream as stalled (WR-01). A slow-loris mirror that trickles
-// bytes under a valid Content-Length would otherwise block the serialized "ddl" queue
-// (MaxWorkers:1) indefinitely. This is a per-read liveness bound, not an overall deadline.
+// mirror before aborting the stream as stalled. A slow-loris mirror that trickles bytes under
+// a valid Content-Length would otherwise block the serialized "ddl" queue (MaxWorkers:1)
+// indefinitely. This is a per-read liveness bound on the body phase, not an overall deadline.
 const ddlStallWindow = 60 * time.Second
+
+// Transport-level timeouts bound the connection-establishment and header phases, which the
+// stall watchdog does NOT cover (it only governs the body stream, after headers arrive). A host
+// that accepts a TCP connection but never sends response headers would otherwise pin the
+// serialized "ddl" queue forever. These are generous enough to exceed real-world dial/handshake/
+// header latency on a slow mirror, while still bounding a dead host. They deliberately do NOT
+// cap the body: a multi-GB legitimate stream may run far longer than any of these and is
+// governed instead by the per-read stall watchdog.
+const (
+	ddlDialTimeout           = 30 * time.Second
+	ddlTLSHandshakeTimeout   = 15 * time.Second
+	ddlResponseHeaderTimeout = 30 * time.Second
+)
 
 // ErrMirrorExhaustion is returned by Fetch when no candidate mirror on the GetComics post
 // page yields a usable file (all mirrors 4xx/5xx/unreachable or report no Content-Length).
@@ -31,9 +44,12 @@ const ddlStallWindow = 60 * time.Second
 // path (download Failed + replacement search).
 var ErrMirrorExhaustion = errors.New("getcomics ddl: all mirrors exhausted")
 
-// GetComicsDDLProvider initiates a GetComics direct-download (DL-02) and, on Fetch, resolves
-// a working mirror from the post page and streams the file to an intermediate dir under
-// data_path. The clientRef is the post URL the resolver re-fetches to discover mirror links.
+// GetComicsDDLProvider initiates a GetComics direct-download and, on Fetch, resolves a working
+// mirror from the post page and streams the file to an intermediate dir under data_path. The
+// clientRef is the post URL the resolver re-fetches to discover mirror links. Its HTTP client
+// bounds the dial/TLS/response-header phases (see NewGetComicsDDLProvider) so a host that never
+// sends headers cannot pin the serialized DDL queue; long bodies stay uncapped and are governed
+// by the per-read stall watchdog.
 type GetComicsDDLProvider struct {
 	baseURL  string
 	client   *http.Client
@@ -66,7 +82,12 @@ func WithDDLAllowPrivateHosts() GetComicsDDLOption {
 	return func(p *GetComicsDDLProvider) { p.allowPrivateHosts = true }
 }
 
-// NewGetComicsDDLProvider builds a GetComics DDL provider.
+// NewGetComicsDDLProvider builds a GetComics DDL provider. The default HTTP client carries a
+// transport that bounds the dial, TLS-handshake, and response-header phases so a host that
+// accepts a connection but never sends headers fails fast instead of hanging the serialized DDL
+// queue. The body phase is deliberately left uncapped (no small client.Timeout) and is governed
+// by the stall watchdog. A caller-supplied client that already sets its own Transport is honored
+// as-is — the default timeout transport is installed only when the client has none.
 func NewGetComicsDDLProvider(baseURL string, opts ...GetComicsDDLOption) *GetComicsDDLProvider {
 	p := &GetComicsDDLProvider{
 		baseURL: strings.TrimRight(baseURL, "/"),
@@ -75,11 +96,36 @@ func NewGetComicsDDLProvider(baseURL string, opts ...GetComicsDDLOption) *GetCom
 	for _, o := range opts {
 		o(p)
 	}
+	// Install the header-phase timeout transport unless the caller supplied their own, so a
+	// test-injected transport is never clobbered. http.DefaultClient has a nil Transport, so the
+	// default path gets the bounded transport.
+	p.client = withTimeoutTransport(p.client)
 	// Wrap whatever client we ended up with (default or injected) so every redirect hop is
-	// re-validated against the SSRF guard (T-05-15): a benign first-hop URL can 302 the server
-	// into the internal network. This runs after options so the guard honors allowPrivateHosts.
+	// re-validated against the SSRF guard: a benign first-hop URL can 302 the server into the
+	// internal network. This runs after options so the guard honors allowPrivateHosts.
 	p.client = ssrfGuardedClient(p.client, p.allowPrivateHosts)
 	return p
+}
+
+// withTimeoutTransport returns a client whose Transport bounds the dial/TLS/response-header
+// phases. When c (or http.DefaultClient when c is nil) already has a non-nil Transport, it is
+// returned unchanged so a caller-injected transport is not clobbered. Otherwise the client is
+// shallow-cloned and given a *http.Transport carrying the dial/handshake/header timeouts; the
+// body stream stays uncapped.
+func withTimeoutTransport(c *http.Client) *http.Client {
+	if c == nil {
+		c = http.DefaultClient
+	}
+	if c.Transport != nil {
+		return c
+	}
+	cloned := *c
+	cloned.Transport = &http.Transport{
+		DialContext:           (&net.Dialer{Timeout: ddlDialTimeout}).DialContext,
+		TLSHandshakeTimeout:   ddlTLSHandshakeTimeout,
+		ResponseHeaderTimeout: ddlResponseHeaderTimeout,
+	}
+	return &cloned
 }
 
 // errRejectedTarget marks a URL rejected by the SSRF guard (bad scheme, missing host, or a
