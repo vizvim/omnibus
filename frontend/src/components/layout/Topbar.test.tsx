@@ -27,7 +27,7 @@ function topbarTransport(
 function renderTopbar(transport: ReturnType<typeof topbarTransport>) {
   return renderWithProviders(
     <AuthProvider>
-      <Topbar onNavigate={() => {}} onOpenCommand={() => {}} />
+      <Topbar active="library" onNavigate={() => {}} onOpenCommand={() => {}} />
     </AuthProvider>,
     transport,
   );

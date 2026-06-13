@@ -9,8 +9,10 @@ import { Skeleton } from "../components/ui/skeleton";
 import { listSeries } from "../gen/omnibus/v1/series-SeriesService_connectquery";
 
 // gridClass is shared by the loading skeletons and the real card grid so they line up.
+// Single column at the base (mobile) breakpoint; tile into an auto-fill cover grid at sm+
+// (UI-02 / D-13 single-column reflow).
 const gridClass =
-  "grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4 sm:grid-cols-[repeat(auto-fill,minmax(168px,1fr))]";
+  "grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(168px,1fr))]";
 
 // Library lists watched series via the generated ListSeries query: a loading grid, then an
 // empty state when there are none, otherwise a grid of cover cards.

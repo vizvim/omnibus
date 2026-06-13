@@ -13,7 +13,8 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { ConnectionState } from "./ConnectionState";
-import type { Navigate } from "./nav";
+import { MobileNavDrawer } from "./MobileNavDrawer";
+import type { Navigate, Route } from "./nav";
 
 // AccountMenu is the topbar account/Sign-out affordance, rendered only when auth is enabled
 // AND the session is active (D-07). Sign-out is non-destructive (no blocking confirm): it
@@ -60,14 +61,19 @@ function AccountMenu() {
 }
 
 export function Topbar({
+  active,
   onNavigate,
   onOpenCommand,
 }: {
+  active: Route;
   onNavigate: Navigate;
   onOpenCommand: () => void;
 }) {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/70 px-5 backdrop-blur-xl md:px-8">
+      {/* mobile nav: hamburger -> focus-trapped left drawer (below lg only, hidden at lg+) */}
+      <MobileNavDrawer active={active} onNavigate={onNavigate} onOpenCommand={onOpenCommand} />
+
       {/* command launcher — styled as a search field, opens ⌘K */}
       <button
         type="button"

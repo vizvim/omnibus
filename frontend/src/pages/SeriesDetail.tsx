@@ -208,7 +208,7 @@ export function SeriesDetail({
       {/* issues */}
       <section className="flex flex-col gap-4">
         <h2 className="font-display text-xl font-semibold tracking-tight">Issues</h2>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(140px,1fr))]">
           {issues.map((issue) => (
             <Fragment key={issue.id.toString()}>
               <button

@@ -74,7 +74,7 @@ export function Search({ seed = "", onAdded }: { seed?: string; onAdded: (series
       ) : null}
 
       {search.isSuccess && search.data.candidates.length > 0 ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4 sm:grid-cols-[repeat(auto-fill,minmax(168px,1fr))]">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(168px,1fr))]">
           {search.data.candidates.map((candidate, i) => (
             <div
               key={candidate.comicvineVolumeId.toString()}

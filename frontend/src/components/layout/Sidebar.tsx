@@ -83,7 +83,7 @@ export function Sidebar({
   onOpenCommand: () => void;
 }) {
   return (
-    <aside className="sticky top-0 flex h-screen w-[68px] shrink-0 flex-col border-r border-border bg-card/40 px-3 py-4 backdrop-blur-xl lg:w-64">
+    <aside className="sticky top-0 hidden h-screen w-[68px] shrink-0 flex-col border-r border-border bg-card/40 px-3 py-4 backdrop-blur-xl lg:flex lg:w-64">
       {/* brand */}
       <button
         type="button"
