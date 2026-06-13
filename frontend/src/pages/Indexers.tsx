@@ -1,9 +1,13 @@
 import { useMutation, useQuery } from "@connectrpc/connect-query";
+import { CheckCircle2, Plus, Radio, XCircle } from "lucide-react";
 import { useState } from "react";
 
 import { AddConfirmDialog } from "../components/AddConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { IndexerForm, type IndexerFormValues } from "../components/IndexerForm";
+import { PageHeader } from "../components/layout/PageHeader";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
 import type { Indexer } from "../gen/omnibus/v1/indexers_pb";
 import {
   createIndexer,
@@ -17,15 +21,12 @@ type TestOutcome = { ok: boolean; detail: string };
 
 const SAVE_ERROR = "Couldn't save the indexer. Check the URL and API key, then try again.";
 
-// Indexers is the functional-minimal indexer-management page (SRCH-09, D-16): a
-// single-column list of DB-backed indexers with add/edit/enable-disable/delete. It
-// reuses EmptyState, AddConfirmDialog (for delete), and the Activity list-row styling.
+// Indexers is the indexer-management page (SRCH-09, D-16): a list of DB-backed indexers
+// with add/edit/enable-disable/delete and a per-row connectivity probe.
 export function Indexers() {
   const list = useQuery(listIndexers, {}, { retry: false });
   const [formMode, setFormMode] = useState<"closed" | "add" | { edit: Indexer }>("closed");
   const [pendingDelete, setPendingDelete] = useState<Indexer | undefined>(undefined);
-  // Per-row connectivity-probe outcome, keyed by indexer id. The in-flight id is captured
-  // before mutate so onSuccess can attribute the result to the right row.
   const [testResults, setTestResults] = useState<Record<string, TestOutcome>>({});
   const [testingId, setTestingId] = useState<string | undefined>(undefined);
 
@@ -102,29 +103,34 @@ export function Indexers() {
 
   if (list.isError) {
     return (
-      <EmptyState
-        heading="Couldn't load indexers"
-        body="Couldn't reach the server. Check your connection, then try again."
-      />
+      <div className="flex flex-col gap-8">
+        <PageHeader eyebrow="Sources" title="Indexers" />
+        <EmptyState
+          icon={<Radio />}
+          heading="Couldn't load indexers"
+          body="Couldn't reach the server. Check your connection, then try again."
+        />
+      </div>
     );
   }
 
   const indexers = list.data?.indexers ?? [];
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Indexers</h1>
-        {formMode === "closed" ? (
-          <button
-            type="button"
-            onClick={() => setFormMode("add")}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
-          >
-            Add indexer
-          </button>
-        ) : null}
-      </div>
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        eyebrow="Sources"
+        title="Indexers"
+        description="omnibus searches every enabled Newznab indexer for releases."
+        actions={
+          formMode === "closed" ? (
+            <Button onClick={() => setFormMode("add")} className="gap-1.5">
+              <Plus className="size-4" />
+              Add indexer
+            </Button>
+          ) : undefined
+        }
+      />
 
       {formMode === "add" ? (
         <IndexerForm
@@ -154,99 +160,87 @@ export function Indexers() {
 
       {indexers.length === 0 && formMode === "closed" ? (
         <EmptyState
+          icon={<Radio />}
           heading="No indexers configured"
           body="Add a Newznab indexer to start finding releases. omnibus searches every enabled indexer."
           cta={
-            <button
-              type="button"
-              onClick={() => setFormMode("add")}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
-            >
+            <Button onClick={() => setFormMode("add")} className="gap-1.5">
+              <Plus className="size-4" />
               Add indexer
-            </button>
+            </Button>
           }
         />
       ) : (
         <ul className="flex flex-col gap-2">
-          {indexers.map((idx) => (
-            <li
-              key={idx.id.toString()}
-              className="flex items-center justify-between gap-4 rounded border border-slate-200 bg-slate-50 p-4"
-            >
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">{idx.name}</span>
-                  <span
-                    className={`inline-flex items-center rounded px-2 py-0.5 text-sm font-semibold ${
-                      idx.enabled ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"
-                    }`}
-                  >
-                    {idx.enabled ? "Enabled" : "Disabled"}
+          {indexers.map((idx) => {
+            const result = testResults[idx.id.toString()];
+            return (
+              <li
+                key={idx.id.toString()}
+                className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card/60 p-4 transition-colors hover:border-border-strong/70"
+              >
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-sm font-medium text-foreground">{idx.name}</span>
+                    <Badge variant={idx.enabled ? "success" : "neutral"} dot>
+                      {idx.enabled ? "Enabled" : "Disabled"}
+                    </Badge>
+                  </div>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {idx.kind} · {idx.baseUrl}
                   </span>
+                  {result ? (
+                    result.ok ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-tn-green">
+                        <CheckCircle2 className="size-3.5" /> Connected
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-tn-red">
+                        <XCircle className="size-3.5" /> {result.detail}
+                      </span>
+                    )
+                  ) : null}
                 </div>
-                <span className="text-sm text-slate-600">
-                  {idx.kind} · {idx.baseUrl}
-                </span>
-                {testResults[idx.id.toString()] ? (
-                  testResults[idx.id.toString()].ok ? (
-                    <span className="text-sm font-semibold text-green-700">✓ Connected</span>
-                  ) : (
-                    <span className="text-sm font-semibold text-red-600">
-                      ✗ {testResults[idx.id.toString()].detail}
-                    </span>
-                  )
-                ) : null}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => runTest(idx)}
-                  disabled={test.isPending && testingId === idx.id.toString()}
-                  className="rounded bg-slate-100 px-3 py-1.5 text-sm font-semibold"
-                >
-                  Test
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toggleEnabled(idx)}
-                  className="rounded bg-slate-100 px-3 py-1.5 text-sm font-semibold"
-                >
-                  {idx.enabled ? "Disable" : "Enable"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormMode({ edit: idx })}
-                  className="rounded bg-slate-100 px-3 py-1.5 text-sm font-semibold"
-                >
-                  Edit
-                </button>
-                <AddConfirmDialog
-                  open={pendingDelete?.id === idx.id}
-                  onOpenChange={(open) => setPendingDelete(open ? idx : undefined)}
-                  pending={remove.isPending}
-                  seriesName={idx.name}
-                  destructive
-                  title="Delete indexer"
-                  confirmLabel="Delete"
-                  description={
-                    <>
-                      Delete “{idx.name}”? Targeted search and RSS will stop using it. This can't be
-                      undone.
-                    </>
-                  }
-                  onConfirm={() => remove.mutate({ id: idx.id })}
-                  trigger={
-                    <button
-                      type="button"
-                      className="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white"
-                    >
-                      Delete
-                    </button>
-                  }
-                />
-              </div>
-            </li>
-          ))}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => runTest(idx)}
+                    disabled={test.isPending && testingId === idx.id.toString()}
+                  >
+                    Test
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => toggleEnabled(idx)}>
+                    {idx.enabled ? "Disable" : "Enable"}
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => setFormMode({ edit: idx })}>
+                    Edit
+                  </Button>
+                  <AddConfirmDialog
+                    open={pendingDelete?.id === idx.id}
+                    onOpenChange={(open) => setPendingDelete(open ? idx : undefined)}
+                    pending={remove.isPending}
+                    seriesName={idx.name}
+                    destructive
+                    title="Delete indexer"
+                    confirmLabel="Delete"
+                    description={
+                      <>
+                        Delete “{idx.name}”? Targeted search and RSS will stop using it. This
+                        can't be undone.
+                      </>
+                    }
+                    onConfirm={() => remove.mutate({ id: idx.id })}
+                    trigger={
+                      <Button variant="destructive" size="sm">
+                        Delete
+                      </Button>
+                    }
+                  />
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

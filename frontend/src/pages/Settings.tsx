@@ -1,4 +1,6 @@
 import { useMutation, useQuery } from "@connectrpc/connect-query";
+import { CheckCircle2, Pencil, XCircle } from "lucide-react";
+import type { ReactNode } from "react";
 import { useState } from "react";
 
 import {
@@ -10,10 +12,13 @@ import {
   type DownloadClientFormValues,
 } from "../components/DownloadClientForm";
 import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "../components/layout/PageHeader";
 import {
   RenameSettingsForm,
   type RenameSettingsFormValues,
 } from "../components/RenameSettingsForm";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
 import {
   getDDLConfig,
   updateDDLConfig,
@@ -33,9 +38,47 @@ const RENAME_SAVE_ERROR =
   "Couldn't save the renaming settings. Check the folder and file formats, then try again.";
 const DDL_SAVE_ERROR = "Couldn't save the DDL settings. Try again.";
 
-// Settings is the functional-minimal settings page. It currently hosts the Download
-// Client (SABnzbd) section: the DB-backed config is shown (URL + category, never the API
-// key) with an edit affordance. Saving via DownloadClientService persists at runtime.
+// SettingsCard is the shared section frame: a titled card with a right-aligned actions slot.
+function SettingsCard({
+  title,
+  description,
+  actions,
+  children,
+}: {
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="surface-sheen flex flex-col gap-4 rounded-xl border border-border bg-card/60 p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
+            {title}
+          </h2>
+          {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+        </div>
+        {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+// ReadRow is one read-only label/value line. The value stays in its own element so tests
+// can select it by exact text.
+function ReadRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-t border-border/60 py-2 text-sm first:border-t-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono text-foreground">{children}</span>
+    </div>
+  );
+}
+
+// Settings hosts the Download Client (SABnzbd), Renaming, and Direct Downloads sections.
+// Each is DB-backed and runtime-editable.
 export function Settings() {
   const config = useQuery(getDownloadClientConfig, {}, { retry: false });
   const [editing, setEditing] = useState(false);
@@ -51,7 +94,6 @@ export function Settings() {
     onSuccess: (res) => setTestResult({ ok: res.ok, detail: res.detail }),
   });
 
-  // Renaming config (D-09): DB-backed, runtime-editable folder/file templates + toggles.
   const renameConfig = useQuery(getRenameConfig, {}, { retry: false });
   const [editingRename, setEditingRename] = useState(false);
   const renameUpdate = useMutation(updateRenameConfig, {
@@ -61,8 +103,6 @@ export function Settings() {
     },
   });
 
-  // DDL config (05-07): DB-backed, runtime-toggleable "Enable DDLs" switch gating the
-  // built-in GetComics fallback.
   const ddlConfig = useQuery(getDDLConfig, {}, { retry: false });
   const [editingDDL, setEditingDDL] = useState(false);
   const ddlUpdate = useMutation(updateDDLConfig, {
@@ -98,10 +138,13 @@ export function Settings() {
 
   if (config.isError) {
     return (
-      <EmptyState
-        heading="Couldn't load settings"
-        body="Couldn't reach the server. Check your connection, then try again."
-      />
+      <div className="flex flex-col gap-8">
+        <PageHeader eyebrow="Configuration" title="Settings" />
+        <EmptyState
+          heading="Couldn't load settings"
+          body="Couldn't reach the server. Check your connection, then try again."
+        />
+      </div>
     );
   }
 
@@ -111,33 +154,40 @@ export function Settings() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+      <PageHeader
+        eyebrow="Configuration"
+        title="Settings"
+        description="Download client, file renaming, and direct-download fallback."
+      />
 
-      <section className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Download Client</h2>
-          {!editing ? (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
+      {/* Download Client */}
+      <SettingsCard
+        title="Download Client"
+        description="Where grabbed releases are handed off."
+        actions={
+          !editing ? (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => test.mutate({})}
                 disabled={test.isPending}
-                className="rounded bg-slate-100 px-4 py-2 text-sm font-semibold"
               >
                 Test connection
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                size="sm"
                 aria-label="Edit download client"
                 onClick={() => setEditing(true)}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                className="gap-1.5"
               >
+                <Pencil className="size-3.5" />
                 Edit
-              </button>
-            </div>
-          ) : null}
-        </div>
-
+              </Button>
+            </>
+          ) : undefined
+        }
+      >
         {editing ? (
           <DownloadClientForm
             initial={{ url: current?.url ?? "", category: current?.category ?? "comics" }}
@@ -147,53 +197,50 @@ export function Settings() {
             onCancel={() => setEditing(false)}
           />
         ) : (
-          <div className="flex flex-col gap-2 rounded border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-center gap-2">
-              <span className="text-base">SABnzbd</span>
-              <span
-                className={`inline-flex items-center rounded px-2 py-0.5 text-sm font-semibold ${
-                  current?.configured
-                    ? "bg-green-100 text-green-700"
-                    : "bg-slate-100 text-slate-500"
-                }`}
-              >
+          <div className="rounded-lg border border-border bg-tn-night/30 p-4">
+            <div className="flex items-center gap-2.5 pb-2">
+              <span className="text-sm font-medium text-foreground">SABnzbd</span>
+              <Badge variant={current?.configured ? "success" : "neutral"} dot>
                 {current?.configured ? "Configured" : "Not configured"}
-              </span>
+              </Badge>
             </div>
-            <span className="text-sm text-slate-600">
-              URL: <span>{current?.url || "—"}</span>
-            </span>
-            <span className="text-sm text-slate-600">
-              Category: <span>{current?.category || "comics"}</span>
-            </span>
+            <ReadRow label="URL">{current?.url || "—"}</ReadRow>
+            <ReadRow label="Category">{current?.category || "comics"}</ReadRow>
             {testResult ? (
               testResult.ok ? (
-                <span className="text-sm font-semibold text-green-700">✓ Connected</span>
+                <p className="inline-flex items-center gap-1.5 pt-2 text-sm font-medium text-tn-green">
+                  <CheckCircle2 className="size-4" /> Connected
+                </p>
               ) : (
-                <span className="text-sm font-semibold text-red-600">✗ {testResult.detail}</span>
+                <p className="inline-flex items-center gap-1.5 pt-2 text-sm font-medium text-tn-red">
+                  <XCircle className="size-4" /> {testResult.detail}
+                </p>
               )
             ) : null}
           </div>
         )}
-      </section>
+      </SettingsCard>
 
-      <section className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Renaming</h2>
-          {!editingRename && !renameConfig.isError ? (
-            <button
-              type="button"
+      {/* Renaming */}
+      <SettingsCard
+        title="Renaming"
+        description="How imported files and folders are named."
+        actions={
+          !editingRename && !renameConfig.isError ? (
+            <Button
+              size="sm"
               aria-label="Edit renaming settings"
               onClick={() => setEditingRename(true)}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+              className="gap-1.5"
             >
+              <Pencil className="size-3.5" />
               Edit
-            </button>
-          ) : null}
-        </div>
-
+            </Button>
+          ) : undefined
+        }
+      >
         {renameConfig.isError ? (
-          <p className="text-sm text-red-600">Couldn't load the renaming settings.</p>
+          <p className="text-sm text-tn-red">Couldn't load the renaming settings.</p>
         ) : editingRename ? (
           <RenameSettingsForm
             initial={{
@@ -211,51 +258,41 @@ export function Settings() {
             onCancel={() => setEditingRename(false)}
           />
         ) : (
-          <div className="flex flex-col gap-2 rounded border border-slate-200 bg-slate-50 p-4">
-            <span className="text-sm text-slate-600">
-              Folder Format: <span>{renameCurrent?.folderFormat || "—"}</span>
-            </span>
-            <span className="text-sm text-slate-600">
-              File Format: <span>{renameCurrent?.fileFormat || "—"}</span>
-            </span>
-            <span className="text-sm text-slate-600">
-              Rename files: <span>{renameCurrent?.renameEnabled ? "On" : "Off"}</span>
-            </span>
-            <span className="text-sm text-slate-600">
-              Issue Number Padding:{" "}
-              <span>
-                {renameCurrent?.issuePaddingEnabled
-                  ? `On (${renameCurrent?.paddingFormat || "00x"})`
-                  : "Off"}
-              </span>
-            </span>
-            <span className="text-sm text-slate-600">
-              Replace Spaces: <span>{renameCurrent?.replaceSpaces ? "On" : "Off"}</span>
-            </span>
-            <span className="text-sm text-slate-600">
-              Lowercase: <span>{renameCurrent?.lowercase ? "On" : "Off"}</span>
-            </span>
+          <div className="rounded-lg border border-border bg-tn-night/30 p-4">
+            <ReadRow label="Folder Format">{renameCurrent?.folderFormat || "—"}</ReadRow>
+            <ReadRow label="File Format">{renameCurrent?.fileFormat || "—"}</ReadRow>
+            <ReadRow label="Rename files">{renameCurrent?.renameEnabled ? "On" : "Off"}</ReadRow>
+            <ReadRow label="Issue Number Padding">
+              {renameCurrent?.issuePaddingEnabled
+                ? `On (${renameCurrent?.paddingFormat || "00x"})`
+                : "Off"}
+            </ReadRow>
+            <ReadRow label="Replace Spaces">{renameCurrent?.replaceSpaces ? "On" : "Off"}</ReadRow>
+            <ReadRow label="Lowercase">{renameCurrent?.lowercase ? "On" : "Off"}</ReadRow>
           </div>
         )}
-      </section>
+      </SettingsCard>
 
-      <section className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Direct Downloads</h2>
-          {!editingDDL && !ddlConfig.isError ? (
-            <button
-              type="button"
+      {/* Direct Downloads */}
+      <SettingsCard
+        title="Direct Downloads"
+        description="GetComics fallback when no indexer has an acceptable release."
+        actions={
+          !editingDDL && !ddlConfig.isError ? (
+            <Button
+              size="sm"
               aria-label="Edit DDL settings"
               onClick={() => setEditingDDL(true)}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+              className="gap-1.5"
             >
+              <Pencil className="size-3.5" />
               Edit
-            </button>
-          ) : null}
-        </div>
-
+            </Button>
+          ) : undefined
+        }
+      >
         {ddlConfig.isError ? (
-          <p className="text-sm text-red-600">Couldn't load the DDL settings.</p>
+          <p className="text-sm text-tn-red">Couldn't load the DDL settings.</p>
         ) : editingDDL ? (
           <DDLSettingsForm
             initial={{ enabled: ddlCurrent?.enabled ?? false }}
@@ -265,17 +302,20 @@ export function Settings() {
             onCancel={() => setEditingDDL(false)}
           />
         ) : (
-          <div className="flex flex-col gap-2 rounded border border-slate-200 bg-slate-50 p-4">
-            <span className="text-sm text-slate-600">
-              Enable DDLs: <span>{ddlCurrent?.enabled ? "On" : "Off"}</span>
+          <div className="flex flex-col gap-2 rounded-lg border border-border bg-tn-night/30 p-4 text-sm">
+            <span className="text-muted-foreground">
+              Enable DDLs:{" "}
+              <span className="font-mono text-foreground">
+                {ddlCurrent?.enabled ? "On" : "Off"}
+              </span>
             </span>
-            <span className="text-sm text-slate-600">
+            <span className="text-muted-foreground">
               GetComics is used as a fallback when no Newznab indexer has an acceptable
               release.
             </span>
           </div>
         )}
-      </section>
+      </SettingsCard>
     </div>
   );
 }

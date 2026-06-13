@@ -1,5 +1,8 @@
 import { useState } from "react";
 
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+
 // DownloadClientFormValues is the editable download-client payload the form collects.
 export interface DownloadClientFormValues {
   url: string;
@@ -13,10 +16,11 @@ const emptyValues: DownloadClientFormValues = {
   category: "comics",
 };
 
-// DownloadClientForm is the functional-minimal edit form for the SABnzbd download client,
-// mirroring IndexerForm. The API key input is masked (type="password") and is never seeded
-// with the stored key — on edit the field starts blank and a blank submit leaves the
-// stored key unchanged server-side (T-ul5-01).
+const fieldLabel = "flex flex-col gap-1.5 text-sm font-medium text-foreground";
+
+// DownloadClientForm is the edit form for the SABnzbd download client. The API key input is
+// masked (type="password") and never seeded with the stored key — on edit the field starts
+// blank and a blank submit leaves the stored key unchanged server-side (T-ul5-01).
 export function DownloadClientForm({
   initial,
   pending = false,
@@ -45,61 +49,46 @@ export function DownloadClientForm({
 
   return (
     <form
-      className="flex flex-col gap-3 rounded border border-slate-200 bg-white p-4"
+      className="flex flex-col gap-4 rounded-xl border border-border bg-card/70 p-5"
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit(values);
       }}
     >
-      <label className="flex flex-col gap-1 text-sm font-semibold">
+      <label className={fieldLabel}>
         URL
-        <input
-          className="rounded border border-slate-300 px-3 py-2 text-sm font-normal"
-          value={values.url}
-          onChange={(e) => set("url", e.target.value)}
-          required
-        />
+        <Input value={values.url} onChange={(e) => set("url", e.target.value)} required />
       </label>
 
-      <label className="flex flex-col gap-1 text-sm font-semibold">
+      <label className={fieldLabel}>
         API key
-        <input
+        <Input
           type="password"
           aria-label="API key"
           placeholder="Leave blank to keep current key"
-          className="rounded border border-slate-300 px-3 py-2 text-sm font-normal"
           value={values.apiKey}
           onChange={(e) => set("apiKey", e.target.value)}
         />
       </label>
 
-      <label className="flex flex-col gap-1 text-sm font-semibold">
+      <label className={fieldLabel}>
         Category
-        <input
-          className="rounded border border-slate-300 px-3 py-2 text-sm font-normal"
+        <Input
           placeholder="Defaults to comics"
           value={values.category}
           onChange={(e) => set("category", e.target.value)}
         />
       </label>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-tn-red">{error}</p> : null}
 
       <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded bg-slate-100 px-4 py-2 text-sm font-semibold"
-        >
+        <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
+        </Button>
+        <Button type="submit" disabled={pending}>
           Save download client
-        </button>
+        </Button>
       </div>
     </form>
   );
