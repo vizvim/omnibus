@@ -46,12 +46,21 @@ type DDLFetcher interface {
 	Fetch(ctx context.Context, clientRef string, progress func(done, total int64)) (string, error)
 }
 
+// Poller reports the current state of one download-client reference. It is the narrow,
+// consumer-owned seam the poll loop needs from a download provider: the map key supplies the
+// provider kind, so Poll is the only method required here (removing a completed item from the
+// client is post-process's concern). The SABnzbd provider satisfies it; the download.FakeProvider
+// satisfies it for tests.
+type Poller interface {
+	Poll(ctx context.Context, clientRef string) (download.PollResult, error)
+}
+
 // Deps are the tracking Service's injected collaborators.
 type Deps struct {
 	Repos *repository.Repositories
-	// Trackers maps a provider kind ("sabnzbd"/"getcomics") to its Tracker. Only kinds with
-	// a Tracker are polled; others are skipped (GetComics DDL tracking lands later).
-	Trackers map[string]download.Tracker
+	// Pollers maps a provider kind ("sabnzbd"/"getcomics") to its Poller. Only kinds with a
+	// Poller are polled; others are skipped (GetComics DDL is fetched, not polled).
+	Pollers map[string]Poller
 	// DDLFetchers maps a provider kind ("getcomics") to its DDLFetcher. The DDLFetch job
 	// (RunDDLFetch) resolves+streams via the matching fetcher, then feeds the file into the
 	// SAME Completed->post-process path as a SAB download.
@@ -64,10 +73,10 @@ type Deps struct {
 }
 
 // Service polls active downloads and drives their observable lifecycle. It depends only on
-// repository interfaces + the Tracker contract + the download-status state machine.
+// repository stores + the Poller seam + the download-status state machine.
 type Service struct {
 	repos       *repository.Repositories
-	trackers    map[string]download.Tracker
+	pollers     map[string]Poller
 	ddlFetchers map[string]DDLFetcher
 	logger      *slog.Logger
 	stallWindow time.Duration
@@ -91,7 +100,7 @@ func New(d Deps) *Service {
 	}
 	return &Service{
 		repos:       d.Repos,
-		trackers:    d.Trackers,
+		pollers:     d.Pollers,
 		ddlFetchers: d.DDLFetchers,
 		logger:      logger,
 		stallWindow: stall,
@@ -262,13 +271,13 @@ func (s *Service) newDDLProgressEmitter(ctx context.Context, row repository.Down
 
 // pollOne reconciles a single active download row.
 func (s *Service) pollOne(ctx context.Context, row repository.DownloadRow) error {
-	tracker, ok := s.trackers[row.Provider]
+	poller, ok := s.pollers[row.Provider]
 	if !ok {
-		// No tracker for this provider kind yet (e.g. GetComics DDL): skip, not an error.
+		// No poller for this provider kind (e.g. GetComics DDL is fetched, not polled): skip.
 		return nil
 	}
 
-	res, err := tracker.Poll(ctx, row.ClientRef)
+	res, err := poller.Poll(ctx, row.ClientRef)
 	if err != nil {
 		return fmt.Errorf("poll %s ref %q: %w", row.Provider, row.ClientRef, err)
 	}

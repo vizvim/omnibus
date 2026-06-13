@@ -28,25 +28,19 @@ type DDLConfigRow struct {
 // DDLConfigRepository persists the DDL enable toggle over the user_config key
 // enable_ddl. Reads go through the read pool, writes through the single-writer pool
 // (ADR 0002).
-type DDLConfigRepository interface {
-	// Get loads the enable_ddl key. When it has never been written the returned row has
-	// Present == false (the service then supplies the default-OFF posture).
-	Get(ctx context.Context) (DDLConfigRow, error)
-	// Upsert persists the enable flag as the enable_ddl user_config key.
-	Upsert(ctx context.Context, enabled bool) (DDLConfigRow, error)
-}
-
-type ddlConfigRepository struct {
+type DDLConfigRepository struct {
 	read  *sqlc.Queries
 	write *sqlc.Queries
 }
 
 // NewDDLConfigRepository binds a DDLConfigRepository to the read and write pools.
-func NewDDLConfigRepository(d *db.DB) DDLConfigRepository {
-	return &ddlConfigRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
+func NewDDLConfigRepository(d *db.DB) *DDLConfigRepository {
+	return &DDLConfigRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
 }
 
-func (r *ddlConfigRepository) Get(ctx context.Context) (DDLConfigRow, error) {
+// Get loads the enable_ddl key. When it has never been written the returned row has
+// Present == false (the service then supplies the default-OFF posture).
+func (r *DDLConfigRepository) Get(ctx context.Context) (DDLConfigRow, error) {
 	row, err := r.read.GetUserConfig(ctx, keyEnableDDL)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -57,7 +51,8 @@ func (r *ddlConfigRepository) Get(ctx context.Context) (DDLConfigRow, error) {
 	return DDLConfigRow{Enabled: row.Value == boolTrue, Present: true}, nil
 }
 
-func (r *ddlConfigRepository) Upsert(ctx context.Context, enabled bool) (DDLConfigRow, error) {
+// Upsert persists the enable flag as the enable_ddl user_config key.
+func (r *DDLConfigRepository) Upsert(ctx context.Context, enabled bool) (DDLConfigRow, error) {
 	if err := r.write.SetUserConfig(ctx, sqlc.SetUserConfigParams{
 		Key:   keyEnableDDL,
 		Value: boolToString(enabled),

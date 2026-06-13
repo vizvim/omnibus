@@ -48,7 +48,7 @@ type Deps struct {
 
 // Service implements DownloadClientService domain logic over DownloadClientRepository.
 type Service struct {
-	repo   repository.DownloadClientRepository
+	repo   *repository.DownloadClientRepository
 	logger *slog.Logger
 	now    func() time.Time
 	prober SABProber

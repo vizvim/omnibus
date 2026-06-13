@@ -45,7 +45,7 @@ type Deps struct {
 
 // Service implements IndexerService domain logic over IndexerRepository.
 type Service struct {
-	repo   repository.IndexerRepository
+	repo   *repository.IndexerRepository
 	logger *slog.Logger
 	now    func() time.Time
 	prober IndexerProber

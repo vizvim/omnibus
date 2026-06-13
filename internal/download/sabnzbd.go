@@ -71,11 +71,6 @@ func NewSABnzbdProviderWithResolver(resolver SABnzbdConfigResolver, opts ...SABn
 	return p
 }
 
-var (
-	_ DownloadProvider = (*SABnzbdProvider)(nil)
-	_ Tracker          = (*SABnzbdProvider)(nil)
-)
-
 // Kind reports the provider type.
 func (p *SABnzbdProvider) Kind() string { return "sabnzbd" }
 

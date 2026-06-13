@@ -102,11 +102,23 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// both NZB submits (search service) and the connectivity probe (download client Test).
 	sabProvider := download.NewSABnzbdProviderWithResolver(sabnzbdResolver(repos))
 	// The GetComics DDL provider streams into <data_path>/incomplete on Fetch (D-03). Built
-	// once so the same instance fronts both the provider map (Submit + post-process remove,
-	// a no-op for DDL) and the tracking service's DDLFetchers map (the DDLFetch job's Fetch).
+	// once so the same instance fronts the search submit map and the tracking DDLFetchers map.
 	ddlProvider := download.NewGetComicsDDLProvider("https://getcomics.org",
 		download.WithDDLDataPath(cfg.DataPath))
-	downloadProviders := newDownloadProviders(sabProvider, ddlProvider)
+	// Each consumer takes only the capability it needs from these concrete providers: the
+	// search/grab path needs Submit (search.Submitter, both providers); the poll loop needs Poll
+	// (tracking.Poller, SAB only); post-process needs RemoveFromHistory (postprocess.HistoryRemover,
+	// SAB only — DDL has no client-side history); the DDLFetch job needs Fetch (tracking.DDLFetcher,
+	// GetComics only).
+	// Provider-kind keys for the per-consumer capability maps below.
+	const (
+		kindSABnzbd   = "sabnzbd"
+		kindGetComics = "getcomics"
+	)
+	downloadSubmitters := map[string]search.Submitter{
+		kindSABnzbd:   sabProvider,
+		kindGetComics: ddlProvider,
+	}
 
 	// SearchService converges the indexer gateway (Plan 02), the filter/score pipeline
 	// (Plan 03), and the grab handoff (Plan 04) behind manual-search RPCs, and owns the
@@ -116,22 +128,22 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	searchSvc := search.New(search.Deps{
 		Gateway:           indexerGateway,
 		Repos:             repos,
-		DownloadProviders: downloadProviders,
+		DownloadProviders: downloadSubmitters,
 		Logger:            logger,
 		AttemptCap:        cfg.SearchAttemptCap,
 		AutoSearchBatch:   cfg.AutoSearchBatchSize,
 	})
 
 	// TrackingService owns the download-status poll loop (DL-03/04/08): it polls active
-	// downloads via the SAB Tracker, surfaces progress/terminal state on the timeline,
+	// downloads via the SAB Poller, surfaces progress/terminal state on the timeline,
 	// records history, and detects failures (explicit + stall). It is the PollRunner the
-	// periodic DownloadPoll job delegates to. Only SAB has a Tracker this phase.
+	// periodic DownloadPoll job delegates to. Only SAB has a Poller this phase.
 	trackingSvc := tracking.New(tracking.Deps{
-		Repos:    repos,
-		Trackers: map[string]download.Tracker{"sabnzbd": sabProvider},
-		// GetComics DDL has no poll-based Tracker; instead the DDLFetch job (RunDDLFetch)
+		Repos:   repos,
+		Pollers: map[string]tracking.Poller{kindSABnzbd: sabProvider},
+		// GetComics DDL has no poll-based Poller; instead the DDLFetch job (RunDDLFetch)
 		// streams via this fetcher then feeds the Completed->post-process path (D-03).
-		DDLFetchers: map[string]tracking.DDLFetcher{"getcomics": ddlProvider},
+		DDLFetchers: map[string]tracking.DDLFetcher{kindGetComics: ddlProvider},
 		Logger:      logger,
 	})
 
@@ -151,7 +163,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// replacement enqueuer below.
 	postProcessSvc := postprocess.New(postprocess.Deps{
 		Repos:        repos,
-		Providers:    downloadProviders,
+		Removers:     map[string]postprocess.HistoryRemover{kindSABnzbd: sabProvider},
 		RenameConfig: renameConfigSvc,
 		LibraryPath:  cfg.LibraryPath,
 		AttemptCap:   attemptCap,
@@ -338,17 +350,6 @@ func sabnzbdResolver(repos *repository.Repositories) download.SABnzbdConfigResol
 			APIKey:   row.APIKey,
 			Category: row.Category,
 		}, nil
-	}
-}
-
-// newDownloadProviders constructs the DownloadProviders keyed by Kind, ready to inject
-// into the search service. The SABnzbd provider is passed in (so the same instance also
-// fronts the connectivity probe). GetComics DDL needs no secret. No polling is started
-// here (Phase 5).
-func newDownloadProviders(sab, ddl download.DownloadProvider) map[string]download.DownloadProvider {
-	return map[string]download.DownloadProvider{
-		"sabnzbd":   sab,
-		"getcomics": ddl,
 	}
 }
 

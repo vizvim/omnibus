@@ -40,26 +40,17 @@ type IndexerUpsert struct {
 
 // IndexerRepository persists DB-backed indexer records (D-16). Writes go through the
 // single-writer pool, reads through the read pool (ADR 0002).
-type IndexerRepository interface {
-	Create(ctx context.Context, in IndexerUpsert, nowISO string) (IndexerRow, error)
-	Get(ctx context.Context, id int64) (IndexerRow, error)
-	List(ctx context.Context) ([]IndexerRow, error)
-	ListEnabled(ctx context.Context) ([]IndexerRow, error)
-	Update(ctx context.Context, id int64, in IndexerUpsert, nowISO string) (IndexerRow, error)
-	Delete(ctx context.Context, id int64) error
-}
-
-type indexerRepository struct {
+type IndexerRepository struct {
 	read  *sqlc.Queries
 	write *sqlc.Queries
 }
 
 // NewIndexerRepository binds an IndexerRepository to the read and write pools.
-func NewIndexerRepository(d *db.DB) IndexerRepository {
-	return &indexerRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
+func NewIndexerRepository(d *db.DB) *IndexerRepository {
+	return &IndexerRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
 }
 
-func (r *indexerRepository) Create(ctx context.Context, in IndexerUpsert, nowISO string) (IndexerRow, error) {
+func (r *IndexerRepository) Create(ctx context.Context, in IndexerUpsert, nowISO string) (IndexerRow, error) {
 	row, err := r.write.CreateIndexer(ctx, sqlc.CreateIndexerParams{
 		Name:       in.Name,
 		Kind:       in.Kind,
@@ -78,7 +69,7 @@ func (r *indexerRepository) Create(ctx context.Context, in IndexerUpsert, nowISO
 	return mapIndexer(row), nil
 }
 
-func (r *indexerRepository) Get(ctx context.Context, id int64) (IndexerRow, error) {
+func (r *IndexerRepository) Get(ctx context.Context, id int64) (IndexerRow, error) {
 	row, err := r.read.GetIndexer(ctx, id)
 	if err != nil {
 		return IndexerRow{}, err
@@ -86,7 +77,7 @@ func (r *indexerRepository) Get(ctx context.Context, id int64) (IndexerRow, erro
 	return mapIndexer(row), nil
 }
 
-func (r *indexerRepository) List(ctx context.Context) ([]IndexerRow, error) {
+func (r *IndexerRepository) List(ctx context.Context) ([]IndexerRow, error) {
 	rows, err := r.read.ListIndexers(ctx)
 	if err != nil {
 		return nil, err
@@ -94,7 +85,7 @@ func (r *indexerRepository) List(ctx context.Context) ([]IndexerRow, error) {
 	return mapIndexers(rows), nil
 }
 
-func (r *indexerRepository) ListEnabled(ctx context.Context) ([]IndexerRow, error) {
+func (r *IndexerRepository) ListEnabled(ctx context.Context) ([]IndexerRow, error) {
 	rows, err := r.read.ListEnabledIndexers(ctx)
 	if err != nil {
 		return nil, err
@@ -102,7 +93,7 @@ func (r *indexerRepository) ListEnabled(ctx context.Context) ([]IndexerRow, erro
 	return mapIndexers(rows), nil
 }
 
-func (r *indexerRepository) Update(ctx context.Context, id int64, in IndexerUpsert, nowISO string) (IndexerRow, error) {
+func (r *IndexerRepository) Update(ctx context.Context, id int64, in IndexerUpsert, nowISO string) (IndexerRow, error) {
 	row, err := r.write.UpdateIndexer(ctx, sqlc.UpdateIndexerParams{
 		Name:       in.Name,
 		Kind:       in.Kind,
@@ -121,7 +112,7 @@ func (r *indexerRepository) Update(ctx context.Context, id int64, in IndexerUpse
 	return mapIndexer(row), nil
 }
 
-func (r *indexerRepository) Delete(ctx context.Context, id int64) error {
+func (r *IndexerRepository) Delete(ctx context.Context, id int64) error {
 	return r.write.DeleteIndexer(ctx, id)
 }
 

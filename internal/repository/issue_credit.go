@@ -21,27 +21,21 @@ type IssueCredit struct {
 
 // IssueCreditRepository persists the normalized per-issue creator credits derived
 // from ComicVine person_credits.
-type IssueCreditRepository interface {
-	// Replace atomically swaps an issue's credit set: it deletes every existing row
-	// then inserts the supplied credits inside one write transaction, so a re-import
-	// is idempotent and never leaves a half-updated credit list.
-	Replace(ctx context.Context, issueID int64, credits []IssueCredit) error
-	// ListByIssue returns an issue's credits ordered by (role, name).
-	ListByIssue(ctx context.Context, issueID int64) ([]IssueCredit, error)
-}
-
-type issueCreditRepository struct {
+type IssueCreditRepository struct {
 	db    *db.DB
 	read  *sqlc.Queries
 	write *sqlc.Queries
 }
 
 // NewIssueCreditRepository binds an IssueCreditRepository to the read and write pools.
-func NewIssueCreditRepository(d *db.DB) IssueCreditRepository {
-	return &issueCreditRepository{db: d, read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
+func NewIssueCreditRepository(d *db.DB) *IssueCreditRepository {
+	return &IssueCreditRepository{db: d, read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
 }
 
-func (r *issueCreditRepository) Replace(ctx context.Context, issueID int64, credits []IssueCredit) (err error) {
+// Replace atomically swaps an issue's credit set: it deletes every existing row
+// then inserts the supplied credits inside one write transaction, so a re-import
+// is idempotent and never leaves a half-updated credit list.
+func (r *IssueCreditRepository) Replace(ctx context.Context, issueID int64, credits []IssueCredit) (err error) {
 	tx, err := r.db.Write.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin issue-credit tx: %w", err)
@@ -77,7 +71,8 @@ func (r *issueCreditRepository) Replace(ctx context.Context, issueID int64, cred
 	return nil
 }
 
-func (r *issueCreditRepository) ListByIssue(ctx context.Context, issueID int64) ([]IssueCredit, error) {
+// ListByIssue returns an issue's credits ordered by (role, name).
+func (r *IssueCreditRepository) ListByIssue(ctx context.Context, issueID int64) ([]IssueCredit, error) {
 	rows, err := r.read.ListIssueCredits(ctx, issueID)
 	if err != nil {
 		return nil, err

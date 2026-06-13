@@ -33,28 +33,17 @@ type SeriesUpsert struct {
 }
 
 // SeriesRepository persists series, pinned to comicvine_volume_id.
-type SeriesRepository interface {
-	Upsert(ctx context.Context, in SeriesUpsert) (Series, error)
-	GetByVolumeID(ctx context.Context, volumeID int64) (Series, error)
-	GetByID(ctx context.Context, id int64) (Series, error)
-	List(ctx context.Context, limit, offset int32) ([]Series, error)
-	UpdateSettings(ctx context.Context, id int64, status, settingsJSON string) (Series, error)
-	UpdateCounts(ctx context.Context, id int64, total, have int32) error
-	UpdateLastRefreshed(ctx context.Context, id int64, refreshedAt string) error
-	ListStale(ctx context.Context, cutoffISO string, limit int32) ([]Series, error)
-}
-
-type seriesRepository struct {
+type SeriesRepository struct {
 	read  *sqlc.Queries
 	write *sqlc.Queries
 }
 
 // NewSeriesRepository binds a SeriesRepository to the read and write pools.
-func NewSeriesRepository(d *db.DB) SeriesRepository {
-	return &seriesRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
+func NewSeriesRepository(d *db.DB) *SeriesRepository {
+	return &SeriesRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
 }
 
-func (r *seriesRepository) Upsert(ctx context.Context, in SeriesUpsert) (Series, error) {
+func (r *SeriesRepository) Upsert(ctx context.Context, in SeriesUpsert) (Series, error) {
 	return r.write.UpsertSeries(ctx, sqlc.UpsertSeriesParams{
 		ComicvineVolumeID: in.ComicvineVolumeID,
 		PublisherID:       nullInt64Ptr(in.PublisherID),
@@ -70,19 +59,19 @@ func (r *seriesRepository) Upsert(ctx context.Context, in SeriesUpsert) (Series,
 	})
 }
 
-func (r *seriesRepository) GetByVolumeID(ctx context.Context, volumeID int64) (Series, error) {
+func (r *SeriesRepository) GetByVolumeID(ctx context.Context, volumeID int64) (Series, error) {
 	return r.read.GetSeriesByVolumeID(ctx, volumeID)
 }
 
-func (r *seriesRepository) GetByID(ctx context.Context, id int64) (Series, error) {
+func (r *SeriesRepository) GetByID(ctx context.Context, id int64) (Series, error) {
 	return r.read.GetSeriesByID(ctx, id)
 }
 
-func (r *seriesRepository) List(ctx context.Context, limit, offset int32) ([]Series, error) {
+func (r *SeriesRepository) List(ctx context.Context, limit, offset int32) ([]Series, error) {
 	return r.read.ListSeries(ctx, sqlc.ListSeriesParams{Limit: int64(limit), Offset: int64(offset)})
 }
 
-func (r *seriesRepository) UpdateSettings(ctx context.Context, id int64, status, settingsJSON string) (Series, error) {
+func (r *SeriesRepository) UpdateSettings(ctx context.Context, id int64, status, settingsJSON string) (Series, error) {
 	return r.write.UpdateSeriesSettings(ctx, sqlc.UpdateSeriesSettingsParams{
 		Status:       status,
 		SettingsJson: nullString(settingsJSON),
@@ -90,7 +79,7 @@ func (r *seriesRepository) UpdateSettings(ctx context.Context, id int64, status,
 	})
 }
 
-func (r *seriesRepository) UpdateCounts(ctx context.Context, id int64, total, have int32) error {
+func (r *SeriesRepository) UpdateCounts(ctx context.Context, id int64, total, have int32) error {
 	return r.write.UpdateSeriesCounts(ctx, sqlc.UpdateSeriesCountsParams{
 		TotalIssues: int64(total),
 		HaveIssues:  int64(have),
@@ -98,7 +87,7 @@ func (r *seriesRepository) UpdateCounts(ctx context.Context, id int64, total, ha
 	})
 }
 
-func (r *seriesRepository) UpdateLastRefreshed(ctx context.Context, id int64, refreshedAt string) error {
+func (r *SeriesRepository) UpdateLastRefreshed(ctx context.Context, id int64, refreshedAt string) error {
 	return r.write.UpdateSeriesLastRefreshed(ctx, sqlc.UpdateSeriesLastRefreshedParams{
 		LastRefreshedAt: nullString(refreshedAt),
 		ID:              id,
@@ -107,7 +96,7 @@ func (r *seriesRepository) UpdateLastRefreshed(ctx context.Context, id int64, re
 
 // ListStale returns Active series never refreshed or last refreshed before cutoffISO,
 // oldest first, bounded by limit. It reads through the read pool.
-func (r *seriesRepository) ListStale(ctx context.Context, cutoffISO string, limit int32) ([]Series, error) {
+func (r *SeriesRepository) ListStale(ctx context.Context, cutoffISO string, limit int32) ([]Series, error) {
 	return r.read.ListStaleSeries(ctx, sqlc.ListStaleSeriesParams{
 		LastRefreshedAt: nullString(cutoffISO),
 		Limit:           int64(limit),

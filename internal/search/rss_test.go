@@ -45,7 +45,7 @@ func newRSSService(t *testing.T, feedCands []indexer.Candidate) (*search.Service
 	svc := search.New(search.Deps{
 		Gateway:           &fakeGateway{feed: feedCands},
 		Repos:             repos,
-		DownloadProviders: map[string]download.DownloadProvider{"sabnzbd": download.NewFakeProvider("sabnzbd", "nzo_rss")},
+		DownloadProviders: map[string]search.Submitter{"sabnzbd": download.NewFakeProvider("sabnzbd", "nzo_rss")},
 		AttemptCap:        5,
 	})
 	return svc, repos, iss.ID

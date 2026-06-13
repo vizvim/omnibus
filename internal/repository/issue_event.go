@@ -25,22 +25,17 @@ type IssueEventInsert struct {
 }
 
 // IssueEventRepository appends and lists per-issue lifecycle events (OBS-01).
-type IssueEventRepository interface {
-	Insert(ctx context.Context, in IssueEventInsert) (IssueEventRow, error)
-	ListByIssue(ctx context.Context, issueID int64) ([]IssueEventRow, error)
-}
-
-type issueEventRepository struct {
+type IssueEventRepository struct {
 	read  *sqlc.Queries
 	write *sqlc.Queries
 }
 
 // NewIssueEventRepository binds an IssueEventRepository to the read and write pools.
-func NewIssueEventRepository(d *db.DB) IssueEventRepository {
-	return &issueEventRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
+func NewIssueEventRepository(d *db.DB) *IssueEventRepository {
+	return &IssueEventRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
 }
 
-func (r *issueEventRepository) Insert(ctx context.Context, in IssueEventInsert) (IssueEventRow, error) {
+func (r *IssueEventRepository) Insert(ctx context.Context, in IssueEventInsert) (IssueEventRow, error) {
 	row, err := r.write.InsertIssueEvent(ctx, sqlc.InsertIssueEventParams{
 		IssueID:     in.IssueID,
 		EventType:   in.EventType,
@@ -53,7 +48,7 @@ func (r *issueEventRepository) Insert(ctx context.Context, in IssueEventInsert) 
 	return mapIssueEvent(row), nil
 }
 
-func (r *issueEventRepository) ListByIssue(ctx context.Context, issueID int64) ([]IssueEventRow, error) {
+func (r *IssueEventRepository) ListByIssue(ctx context.Context, issueID int64) ([]IssueEventRow, error) {
 	rows, err := r.read.ListIssueEventsByIssue(ctx, issueID)
 	if err != nil {
 		return nil, err

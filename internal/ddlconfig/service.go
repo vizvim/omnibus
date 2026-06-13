@@ -22,7 +22,7 @@ type Deps struct {
 
 // Service implements DDLConfigService domain logic over DDLConfigRepository.
 type Service struct {
-	repo   repository.DDLConfigRepository
+	repo   *repository.DDLConfigRepository
 	logger *slog.Logger
 }
 

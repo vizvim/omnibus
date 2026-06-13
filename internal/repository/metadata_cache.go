@@ -19,26 +19,21 @@ type MetadataCacheEntry struct {
 }
 
 // MetadataCacheRepository persists cached provider responses.
-type MetadataCacheRepository interface {
-	Get(ctx context.Context, cacheKey string) (MetadataCache, error)
-	Put(ctx context.Context, in MetadataCacheEntry) error
-}
-
-type metadataCacheRepository struct {
+type MetadataCacheRepository struct {
 	read  *sqlc.Queries
 	write *sqlc.Queries
 }
 
 // NewMetadataCacheRepository binds a MetadataCacheRepository to the read and write pools.
-func NewMetadataCacheRepository(d *db.DB) MetadataCacheRepository {
-	return &metadataCacheRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
+func NewMetadataCacheRepository(d *db.DB) *MetadataCacheRepository {
+	return &MetadataCacheRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
 }
 
-func (r *metadataCacheRepository) Get(ctx context.Context, cacheKey string) (MetadataCache, error) {
+func (r *MetadataCacheRepository) Get(ctx context.Context, cacheKey string) (MetadataCache, error) {
 	return r.read.GetMetadataCache(ctx, cacheKey)
 }
 
-func (r *metadataCacheRepository) Put(ctx context.Context, in MetadataCacheEntry) error {
+func (r *MetadataCacheRepository) Put(ctx context.Context, in MetadataCacheEntry) error {
 	return r.write.PutMetadataCache(ctx, sqlc.PutMetadataCacheParams{
 		CacheKey:        in.CacheKey,
 		Payload:         in.Payload,

@@ -22,7 +22,7 @@ const timeFormat = time.RFC3339
 // later, CV date_last_updated).
 type Gateway struct {
 	provider MetadataProvider
-	cache    repository.MetadataCacheRepository
+	cache    *repository.MetadataCacheRepository
 	limiter  *rate.Limiter
 	logger   *slog.Logger
 	ttl      time.Duration
@@ -33,7 +33,7 @@ type Gateway struct {
 // fetch; logger receives cache hit/miss + rate-wait lines.
 func NewGateway(
 	provider MetadataProvider,
-	cache repository.MetadataCacheRepository,
+	cache *repository.MetadataCacheRepository,
 	limiter *rate.Limiter,
 	logger *slog.Logger,
 	ttl time.Duration,

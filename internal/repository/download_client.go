@@ -34,24 +34,19 @@ type DownloadClientConfigUpsert struct {
 
 // DownloadClientRepository persists the singleton SABnzbd download-client config. Writes
 // go through the single-writer pool, reads through the read pool (ADR 0002).
-type DownloadClientRepository interface {
-	// Get returns the stored config. When no row exists yet it returns a zero-value row
-	// and ErrNoDownloadClientConfig so callers can detect the absent/empty case.
-	Get(ctx context.Context) (DownloadClientRow, error)
-	Upsert(ctx context.Context, in DownloadClientConfigUpsert, nowISO string) (DownloadClientRow, error)
-}
-
-type downloadClientRepository struct {
+type DownloadClientRepository struct {
 	read  *sqlc.Queries
 	write *sqlc.Queries
 }
 
 // NewDownloadClientRepository binds a DownloadClientRepository to the read and write pools.
-func NewDownloadClientRepository(d *db.DB) DownloadClientRepository {
-	return &downloadClientRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
+func NewDownloadClientRepository(d *db.DB) *DownloadClientRepository {
+	return &DownloadClientRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
 }
 
-func (r *downloadClientRepository) Get(ctx context.Context) (DownloadClientRow, error) {
+// Get returns the stored config. When no row exists yet it returns a zero-value row
+// and ErrNoDownloadClientConfig so callers can detect the absent/empty case.
+func (r *DownloadClientRepository) Get(ctx context.Context) (DownloadClientRow, error) {
 	row, err := r.read.GetDownloadClientConfig(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -62,7 +57,7 @@ func (r *downloadClientRepository) Get(ctx context.Context) (DownloadClientRow, 
 	return mapDownloadClientConfig(row), nil
 }
 
-func (r *downloadClientRepository) Upsert(ctx context.Context, in DownloadClientConfigUpsert, nowISO string) (DownloadClientRow, error) {
+func (r *DownloadClientRepository) Upsert(ctx context.Context, in DownloadClientConfigUpsert, nowISO string) (DownloadClientRow, error) {
 	row, err := r.write.UpsertDownloadClientConfig(ctx, sqlc.UpsertDownloadClientConfigParams{
 		Url:       in.URL,
 		ApiKey:    nullString(in.APIKey),

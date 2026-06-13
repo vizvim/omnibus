@@ -5,21 +5,21 @@ import "github.com/vizvim/omnibus/internal/db"
 // Repositories bundles every domain repository so the wiring layer can construct them
 // once and hand the set to the service layer.
 type Repositories struct {
-	Series         SeriesRepository
-	Issue          IssueRepository
-	Cover          CoverRepository
-	Publisher      PublisherRepository
-	Arc            ArcRepository
-	MetadataCache  MetadataCacheRepository
-	UserConfig     UserConfigRepository
-	Indexers       IndexerRepository
-	Downloads      DownloadRepository
-	IssueEvents    IssueEventRepository
-	IssueCredits   IssueCreditRepository
-	DownloadClient DownloadClientRepository
-	RenameConfig   RenameConfigRepository
-	DDLConfig      DDLConfigRepository
-	Blacklist      BlacklistRepository
+	Series         *SeriesRepository
+	Issue          *IssueRepository
+	Cover          *CoverRepository
+	Publisher      *PublisherRepository
+	Arc            *ArcRepository
+	MetadataCache  *MetadataCacheRepository
+	UserConfig     *UserConfigRepository
+	Indexers       *IndexerRepository
+	Downloads      *DownloadRepository
+	IssueEvents    *IssueEventRepository
+	IssueCredits   *IssueCreditRepository
+	DownloadClient *DownloadClientRepository
+	RenameConfig   *RenameConfigRepository
+	DDLConfig      *DDLConfigRepository
+	Blacklist      *BlacklistRepository
 }
 
 // NewRepositories constructs all repositories bound to the read/write pools.

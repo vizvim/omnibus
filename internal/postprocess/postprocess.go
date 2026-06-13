@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vizvim/omnibus/internal/download"
 	"github.com/vizvim/omnibus/internal/renameconfig"
 	"github.com/vizvim/omnibus/internal/repository"
 	"github.com/vizvim/omnibus/internal/series"
@@ -41,13 +40,22 @@ type ReplacementEnqueuer interface {
 	EnqueueReplacementSearch(ctx context.Context, issueID int64) error
 }
 
+// HistoryRemover removes a completed item from the download client after a confirmed import
+// (the *arr "Remove Completed" default, D-05; the hard-linked/copied file persists in the
+// library). It is the narrow, consumer-owned seam post-process needs from a download provider:
+// only providers with client-side history (SABnzbd) implement it, so a provider kind absent from
+// the map (e.g. GetComics DDL) is simply skipped. The download.FakeProvider satisfies it for tests.
+type HistoryRemover interface {
+	RemoveFromHistory(ctx context.Context, clientRef string) error
+}
+
 // Deps are the orchestrator's injected collaborators, mirroring the downloadclient/tracking
 // Deps shape (repos + logger + injectable clock).
 type Deps struct {
 	Repos *repository.Repositories
-	// Providers maps a provider kind ("sabnzbd"/"getcomics") to its DownloadProvider; the
-	// Tracker capability (RemoveFromHistory) is type-asserted per provider.
-	Providers map[string]download.DownloadProvider
+	// Removers maps a provider kind ("sabnzbd") to its HistoryRemover. A provider kind absent
+	// from the map (e.g. GetComics DDL, which has no client-side history) is skipped at removal.
+	Removers map[string]HistoryRemover
 	// RenameConfig resolves the live renaming templates/toggles.
 	RenameConfig RenameConfigGetter
 	// LibraryPath is the root of the organized library; the import dst is asserted under it.
@@ -66,7 +74,7 @@ type Deps struct {
 // archive routes into the shared replacement path.
 type Service struct {
 	repos       *repository.Repositories
-	providers   map[string]download.DownloadProvider
+	removers    map[string]HistoryRemover
 	renameCfg   RenameConfigGetter
 	importer    *Importer
 	libraryPath string
@@ -88,7 +96,7 @@ func New(d Deps) *Service {
 	}
 	return &Service{
 		repos:       d.Repos,
-		providers:   d.Providers,
+		removers:    d.Removers,
 		renameCfg:   d.RenameConfig,
 		importer:    NewImporter(),
 		libraryPath: d.LibraryPath,
@@ -420,18 +428,15 @@ func (s *Service) writeEvent(ctx context.Context, issueID int64, eventType strin
 	return nil
 }
 
-// removeFromClient removes the completed item from the client via the Tracker capability. Only
-// providers implementing Tracker support removal; a removal failure is non-fatal.
+// removeFromClient removes the completed item from the client via its HistoryRemover. Only
+// providers with client-side history (SABnzbd) are in the removers map; a provider kind absent
+// from it (e.g. GetComics DDL) is a no-op, and a removal failure is non-fatal.
 func (s *Service) removeFromClient(ctx context.Context, row repository.DownloadRow) {
-	provider, ok := s.providers[row.Provider]
+	remover, ok := s.removers[row.Provider]
 	if !ok {
 		return
 	}
-	tracker, ok := provider.(download.Tracker)
-	if !ok {
-		return
-	}
-	if rerr := tracker.RemoveFromHistory(ctx, row.ClientRef); rerr != nil {
+	if rerr := remover.RemoveFromHistory(ctx, row.ClientRef); rerr != nil {
 		s.logger.Warn("post-process: remove-from-history failed (non-fatal)",
 			slog.Int64("download_id", row.ID), slog.Any("error", rerr))
 	}

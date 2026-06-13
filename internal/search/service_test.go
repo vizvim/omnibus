@@ -119,7 +119,7 @@ func newSearchServiceWithGateway(t *testing.T, gw *fakeGateway, seed issueSeed) 
 	svc := search.New(search.Deps{
 		Gateway:           gw,
 		Repos:             repos,
-		DownloadProviders: map[string]download.DownloadProvider{"sabnzbd": download.NewFakeProvider("sabnzbd", "nzo_1")},
+		DownloadProviders: map[string]search.Submitter{"sabnzbd": download.NewFakeProvider("sabnzbd", "nzo_1")},
 		AttemptCap:        5,
 	})
 	return svc, repos, iss.ID, gw
@@ -329,7 +329,7 @@ func newDDLSearchService(t *testing.T, gw *fakeGateway, ddlEnabled bool) (*searc
 	svc := search.New(search.Deps{
 		Gateway: gwOut,
 		Repos:   repos,
-		DownloadProviders: map[string]download.DownloadProvider{
+		DownloadProviders: map[string]search.Submitter{
 			"sabnzbd":   download.NewFakeProvider("sabnzbd", "nzo_1"),
 			"getcomics": download.NewFakeProvider("getcomics", "ddl_1"),
 		},
