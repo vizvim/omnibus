@@ -45,3 +45,5 @@ frontend/.vite/
 
 # Compiled binary
 /omnibus
+
+**/.task
