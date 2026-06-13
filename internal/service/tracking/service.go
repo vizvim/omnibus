@@ -358,9 +358,12 @@ func (s *Service) onCompleted(ctx context.Context, row repository.DownloadRow, r
 	return nil
 }
 
-// onFailed flips the row to Failed, writes a failed timeline event (DL-04), records history,
-// and enqueues an attempt-capped replacement search (05-04). reason carries the client's
-// fail message (explicit failure) or "stall" (stall reap).
+// onFailed flips the row to Failed, writes a failed timeline event, records history, counts the
+// terminal failure toward the issue's download-attempt cap, and enqueues an attempt-capped
+// replacement search. reason carries the client's fail message (explicit failure) or "stall"
+// (stall reap). Incrementing download_attempts here ensures the failed->replacement-grabbed->failed
+// loop reaches cool-off; this path is disjoint from the post-process corrupt path, so the counter
+// is bumped exactly once per terminal failure.
 func (s *Service) onFailed(ctx context.Context, row repository.DownloadRow, reason string) error {
 	nowISO := s.now().UTC().Format(time.RFC3339)
 
@@ -389,6 +392,13 @@ func (s *Service) onFailed(ctx context.Context, row repository.DownloadRow, reas
 		Result: "failed", Detail: reason, OccurredAt: nowISO,
 	}); herr != nil {
 		return fmt.Errorf("record failed history for download %d: %w", row.ID, herr)
+	}
+
+	// Count the terminal failure toward the replacement cap so the failed->replacement-grabbed->
+	// failed loop eventually reaches cool-off. Runs once per terminal failure (this path and the
+	// post-process corrupt path are mutually exclusive for a single event).
+	if aerr := s.repos.Issue.IncrementDownloadAttempts(ctx, row.IssueID); aerr != nil {
+		return fmt.Errorf("bump download_attempts for issue %d: %w", row.IssueID, aerr)
 	}
 
 	if s.enqueuer != nil {
