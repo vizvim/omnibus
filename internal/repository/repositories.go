@@ -18,6 +18,7 @@ type Repositories struct {
 	IssueCredits   IssueCreditRepository
 	DownloadClient DownloadClientRepository
 	RenameConfig   RenameConfigRepository
+	DDLConfig      DDLConfigRepository
 	Blacklist      BlacklistRepository
 }
 
@@ -37,6 +38,7 @@ func NewRepositories(d *db.DB) *Repositories {
 		IssueCredits:   NewIssueCreditRepository(d),
 		DownloadClient: NewDownloadClientRepository(d),
 		RenameConfig:   NewRenameConfigRepository(d),
+		DDLConfig:      NewDDLConfigRepository(d),
 		Blacklist:      NewBlacklistRepository(d),
 	}
 }

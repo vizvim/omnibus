@@ -29,8 +29,8 @@ type IndexerProber interface {
 	Probe(ctx context.Context, row repository.IndexerRow) TestResult
 }
 
-// httpProber is the production IndexerProber: it issues a lightweight request (newznab
-// t=caps, getcomics site root) and maps the outcome to a TestResult.
+// httpProber is the production IndexerProber: it issues a lightweight newznab t=caps
+// request and maps the outcome to a TestResult.
 type httpProber struct {
 	client *http.Client
 }
@@ -60,9 +60,9 @@ func (p *httpProber) Probe(ctx context.Context, row repository.IndexerRow) TestR
 	switch row.Kind {
 	case KindNewznab:
 		return p.probeNewznab(ctx, row)
-	case KindGetComics:
-		return p.probeGetComics(ctx, row)
 	default:
+		// GetComics is no longer an indexer kind (05-07); a legacy getcomics row (or any
+		// other unknown kind) falls through here.
 		return TestResult{OK: false, Detail: "unknown indexer kind"}
 	}
 }
@@ -130,20 +130,6 @@ func parseNewznabError(body []byte) (detail string, isErr bool) {
 	default:
 		return "newznab error " + e.Code, true
 	}
-}
-
-// probeGetComics requests the site root; a 2xx means the scraper target is reachable.
-func (p *httpProber) probeGetComics(ctx context.Context, row repository.IndexerRow) TestResult {
-	endpoint := normalizeBaseURL(row.BaseURL) + "/"
-
-	_, status, err := p.get(ctx, endpoint)
-	if err != nil {
-		return TestResult{OK: false, Detail: dialDetail(err)}
-	}
-	if res, ok := statusDetail(status); !ok {
-		return res
-	}
-	return TestResult{OK: true, Detail: "connected"}
 }
 
 // get issues a GET and returns the body + status code. A non-nil error is a transport

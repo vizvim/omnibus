@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package omnibus.v1;
+
+option go_package = "github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1";
+
+// DDLConfig is the DB-backed, runtime-toggleable Direct-Download (DDL) configuration.
+// GetComics is no longer a per-user indexer row (05-07): it is a built-in static source
+// consulted ONLY as a fallback, after Newznab indexers yield no acceptable candidate.
+// The only knob is the master enable switch — there is NO numeric DDL-priority control
+// (the order is structural: Newznab indexers first, GetComics last). There are no
+// secrets here (the base URL is a built-in constant, not user-editable), so the message
+// is returned verbatim with no masking.
+message DDLConfig {
+  // enabled toggles the built-in GetComics DDL fallback. Default OFF on a fresh install
+  // (DDL is opt-in). When false, GetComics is never searched and never grabbed.
+  bool enabled = 1;
+}
+
+message GetDDLConfigRequest {}
+
+message GetDDLConfigResponse {
+  DDLConfig config = 1;
+}
+
+message UpdateDDLConfigRequest {
+  bool enabled = 1;
+}
+
+message UpdateDDLConfigResponse {
+  DDLConfig config = 1;
+}
+
+// DDLConfigService owns the DB-backed DDL enable toggle (05-07). It is a
+// domain-segmented service (ADR 0007), persisting its value as a user_config key so the
+// search/grab path can gate the built-in GetComics fallback on it at runtime.
+service DDLConfigService {
+  // GetDDLConfig returns the current DDL config, defaulting to disabled on a fresh
+  // install (DDL is opt-in).
+  rpc GetDDLConfig(GetDDLConfigRequest) returns (GetDDLConfigResponse);
+  // UpdateDDLConfig persists the DDL enable toggle at runtime (no restart).
+  rpc UpdateDDLConfig(UpdateDDLConfigRequest) returns (UpdateDDLConfigResponse);
+}

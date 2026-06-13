@@ -35,6 +35,21 @@ func TestCreateRejectsInvalidKind(t *testing.T) {
 	require.ErrorIs(t, err, indexer.ErrInvalidKind)
 }
 
+// TestCreateRejectsGetComicsKind asserts GetComics is no longer a creatable indexer kind
+// (05-07): only newznab is accepted. GetComics is a built-in static source toggled by the
+// enable_ddl config, never an indexer row.
+func TestCreateRejectsGetComicsKind(t *testing.T) {
+	t.Parallel()
+	svc, _ := newService(t)
+
+	_, err := svc.Create(context.Background(), indexer.Input{
+		Name:    "gc",
+		Kind:    "getcomics",
+		BaseURL: "https://getcomics.org",
+	})
+	require.ErrorIs(t, err, indexer.ErrInvalidKind)
+}
+
 func TestCreateRejectsMissingFields(t *testing.T) {
 	t.Parallel()
 	svc, _ := newService(t)

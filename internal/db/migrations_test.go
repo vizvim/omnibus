@@ -79,6 +79,38 @@ func TestMigrateUpDownUpRoundTrips(t *testing.T) {
 	require.ElementsMatch(t, allTables, tableNames(t, d.Read))
 }
 
+// TestMigration0006RejectsGetComicsKind verifies the indexers table rebuild relaxed the
+// kind CHECK to newznab-only (05-07): a getcomics insert is now rejected, while a newznab
+// insert still succeeds. The migration also preserved the idx_indexers_enabled index.
+func TestMigration0006RejectsGetComicsKind(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "m.db")
+	require.NoError(t, db.Migrate(context.Background(), path))
+	d, err := db.Open(context.Background(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.Close() })
+	ctx := context.Background()
+
+	// A newznab row still inserts.
+	_, err = d.Write.ExecContext(ctx,
+		`INSERT INTO indexers (name, kind, base_url, created_at, updated_at)
+		 VALUES ('nzb', 'newznab', 'http://nzb.test', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`)
+	require.NoError(t, err)
+
+	// A getcomics row is now rejected by the relaxed CHECK constraint.
+	_, err = d.Write.ExecContext(ctx,
+		`INSERT INTO indexers (name, kind, base_url, created_at, updated_at)
+		 VALUES ('gc', 'getcomics', 'https://getcomics.org', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "CHECK")
+
+	// The enabled index survived the table rebuild.
+	var indexName string
+	require.NoError(t, d.Read.QueryRowContext(ctx,
+		`SELECT name FROM sqlite_master WHERE type='index' AND name='idx_indexers_enabled'`).Scan(&indexName))
+	require.Equal(t, "idx_indexers_enabled", indexName)
+}
+
 func TestCompositeIssueNumberIndexDistinctness(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "m.db")

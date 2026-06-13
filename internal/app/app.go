@@ -29,6 +29,7 @@ import (
 	indexerprovider "github.com/vizvim/omnibus/internal/provider/indexer"
 	"github.com/vizvim/omnibus/internal/provider/metadata"
 	"github.com/vizvim/omnibus/internal/repository"
+	"github.com/vizvim/omnibus/internal/service/ddlconfig"
 	"github.com/vizvim/omnibus/internal/service/downloadclient"
 	"github.com/vizvim/omnibus/internal/service/indexer"
 	jobsservice "github.com/vizvim/omnibus/internal/service/jobs"
@@ -139,6 +140,10 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// post-process service (its config getter) and the jobs client.
 	renameConfigSvc := renameconfig.New(renameconfig.Deps{Repos: repos, Logger: logger})
 
+	// DDLConfigService owns the DB-backed, runtime-toggleable DDL enable flag (05-07),
+	// the flag the search/grab path reads to gate the built-in GetComics fallback.
+	ddlConfigSvc := ddlconfig.New(ddlconfig.Deps{Repos: repos, Logger: logger})
+
 	// PostProcessService composes the 05-02 units against a real completed download (05-03):
 	// validate -> render -> import -> Snatched->Downloaded -> events -> history -> remove, and
 	// routes a corrupt archive into the shared D-16 replacement path. Built before the jobs
@@ -194,7 +199,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// connectivity prober so Test probes the live, DB-resolved config.
 	downloadClientSvc := downloadclient.New(downloadclient.Deps{Repos: repos, Logger: logger, Prober: sabProvider})
 
-	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, renameConfigSvc, searchSvc, repos.Cover)
+	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, renameConfigSvc, ddlConfigSvc, searchSvc, repos.Cover)
 	if err != nil {
 		_ = database.Close()
 		return err
@@ -253,7 +258,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 // newServer builds the h2c-wrapped HTTP server hosting the SeriesService + JobService
 // Connect handlers (with slog + otel interceptors) and the cover handler serving blobs
 // from SQLite, with CORS scoped to the Vite dev origin.
-func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, indexerSvc *indexer.Service, downloadClientSvc *downloadclient.Service, renameConfigSvc *renameconfig.Service, searchSvc *search.Service, covers transport.CoverStore) (*http.Server, error) {
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, indexerSvc *indexer.Service, downloadClientSvc *downloadclient.Service, renameConfigSvc *renameconfig.Service, ddlConfigSvc *ddlconfig.Service, searchSvc *search.Service, covers transport.CoverStore) (*http.Server, error) {
 	interceptors, err := transport.NewInterceptors(logger)
 	if err != nil {
 		return nil, fmt.Errorf("build interceptors: %w", err)
@@ -282,6 +287,10 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 	renameConfigHandler := transport.NewRenameConfigHandler(renameConfigSvc)
 	renameConfigPath, renameConfigH := omnibusv1connect.NewRenameConfigServiceHandler(renameConfigHandler, connect.WithInterceptors(interceptors...))
 	mux.Handle("/api"+renameConfigPath, http.StripPrefix("/api", renameConfigH))
+
+	ddlConfigHandler := transport.NewDDLConfigHandler(ddlConfigSvc)
+	ddlConfigPath, ddlConfigH := omnibusv1connect.NewDDLConfigServiceHandler(ddlConfigHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+ddlConfigPath, http.StripPrefix("/api", ddlConfigH))
 
 	searchHandler := transport.NewSearchHandler(searchSvc)
 	searchPath, searchH := omnibusv1connect.NewSearchServiceHandler(searchHandler, connect.WithInterceptors(interceptors...))

@@ -15,18 +15,18 @@ import (
 	"github.com/vizvim/omnibus/internal/repository"
 )
 
-// KindNewznab and KindGetComics are the only valid indexer kinds.
-const (
-	KindNewznab   = "newznab"
-	KindGetComics = "getcomics"
-)
+// KindNewznab is the only valid (creatable) indexer kind. GetComics is no longer an
+// indexer kind (05-07): it is a built-in static DDL source toggled by the enable_ddl
+// config, never a per-user indexer row.
+const KindNewznab = "newznab"
 
 // defaultNewznabCategories is the Newznab comic category applied when a newznab
 // indexer is created without explicit categories (RESEARCH §4).
 const defaultNewznabCategories = "7030"
 
-// ErrInvalidKind is returned when an indexer kind is not newznab/getcomics.
-var ErrInvalidKind = errors.New("indexer kind must be 'newznab' or 'getcomics'")
+// ErrInvalidKind is returned when an indexer kind is not newznab. GetComics is no longer
+// a creatable kind (05-07).
+var ErrInvalidKind = errors.New("indexer kind must be 'newznab'")
 
 // ErrMissingField is returned when a required field (name, base_url) is blank.
 var ErrMissingField = errors.New("indexer name and base_url are required")
@@ -149,7 +149,7 @@ func (s *Service) normalize(in Input) (repository.IndexerUpsert, error) {
 	in.Kind = strings.TrimSpace(in.Kind)
 	in.Categories = strings.TrimSpace(in.Categories)
 
-	if in.Kind != KindNewznab && in.Kind != KindGetComics {
+	if in.Kind != KindNewznab {
 		return repository.IndexerUpsert{}, ErrInvalidKind
 	}
 	if in.Name == "" || in.BaseURL == "" {

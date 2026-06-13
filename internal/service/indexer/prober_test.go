@@ -83,18 +83,15 @@ func TestHTTPProberNewznab401IsUnauthorized(t *testing.T) {
 	require.Contains(t, strings.ToLower(res.Detail), "unauthorized")
 }
 
-func TestHTTPProberGetComics200IsConnected(t *testing.T) {
+// TestHTTPProberGetComicsIsUnknownKind asserts a legacy kind=getcomics row no longer has
+// a probe branch (05-07): GetComics is a built-in source, not an indexer kind, so it
+// falls through to the "unknown indexer kind" default.
+func TestHTTPProberGetComicsIsUnknownKind(t *testing.T) {
 	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		_, _ = w.Write([]byte(`<html></html>`))
-	}))
-	t.Cleanup(srv.Close)
-
-	p := indexer.NewHTTPProber(indexer.WithProberHTTPClient(srv.Client()))
-	res := p.Probe(context.Background(), repository.IndexerRow{Kind: indexer.KindGetComics, BaseURL: srv.URL})
-	require.True(t, res.OK)
-	require.Equal(t, "connected", res.Detail)
+	p := indexer.NewHTTPProber()
+	res := p.Probe(context.Background(), repository.IndexerRow{Kind: "getcomics", BaseURL: "http://x.test"})
+	require.False(t, res.OK)
+	require.Equal(t, "unknown indexer kind", res.Detail)
 }
 
 func TestHTTPProberSchemeLessBaseURLProbes(t *testing.T) {
@@ -109,19 +106,6 @@ func TestHTTPProberSchemeLessBaseURLProbes(t *testing.T) {
 	p := indexer.NewHTTPProber(indexer.WithProberHTTPClient(srv.Client()))
 	res := p.Probe(context.Background(), repository.IndexerRow{Kind: indexer.KindNewznab, BaseURL: schemeless})
 	require.True(t, res.OK, "a scheme-less stored URL must still probe successfully")
-}
-
-func TestHTTPProberGetComicsNon200IsStatus(t *testing.T) {
-	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable)
-	}))
-	t.Cleanup(srv.Close)
-
-	p := indexer.NewHTTPProber(indexer.WithProberHTTPClient(srv.Client()))
-	res := p.Probe(context.Background(), repository.IndexerRow{Kind: indexer.KindGetComics, BaseURL: srv.URL})
-	require.False(t, res.OK)
-	require.Contains(t, res.Detail, "status 503")
 }
 
 func TestHTTPProberNewznabNon2xxIsStatus(t *testing.T) {
