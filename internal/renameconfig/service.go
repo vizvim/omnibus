@@ -37,7 +37,7 @@ type Deps struct {
 
 // Service implements RenameConfigService domain logic over RenameConfigRepository.
 type Service struct {
-	repo   repository.RenameConfigRepository
+	repo   *repository.RenameConfigRepository
 	logger *slog.Logger
 }
 

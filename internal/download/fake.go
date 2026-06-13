@@ -2,9 +2,11 @@ package download
 
 import "context"
 
-// FakeProvider is a network-free DownloadProvider + Tracker for service tests. It records
-// the last GrabRequest and returns a canned client reference (or a configured error), and
-// serves scripted Poll results keyed by client ref so the poll job can be tested without SAB.
+// FakeProvider is a network-free download provider for service tests. It satisfies every
+// consumer seam (search.Submitter via Submit, tracking.Poller via Poll, postprocess.HistoryRemover
+// via RemoveFromHistory). It records the last GrabRequest and returns a canned client reference
+// (or a configured error), and serves scripted Poll results keyed by client ref so the poll job
+// can be tested without SAB.
 type FakeProvider struct {
 	kind      string
 	clientRef string
@@ -22,11 +24,6 @@ type FakeProvider struct {
 	// Removed records the client refs passed to RemoveFromHistory (D-05 assertions).
 	Removed []string
 }
-
-var (
-	_ DownloadProvider = (*FakeProvider)(nil)
-	_ Tracker          = (*FakeProvider)(nil)
-)
 
 // NewFakeProvider builds a fake that returns clientRef from Submit.
 func NewFakeProvider(kind, clientRef string) *FakeProvider {

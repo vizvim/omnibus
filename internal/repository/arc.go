@@ -18,23 +18,17 @@ type ArcUpsert struct {
 }
 
 // ArcRepository persists story arcs and their issue membership.
-type ArcRepository interface {
-	Upsert(ctx context.Context, in ArcUpsert) (StoryArc, error)
-	LinkIssue(ctx context.Context, arcID, issueID int64, position int32) error
-	ListBySeries(ctx context.Context, seriesID int64) ([]StoryArc, error)
-}
-
-type arcRepository struct {
+type ArcRepository struct {
 	read  *sqlc.Queries
 	write *sqlc.Queries
 }
 
 // NewArcRepository binds an ArcRepository to the read and write pools.
-func NewArcRepository(d *db.DB) ArcRepository {
-	return &arcRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
+func NewArcRepository(d *db.DB) *ArcRepository {
+	return &ArcRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
 }
 
-func (r *arcRepository) Upsert(ctx context.Context, in ArcUpsert) (StoryArc, error) {
+func (r *ArcRepository) Upsert(ctx context.Context, in ArcUpsert) (StoryArc, error) {
 	return r.write.UpsertArc(ctx, sqlc.UpsertArcParams{
 		ComicvineArcID: nullInt64(in.ComicvineArcID),
 		Name:           in.Name,
@@ -42,7 +36,7 @@ func (r *arcRepository) Upsert(ctx context.Context, in ArcUpsert) (StoryArc, err
 	})
 }
 
-func (r *arcRepository) LinkIssue(ctx context.Context, arcID, issueID int64, position int32) error {
+func (r *ArcRepository) LinkIssue(ctx context.Context, arcID, issueID int64, position int32) error {
 	return r.write.LinkArcIssue(ctx, sqlc.LinkArcIssueParams{
 		ArcID:    arcID,
 		IssueID:  issueID,
@@ -50,6 +44,6 @@ func (r *arcRepository) LinkIssue(ctx context.Context, arcID, issueID int64, pos
 	})
 }
 
-func (r *arcRepository) ListBySeries(ctx context.Context, seriesID int64) ([]StoryArc, error) {
+func (r *ArcRepository) ListBySeries(ctx context.Context, seriesID int64) ([]StoryArc, error) {
 	return r.read.ListArcsBySeries(ctx, seriesID)
 }

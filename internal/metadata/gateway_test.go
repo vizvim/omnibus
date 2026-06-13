@@ -60,7 +60,7 @@ func (c *countingProvider) GetCover(ctx context.Context, u string) ([]byte, erro
 	return c.inner.GetCover(ctx, u)
 }
 
-func cacheRepo(t *testing.T) repository.MetadataCacheRepository {
+func cacheRepo(t *testing.T) *repository.MetadataCacheRepository {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "gw.db")
 	require.NoError(t, db.Migrate(context.Background(), path))

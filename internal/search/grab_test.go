@@ -38,7 +38,7 @@ func newGrabFixture(t *testing.T) (*search.Grabber, *repository.Repositories, *d
 
 	fake := download.NewFakeProvider("sabnzbd", "nzo_abc")
 	grabber := search.NewGrabber(search.GrabDeps{
-		Providers:  map[string]download.DownloadProvider{"sabnzbd": fake},
+		Providers:  map[string]search.Submitter{"sabnzbd": fake},
 		Repos:      repos,
 		AttemptCap: 5,
 	})

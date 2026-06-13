@@ -56,26 +56,18 @@ type RenameConfigUpsert struct {
 
 // RenameConfigRepository persists the renaming config over user_config keys. Reads go
 // through the read pool, writes through the single-writer pool (ADR 0002).
-type RenameConfigRepository interface {
-	// Get loads each renaming key. When no renaming key has been written yet the
-	// returned row has Present == false (the service then supplies the D-06 defaults).
-	Get(ctx context.Context) (RenameConfigRow, error)
-	// Upsert persists every renaming field as a user_config key.
-	Upsert(ctx context.Context, in RenameConfigUpsert) (RenameConfigRow, error)
-}
-
-type renameConfigRepository struct {
+type RenameConfigRepository struct {
 	read  *sqlc.Queries
 	write *sqlc.Queries
 }
 
 // NewRenameConfigRepository binds a RenameConfigRepository to the read and write pools.
-func NewRenameConfigRepository(d *db.DB) RenameConfigRepository {
-	return &renameConfigRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
+func NewRenameConfigRepository(d *db.DB) *RenameConfigRepository {
+	return &RenameConfigRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
 }
 
 // getKey loads a single user_config value, reporting absence via (value, present, err).
-func (r *renameConfigRepository) getKey(ctx context.Context, key string) (string, bool, error) {
+func (r *RenameConfigRepository) getKey(ctx context.Context, key string) (string, bool, error) {
 	row, err := r.read.GetUserConfig(ctx, key)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -86,7 +78,9 @@ func (r *renameConfigRepository) getKey(ctx context.Context, key string) (string
 	return row.Value, true, nil
 }
 
-func (r *renameConfigRepository) Get(ctx context.Context) (RenameConfigRow, error) {
+// Get loads each renaming key. When no renaming key has been written yet the
+// returned row has Present == false (the service then supplies the D-06 defaults).
+func (r *RenameConfigRepository) Get(ctx context.Context) (RenameConfigRow, error) {
 	var out RenameConfigRow
 
 	type field struct {
@@ -117,7 +111,8 @@ func (r *renameConfigRepository) Get(ctx context.Context) (RenameConfigRow, erro
 	return out, nil
 }
 
-func (r *renameConfigRepository) Upsert(ctx context.Context, in RenameConfigUpsert) (RenameConfigRow, error) {
+// Upsert persists every renaming field as a user_config key.
+func (r *RenameConfigRepository) Upsert(ctx context.Context, in RenameConfigUpsert) (RenameConfigRow, error) {
 	pairs := [][2]string{
 		{keyRenameFolderFormat, in.FolderFormat},
 		{keyRenameFileFormat, in.FileFormat},

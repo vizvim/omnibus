@@ -11,23 +11,17 @@ import (
 type UserConfig = sqlc.UserConfig
 
 // UserConfigRepository persists typed user configuration keys.
-type UserConfigRepository interface {
-	Get(ctx context.Context, key string) (string, error)
-	Set(ctx context.Context, key, value string) error
-	List(ctx context.Context) ([]UserConfig, error)
-}
-
-type userConfigRepository struct {
+type UserConfigRepository struct {
 	read  *sqlc.Queries
 	write *sqlc.Queries
 }
 
 // NewUserConfigRepository binds a UserConfigRepository to the read and write pools.
-func NewUserConfigRepository(d *db.DB) UserConfigRepository {
-	return &userConfigRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
+func NewUserConfigRepository(d *db.DB) *UserConfigRepository {
+	return &UserConfigRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
 }
 
-func (r *userConfigRepository) Get(ctx context.Context, key string) (string, error) {
+func (r *UserConfigRepository) Get(ctx context.Context, key string) (string, error) {
 	row, err := r.read.GetUserConfig(ctx, key)
 	if err != nil {
 		return "", err
@@ -35,10 +29,10 @@ func (r *userConfigRepository) Get(ctx context.Context, key string) (string, err
 	return row.Value, nil
 }
 
-func (r *userConfigRepository) Set(ctx context.Context, key, value string) error {
+func (r *UserConfigRepository) Set(ctx context.Context, key, value string) error {
 	return r.write.SetUserConfig(ctx, sqlc.SetUserConfigParams{Key: key, Value: value})
 }
 
-func (r *userConfigRepository) List(ctx context.Context) ([]UserConfig, error) {
+func (r *UserConfigRepository) List(ctx context.Context) ([]UserConfig, error) {
 	return r.read.ListUserConfig(ctx)
 }

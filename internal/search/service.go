@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/vizvim/omnibus/internal/download"
 	"github.com/vizvim/omnibus/internal/indexer"
 	"github.com/vizvim/omnibus/internal/repository"
 )
@@ -51,7 +50,7 @@ func indexerKindFor(downloadKind string) string {
 type Deps struct {
 	Gateway           IndexerGateway
 	Repos             *repository.Repositories
-	DownloadProviders map[string]download.DownloadProvider
+	DownloadProviders map[string]Submitter
 	Logger            *slog.Logger
 	AttemptCap        int
 	// DownloadAttemptCap bounds the attempt-capped replacement loop on the SEPARATE

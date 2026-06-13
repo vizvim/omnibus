@@ -63,39 +63,17 @@ type DeadReleaseKey struct {
 }
 
 // DownloadRepository persists downloads, idempotent on (provider, release_key, issue_id).
-type DownloadRepository interface {
-	Upsert(ctx context.Context, in DownloadUpsert, nowISO string) (DownloadRow, error)
-	Get(ctx context.Context, id int64) (DownloadRow, error)
-	ListByIssue(ctx context.Context, issueID int64) ([]DownloadRow, error)
-	// ListActive returns the in-flight downloads (Queued/Downloading) the poll job
-	// reconciles each tick, oldest-updated-first (D-01).
-	ListActive(ctx context.Context) ([]DownloadRow, error)
-	// UpdateStatus flips a download row's status and bumps updated_at, returning the row.
-	// Status writes route through the download-status state machine before this call.
-	UpdateStatus(ctx context.Context, id int64, status, nowISO string) (DownloadRow, error)
-	// InsertHistory appends a download_history row (append-only audit trail, DL-03).
-	InsertHistory(ctx context.Context, in DownloadHistoryInsert) (DownloadHistoryRow, error)
-	// ListDeadReleaseKeys returns the (provider, release_key) pairs already Failed or
-	// Blacklisted for an issue, so a replacement search cannot re-pick them (D-12).
-	ListDeadReleaseKeys(ctx context.Context, issueID int64) ([]DeadReleaseKey, error)
-	// GetCompletedStorage returns the storage path the poll loop captured when this
-	// release completed for the issue (DL-03 history.detail with result='completed'). The
-	// post-process orchestrator reads it to locate the file on disk. The bool is false when
-	// no completed history row exists (the download never reached Completed).
-	GetCompletedStorage(ctx context.Context, issueID int64, provider, releaseKey string) (string, bool, error)
-}
-
-type downloadRepository struct {
+type DownloadRepository struct {
 	read  *sqlc.Queries
 	write *sqlc.Queries
 }
 
 // NewDownloadRepository binds a DownloadRepository to the read and write pools.
-func NewDownloadRepository(d *db.DB) DownloadRepository {
-	return &downloadRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
+func NewDownloadRepository(d *db.DB) *DownloadRepository {
+	return &DownloadRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
 }
 
-func (r *downloadRepository) Upsert(ctx context.Context, in DownloadUpsert, nowISO string) (DownloadRow, error) {
+func (r *DownloadRepository) Upsert(ctx context.Context, in DownloadUpsert, nowISO string) (DownloadRow, error) {
 	row, err := r.write.CreateDownload(ctx, sqlc.CreateDownloadParams{
 		IssueID:      in.IssueID,
 		Provider:     in.Provider,
@@ -113,7 +91,7 @@ func (r *downloadRepository) Upsert(ctx context.Context, in DownloadUpsert, nowI
 	return mapDownload(row), nil
 }
 
-func (r *downloadRepository) Get(ctx context.Context, id int64) (DownloadRow, error) {
+func (r *DownloadRepository) Get(ctx context.Context, id int64) (DownloadRow, error) {
 	row, err := r.read.GetDownloadByID(ctx, id)
 	if err != nil {
 		return DownloadRow{}, err
@@ -121,7 +99,7 @@ func (r *downloadRepository) Get(ctx context.Context, id int64) (DownloadRow, er
 	return mapDownload(row), nil
 }
 
-func (r *downloadRepository) ListByIssue(ctx context.Context, issueID int64) ([]DownloadRow, error) {
+func (r *DownloadRepository) ListByIssue(ctx context.Context, issueID int64) ([]DownloadRow, error) {
 	rows, err := r.read.ListDownloadsByIssue(ctx, issueID)
 	if err != nil {
 		return nil, err
@@ -133,7 +111,9 @@ func (r *downloadRepository) ListByIssue(ctx context.Context, issueID int64) ([]
 	return out, nil
 }
 
-func (r *downloadRepository) ListActive(ctx context.Context) ([]DownloadRow, error) {
+// ListActive returns the in-flight downloads (Queued/Downloading) the poll job
+// reconciles each tick, oldest-updated-first (D-01).
+func (r *DownloadRepository) ListActive(ctx context.Context) ([]DownloadRow, error) {
 	rows, err := r.read.ListActiveDownloads(ctx)
 	if err != nil {
 		return nil, err
@@ -145,7 +125,9 @@ func (r *downloadRepository) ListActive(ctx context.Context) ([]DownloadRow, err
 	return out, nil
 }
 
-func (r *downloadRepository) UpdateStatus(ctx context.Context, id int64, status, nowISO string) (DownloadRow, error) {
+// UpdateStatus flips a download row's status and bumps updated_at, returning the row.
+// Status writes route through the download-status state machine before this call.
+func (r *DownloadRepository) UpdateStatus(ctx context.Context, id int64, status, nowISO string) (DownloadRow, error) {
 	row, err := r.write.UpdateDownloadStatus(ctx, sqlc.UpdateDownloadStatusParams{
 		Status:    status,
 		UpdatedAt: nowISO,
@@ -157,7 +139,8 @@ func (r *downloadRepository) UpdateStatus(ctx context.Context, id int64, status,
 	return mapDownload(row), nil
 }
 
-func (r *downloadRepository) InsertHistory(ctx context.Context, in DownloadHistoryInsert) (DownloadHistoryRow, error) {
+// InsertHistory appends a download_history row (append-only audit trail, DL-03).
+func (r *DownloadRepository) InsertHistory(ctx context.Context, in DownloadHistoryInsert) (DownloadHistoryRow, error) {
 	row, err := r.write.InsertDownloadHistory(ctx, sqlc.InsertDownloadHistoryParams{
 		IssueID:    in.IssueID,
 		Provider:   in.Provider,
@@ -180,7 +163,9 @@ func (r *downloadRepository) InsertHistory(ctx context.Context, in DownloadHisto
 	}, nil
 }
 
-func (r *downloadRepository) ListDeadReleaseKeys(ctx context.Context, issueID int64) ([]DeadReleaseKey, error) {
+// ListDeadReleaseKeys returns the (provider, release_key) pairs already Failed or
+// Blacklisted for an issue, so a replacement search cannot re-pick them (D-12).
+func (r *DownloadRepository) ListDeadReleaseKeys(ctx context.Context, issueID int64) ([]DeadReleaseKey, error) {
 	rows, err := r.read.ListDeadReleaseKeysForIssue(ctx, issueID)
 	if err != nil {
 		return nil, err
@@ -192,7 +177,11 @@ func (r *downloadRepository) ListDeadReleaseKeys(ctx context.Context, issueID in
 	return out, nil
 }
 
-func (r *downloadRepository) GetCompletedStorage(ctx context.Context, issueID int64, provider, releaseKey string) (string, bool, error) {
+// GetCompletedStorage returns the storage path the poll loop captured when this
+// release completed for the issue (DL-03 history.detail with result='completed'). The
+// post-process orchestrator reads it to locate the file on disk. The bool is false when
+// no completed history row exists (the download never reached Completed).
+func (r *DownloadRepository) GetCompletedStorage(ctx context.Context, issueID int64, provider, releaseKey string) (string, bool, error) {
 	detail, err := r.read.GetLatestCompletedStorageForIssue(ctx, sqlc.GetLatestCompletedStorageForIssueParams{
 		IssueID:    issueID,
 		Provider:   provider,

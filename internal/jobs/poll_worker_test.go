@@ -61,8 +61,8 @@ func TestPollProgressEvent(t *testing.T) {
 	fake.SetPoll("nzo_1", download.PollResult{Status: download.PollInProgress, ProgressPct: 42})
 
 	svc := tracking.New(tracking.Deps{
-		Repos:    repos,
-		Trackers: map[string]download.Tracker{"sabnzbd": fake},
+		Repos:   repos,
+		Pollers: map[string]tracking.Poller{"sabnzbd": fake},
 	})
 	require.NoError(t, svc.RunDownloadPoll(ctx))
 
@@ -97,8 +97,8 @@ func TestPollTerminal(t *testing.T) {
 	})
 
 	svc := tracking.New(tracking.Deps{
-		Repos:    repos,
-		Trackers: map[string]download.Tracker{"sabnzbd": fake},
+		Repos:   repos,
+		Pollers: map[string]tracking.Poller{"sabnzbd": fake},
 	})
 	require.NoError(t, svc.RunDownloadPoll(ctx))
 
@@ -134,7 +134,7 @@ func TestPollStall(t *testing.T) {
 
 	svc := tracking.New(tracking.Deps{
 		Repos:       repos,
-		Trackers:    map[string]download.Tracker{"sabnzbd": fake},
+		Pollers:     map[string]tracking.Poller{"sabnzbd": fake},
 		StallWindow: 30 * time.Minute,
 		Now:         func() time.Time { return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC) },
 	})

@@ -18,22 +18,17 @@ type PublisherUpsert struct {
 }
 
 // PublisherRepository persists publishers.
-type PublisherRepository interface {
-	Upsert(ctx context.Context, in PublisherUpsert) (Publisher, error)
-	GetByID(ctx context.Context, id int64) (Publisher, error)
-}
-
-type publisherRepository struct {
+type PublisherRepository struct {
 	read  *sqlc.Queries
 	write *sqlc.Queries
 }
 
 // NewPublisherRepository binds a PublisherRepository to the read and write pools.
-func NewPublisherRepository(d *db.DB) PublisherRepository {
-	return &publisherRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
+func NewPublisherRepository(d *db.DB) *PublisherRepository {
+	return &PublisherRepository{read: sqlc.New(d.Read), write: sqlc.New(d.Write)}
 }
 
-func (r *publisherRepository) Upsert(ctx context.Context, in PublisherUpsert) (Publisher, error) {
+func (r *PublisherRepository) Upsert(ctx context.Context, in PublisherUpsert) (Publisher, error) {
 	return r.write.UpsertPublisher(ctx, sqlc.UpsertPublisherParams{
 		ComicvinePublisherID: nullInt64Ptr(in.ComicvinePublisherID),
 		Name:                 in.Name,
@@ -41,6 +36,6 @@ func (r *publisherRepository) Upsert(ctx context.Context, in PublisherUpsert) (P
 	})
 }
 
-func (r *publisherRepository) GetByID(ctx context.Context, id int64) (Publisher, error) {
+func (r *PublisherRepository) GetByID(ctx context.Context, id int64) (Publisher, error) {
 	return r.read.GetPublisherByID(ctx, id)
 }

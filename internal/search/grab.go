@@ -27,7 +27,7 @@ func clampInt32(v int64) int32 {
 	return int32(v)
 }
 
-// ErrProviderNotFound is returned when no DownloadProvider matches a grab's kind.
+// ErrProviderNotFound is returned when no Submitter matches a grab's kind.
 var ErrProviderNotFound = errors.New("no download provider for kind")
 
 // ErrCrossIssueGrab is returned when a grab's release_key was not a candidate for the
@@ -43,11 +43,20 @@ type DownloadResult struct {
 	Status     string
 }
 
+// Submitter hands a chosen release off to a download client and returns a client-side
+// reference (e.g. a SABnzbd nzo_id or a GetComics DDL job id) used later to track it. It is the
+// narrow, consumer-owned seam the grab path needs from a download provider: the map key already
+// supplies the provider kind, so Submit is the only method required here. The SABnzbd and
+// GetComics providers satisfy it; the download.FakeProvider satisfies it for tests.
+type Submitter interface {
+	Submit(ctx context.Context, req download.GrabRequest) (clientRef string, err error)
+}
+
 // GrabDeps are the collaborators a Grabber needs. It is embedded into the search service
 // (Plan 05) which assembles these.
 type GrabDeps struct {
-	// Providers maps a provider Kind ("sabnzbd"/"getcomics") to its DownloadProvider.
-	Providers  map[string]download.DownloadProvider
+	// Providers maps a provider kind ("sabnzbd"/"getcomics") to its Submitter.
+	Providers  map[string]Submitter
 	Repos      *repository.Repositories
 	Logger     *slog.Logger
 	AttemptCap int
@@ -59,7 +68,7 @@ type GrabDeps struct {
 // Snatched via the state machine → write the snatched timeline event (D-14). It stops at
 // the snatch — no polling, progress, history, or post-processing (Phase 5).
 type Grabber struct {
-	providers  map[string]download.DownloadProvider
+	providers  map[string]Submitter
 	repos      *repository.Repositories
 	logger     *slog.Logger
 	attemptCap int

@@ -209,8 +209,6 @@ func ssrfGuardedClient(base *http.Client, allowPrivate bool) *http.Client {
 	return &cloned
 }
 
-var _ DownloadProvider = (*GetComicsDDLProvider)(nil)
-
 // Kind reports the provider type.
 func (p *GetComicsDDLProvider) Kind() string { return "getcomics" }
 

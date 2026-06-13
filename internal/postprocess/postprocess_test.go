@@ -85,7 +85,7 @@ func newFixture(t *testing.T, storagePath string) *fixture {
 
 	svc := postprocess.New(postprocess.Deps{
 		Repos:        repos,
-		Providers:    map[string]download.DownloadProvider{"sabnzbd": fake},
+		Removers:     map[string]postprocess.HistoryRemover{"sabnzbd": fake},
 		RenameConfig: renameConfigGetter{},
 		LibraryPath:  libraryDir,
 		AttemptCap:   5,
