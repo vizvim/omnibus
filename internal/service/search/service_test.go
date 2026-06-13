@@ -318,8 +318,8 @@ func gcCand(releaseKey, format string, size int64) indexer.Candidate {
 // newDDLSearchService seeds the standard Saga #7 fixture with an enabled newznab indexer,
 // wires the supplied gateway + a recording enqueuer (so DDL fetches are observable), and
 // sets enable_ddl to the given value. It returns the service, the issue id, the gateway,
-// and the enqueuer.
-func newDDLSearchService(t *testing.T, gw *fakeGateway, ddlEnabled bool) (*search.Service, int64, *fakeGateway, *recordingEnqueuer) {
+// the enqueuer, and the repos (so a test can inspect the downloads row the grab created).
+func newDDLSearchService(t *testing.T, gw *fakeGateway, ddlEnabled bool) (*search.Service, int64, *fakeGateway, *recordingEnqueuer, *repository.Repositories) {
 	t.Helper()
 	_, repos, issueID, gwOut := newSearchServiceWithGateway(t, gw, issueSeed{
 		seriesName: "Saga", issueNumberRaw: "7", issueNumberSort: 7.0,
@@ -340,7 +340,7 @@ func newDDLSearchService(t *testing.T, gw *fakeGateway, ddlEnabled bool) (*searc
 	if ddlEnabled {
 		require.NoError(t, repos.UserConfig.Set(context.Background(), "enable_ddl", "true"))
 	}
-	return svc, issueID, gwOut, enq
+	return svc, issueID, gwOut, enq, repos
 }
 
 // TestDDLDisabledNeverConsultsGetComics: with enable_ddl=false, a wanted issue whose only
@@ -352,7 +352,7 @@ func TestDDLDisabledNeverConsultsGetComics(t *testing.T) {
 		candidates:     nil, // no acceptable Newznab candidate
 		getComicsCands: []indexer.Candidate{gcCand("gc-cbz", "cbz", 30*1024*1024)},
 	}
-	svc, issueID, gwOut, enq := newDDLSearchService(t, gw, false)
+	svc, issueID, gwOut, enq, _ := newDDLSearchService(t, gw, false)
 	ctx := context.Background()
 
 	res, err := svc.SearchIssue(ctx, issueID)
@@ -376,7 +376,7 @@ func TestDDLEnabledNewznabAcceptableSkipsGetComics(t *testing.T) {
 		candidates:     []indexer.Candidate{svcCand("newznab", "rk-cbz", "cbz", 30*1024*1024)},
 		getComicsCands: []indexer.Candidate{gcCand("gc-cbz", "cbz", 30*1024*1024)},
 	}
-	svc, issueID, gwOut, enq := newDDLSearchService(t, gw, true)
+	svc, issueID, gwOut, enq, _ := newDDLSearchService(t, gw, true)
 	ctx := context.Background()
 
 	res, err := svc.SearchIssue(ctx, issueID)
@@ -399,7 +399,7 @@ func TestDDLEnabledNoNewznabFallsBackToGetComics(t *testing.T) {
 		candidates:     nil, // no acceptable Newznab candidate
 		getComicsCands: []indexer.Candidate{gcCand("gc-cbz", "cbz", 30*1024*1024)},
 	}
-	svc, issueID, gwOut, enq := newDDLSearchService(t, gw, true)
+	svc, issueID, gwOut, enq, _ := newDDLSearchService(t, gw, true)
 	ctx := context.Background()
 
 	res, err := svc.SearchIssue(ctx, issueID)
@@ -411,6 +411,36 @@ func TestDDLEnabledNoNewznabFallsBackToGetComics(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "ddl_1", dl.ClientRef, "the GetComics pick is grabbed via the DDL provider")
 	require.Len(t, enq.ddlFetched, 1, "a GetComics grab enqueues exactly one DDLFetch")
+}
+
+// TestDDLAutoGrabFallbackEnqueuesDDLFetch is the CR-01 regression guard: the AUTO-grab
+// path (SearchAndGrab/RunSearchIssue/RunReplacement/RetryDownload all share runSearchIssue)
+// must enqueue a DDLFetch when it falls back to a GetComics pick. Before the fix the enqueue
+// lived only in the manual SelectCandidate path, so an auto-grabbed getcomics download was
+// snatched then stranded in Queued forever (never fetched, never post-processed). This test
+// exercises SearchAndGrab (not SelectCandidate) so it actually covers the auto path the
+// existing TestDDLEnabledNoNewznabFallsBackToGetComics missed.
+func TestDDLAutoGrabFallbackEnqueuesDDLFetch(t *testing.T) {
+	t.Parallel()
+	gw := &fakeGateway{
+		candidates:     nil, // no acceptable Newznab candidate -> DDL fallback consulted
+		getComicsCands: []indexer.Candidate{gcCand("gc-cbz", "cbz", 30*1024*1024)},
+	}
+	svc, issueID, gwOut, enq, repos := newDDLSearchService(t, gw, true)
+	ctx := context.Background()
+
+	outcome, err := svc.SearchAndGrab(ctx, issueID)
+	require.NoError(t, err)
+	require.True(t, outcome.Grabbed, "the GetComics fallback pick is auto-grabbed")
+	require.GreaterOrEqual(t, gwOut.getComicsCalls, 1, "GetComics consulted on the auto path")
+	require.Len(t, enq.ddlFetched, 1, "an auto-grabbed GetComics release enqueues exactly one DDLFetch")
+
+	// The enqueued DDLFetch must reference the download row the grab actually created, so the
+	// fetch job resolves the right download (not a stale/zero id).
+	dls, err := repos.Downloads.ListByIssue(ctx, issueID)
+	require.NoError(t, err)
+	require.Len(t, dls, 1, "the auto-grab created exactly one downloads row")
+	require.Equal(t, dls[0].ID, enq.ddlFetched[0], "DDLFetch is enqueued for the grabbed download's id")
 }
 
 // candidateKeys extracts the release keys from a result's candidate views.

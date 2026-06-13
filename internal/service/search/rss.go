@@ -99,9 +99,15 @@ func (s *Service) processRSSIssue(ctx context.Context, issueID int64, cands []in
 		return false, nil
 	}
 
-	if _, err := s.Grab(ctx, issueID, downloadKindFor(pick.Provider), pick.ReleaseKey, pick); err != nil {
+	dlKind := downloadKindFor(pick.Provider)
+	res, err := s.Grab(ctx, issueID, dlKind, pick.ReleaseKey, pick)
+	if err != nil {
 		return false, fmt.Errorf("rss auto-grab issue %d: %w", issueID, err)
 	}
+	// Defense-in-depth: RSS is Newznab-only today (buildRSSProviders excludes getcomics), so
+	// this is a no-op now, but routing through the shared chokepoint keeps every grab path
+	// uniform so a future getcomics-over-RSS path cannot strand in Queued (CR-01).
+	s.maybeEnqueueDDLFetch(ctx, dlKind, res)
 	return true, nil
 }
 

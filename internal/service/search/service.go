@@ -200,19 +200,30 @@ func (s *Service) SelectCandidate(ctx context.Context, issueID int64, provider, 
 		return DownloadResult{}, gerr
 	}
 
-	// A GetComics DDL grab has no download-client poll loop (SAB's CDH model does not apply):
-	// enqueue the serialized DDLFetch job (D-03) to resolve a mirror + stream the file, then
-	// feed it into the same Completed->post-process path as a SAB download. SAB grabs are
-	// tracked by the periodic poll loop instead, so no DDL fetch is enqueued for them.
-	if downloadKind == "getcomics" && s.enqueuer != nil {
-		if eerr := s.enqueuer.EnqueueDDLFetch(ctx, res.DownloadID); eerr != nil {
-			// Non-fatal: the grab succeeded; a failed enqueue is logged and the download row
-			// remains Queued for a later reactive enqueue. Surfacing it would falsely fail the grab.
-			s.logger.Warn("enqueue ddl fetch failed (non-fatal)",
-				slog.Int64("download_id", res.DownloadID), slog.Any("error", eerr))
-		}
-	}
+	s.maybeEnqueueDDLFetch(ctx, downloadKind, res)
 	return res, nil
+}
+
+// maybeEnqueueDDLFetch enqueues the serialized DDLFetch job (D-03) for a successful
+// getcomics grab, and is a no-op for any other download kind. It is the single shared
+// chokepoint every grab path routes through (manual SelectCandidate, auto-grab
+// runSearchIssue, RSS processRSSIssue) so EVERY getcomics grab — not just the manual one
+// — gets fetched and post-processed (CR-01). It MUST be called after a successful Grab.
+//
+// A GetComics DDL grab has no download-client poll loop (SAB's CDH model does not apply):
+// the DDLFetch job resolves a mirror + streams the file, then feeds it into the same
+// Completed->post-process path as a SAB download. SAB grabs are tracked by the periodic
+// poll loop instead, so no DDL fetch is enqueued for them.
+func (s *Service) maybeEnqueueDDLFetch(ctx context.Context, downloadKind string, res DownloadResult) {
+	if downloadKind != "getcomics" || s.enqueuer == nil {
+		return
+	}
+	if eerr := s.enqueuer.EnqueueDDLFetch(ctx, res.DownloadID); eerr != nil {
+		// Non-fatal: the grab succeeded; a failed enqueue is logged and the download row
+		// remains Queued for a later reactive enqueue. Surfacing it would falsely fail the grab.
+		s.logger.Warn("enqueue ddl fetch failed (non-fatal)",
+			slog.Int64("download_id", res.DownloadID), slog.Any("error", eerr))
+	}
 }
 
 // GetTimeline returns the per-issue events in occurred_at order (OBS-01).

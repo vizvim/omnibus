@@ -206,8 +206,13 @@ func (s *Service) runSearchIssue(ctx context.Context, issueID int64) (AutoSearch
 
 	// A candidate cleared the floor — auto-grab it through the shared Grab path (Plan 04).
 	pick := result.Pick.Candidate
-	if _, err := s.Grab(ctx, issueID, downloadKindFor(pick.Provider), pick.ReleaseKey, pick); err != nil {
-		return AutoSearchOutcome{}, fmt.Errorf("auto-grab issue %d: %w", issueID, err)
+	dlKind := downloadKindFor(pick.Provider)
+	res, gerr := s.Grab(ctx, issueID, dlKind, pick.ReleaseKey, pick)
+	if gerr != nil {
+		return AutoSearchOutcome{}, fmt.Errorf("auto-grab issue %d: %w", issueID, gerr)
 	}
+	// A getcomics auto-grab has no poll-loop tracker, so it MUST enqueue its DDLFetch here
+	// or it strands in Queued forever (CR-01). Shared chokepoint with the manual path.
+	s.maybeEnqueueDDLFetch(ctx, dlKind, res)
 	return AutoSearchOutcome{Grabbed: true, Title: pick.Title}, nil
 }
