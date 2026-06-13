@@ -310,6 +310,12 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 
 	mux.Handle("/covers/", transport.NewCoverHandler(covers))
 
+	// The embedded SPA is the "/" catch-all, mounted LAST so it never shadows the
+	// /api-prefixed Connect handlers or /covers/ above; it serves the built React app and
+	// falls back to index.html for client-side routes (D-07). The auth gate (Plan 02)
+	// wraps the whole mux so this route is covered uniformly.
+	mux.Handle("/", NewSPAHandler())
+
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins: []string{"http://localhost:5173"},
 		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},

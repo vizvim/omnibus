@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>omnibus</title>
+  </head>
+  <body>
+    <!--
+      Placeholder shell committed so `//go:embed frontend/dist` compiles in a clean
+      checkout and dev builds. A real `vite build` overwrites this with the built SPA
+      (its output is gitignored). The Go SPA handler also serves a minimal fallback if
+      this file is ever absent from the embedded FS, so the binary never panics.
+    -->
+    <div id="root">omnibus (dev placeholder — run `vite build` for the real UI)</div>
+  </body>
+</html>
