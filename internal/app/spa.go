@@ -46,7 +46,11 @@ func NewSPAHandler() http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(placeholderIndex))
+		// The placeholder shell is a static HTML constant; a write failure (client
+		// disconnect) is unrecoverable here, so the checked error is intentionally dropped.
+		if _, err := w.Write([]byte(placeholderIndex)); err != nil {
+			return
+		}
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +67,7 @@ func NewSPAHandler() http.Handler {
 		}
 
 		// Serve a real embedded asset if it exists; otherwise fall back to index.html so
-		// deep client routes load the SPA shell (the canonical SPA-fallback behaviour).
+		// deep client routes load the SPA shell (the canonical SPA-fallback behavior).
 		if dist != nil && assetExists(dist, clean) {
 			fileServer.ServeHTTP(w, r)
 			return

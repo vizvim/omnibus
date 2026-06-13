@@ -32,7 +32,7 @@ func TestSPAServesIndexAtRoot(t *testing.T) {
 	t.Parallel()
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	app.NewSPAHandler().ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -48,7 +48,7 @@ func TestSPADeepRouteFallsBackToIndex(t *testing.T) {
 	rec := httptest.NewRecorder()
 	// A deep client route that is not an embedded asset must return the index.html shell
 	// so client-side routing can take over (SPA fallback).
-	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/settings", http.NoBody)
 	app.NewSPAHandler().ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -62,7 +62,7 @@ func TestSPADoesNotShadowAPI(t *testing.T) {
 	mux := assembleMux()
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/omnibus.v1.SeriesService/ListSeries", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/omnibus.v1.SeriesService/ListSeries", http.NoBody)
 	mux.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -76,7 +76,7 @@ func TestSPADoesNotShadowCovers(t *testing.T) {
 	mux := assembleMux()
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/covers/series/1.jpg", nil)
+	req := httptest.NewRequest(http.MethodGet, "/covers/series/1.jpg", http.NoBody)
 	mux.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -88,7 +88,7 @@ func TestSPARejectsNonGet(t *testing.T) {
 	t.Parallel()
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/settings", nil)
+	req := httptest.NewRequest(http.MethodPost, "/settings", http.NoBody)
 	app.NewSPAHandler().ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusMethodNotAllowed, rec.Code,
