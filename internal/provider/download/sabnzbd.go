@@ -116,7 +116,9 @@ func (p *SABnzbdProvider) Submit(ctx context.Context, req GrabRequest) (string, 
 	}
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("sabnzbd request: %w", err)
+		// Use sabDialDetail (not %w): the wrapped *url.Error embeds the request URL, which
+		// carries the apikey in its query string — never surface it in an error (T-05-01).
+		return "", fmt.Errorf("sabnzbd request: %s", sabDialDetail(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
