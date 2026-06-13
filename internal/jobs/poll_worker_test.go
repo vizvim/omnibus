@@ -77,8 +77,9 @@ func TestPollProgressEvent(t *testing.T) {
 	require.Contains(t, events[0].PayloadJSON, "\"progress_pct\":42")
 }
 
-// TestPollTerminal: a Completed history result flips the row to Completed, records a
-// download_history row (DL-03), and removes the item from the client (D-05).
+// TestPollTerminal: a Completed history result flips the row to Completed and records a
+// download_history row (DL-03). Removal from the client (D-05) is NOT done here — it is
+// deferred to post-process so it runs only after a confirmed import (T-05-11).
 func TestPollTerminal(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -104,7 +105,7 @@ func TestPollTerminal(t *testing.T) {
 	got, err := repos.Downloads.Get(ctx, dl.ID)
 	require.NoError(t, err)
 	require.Equal(t, "Completed", got.Status)
-	require.Equal(t, []string{"nzo_done"}, fake.Removed, "completed item is removed from the client (D-05)")
+	require.Empty(t, fake.Removed, "poll does NOT remove at SAB-completion; removal is deferred to post-process (T-05-11)")
 
 	// History recorded the storage path (DL-03). ListDeadReleaseKeys excludes completed, so
 	// assert via the absence of a dead key and the presence of a completed-status terminal row.

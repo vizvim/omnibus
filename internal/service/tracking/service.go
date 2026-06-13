@@ -322,8 +322,10 @@ func (s *Service) onProgress(ctx context.Context, row repository.DownloadRow, re
 }
 
 // onCompleted flips the row to Completed (carrying nothing extra; storage is captured in
-// history + handed to post-process), records a download_history row (DL-03), removes the
-// item from the client (D-05), and enqueues post-process (05-03).
+// history + handed to post-process), records a download_history row (DL-03), and enqueues
+// post-process (05-03). Removal from the client (D-05) is deferred to post-process and runs
+// only AFTER a confirmed successful import (T-05-11), so a file that fails import is never
+// orphaned from the client's history.
 func (s *Service) onCompleted(ctx context.Context, row repository.DownloadRow, res download.PollResult) error {
 	nowISO := s.now().UTC().Format(time.RFC3339)
 
@@ -342,15 +344,9 @@ func (s *Service) onCompleted(ctx context.Context, row repository.DownloadRow, r
 		return fmt.Errorf("record completed history for download %d: %w", row.ID, herr)
 	}
 
-	// Remove the completed item from the client (the *arr "Remove Completed" default, D-05).
-	// The hard-linked/copied file persists; a removal failure is non-fatal (log + continue).
-	if tracker, ok := s.trackers[row.Provider]; ok {
-		if rerr := tracker.RemoveFromHistory(ctx, row.ClientRef); rerr != nil {
-			s.logger.Warn("remove-from-history failed (non-fatal)",
-				slog.Int64("download_id", row.ID), slog.Any("error", rerr))
-		}
-	}
-
+	// Removal from the client (D-05) is intentionally NOT done here: it is deferred to
+	// post-process (05-03) so it runs only after a confirmed successful import (T-05-11).
+	// Removing at SAB-completion would orphan a corrupt archive that later fails import.
 	if s.enqueuer != nil {
 		if eerr := s.enqueuer.EnqueuePostProcess(ctx, row.ID); eerr != nil {
 			return fmt.Errorf("enqueue post-process for download %d: %w", row.ID, eerr)
