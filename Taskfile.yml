@@ -25,7 +25,7 @@ tasks:
     silent: true
 
   dev:
-    desc: Run backend + Vite frontend together with sane local defaults (the friendly one)
+    desc: Run the full local dev stack — install frontend deps, then run backend + Vite frontend together (hot reload; Vite proxies /api + /covers to :8080)
     deps:
       - dev:backend
       - dev:frontend
@@ -33,17 +33,47 @@ tasks:
   dev:backend:
     desc: Run the Go server with local-friendly defaults (colorized console logs, ./.dev data dir)
     cmds:
-      - mkdir -p .dev
+      # Pre-create the local data + library dirs so first-boot DB open and the
+      # post-process importer don't fail on a missing path.
+      - mkdir -p .dev .dev/library
       - go run ./cmd/omnibus
 
   dev:frontend:
     desc: Run the Vite dev server (proxies /api + /covers to the backend on :8080)
     dir: frontend
+    deps:
+      - frontend:install
     cmds:
       - npm run dev
 
+  run:
+    desc: Production-like single-server run — build the SPA, embed it, and serve the whole app from the Go server at :8080 (use this for auth/session/cookie verification, not the Vite dev server)
+    deps:
+      - frontend:install
+    cmds:
+      # Build the SPA so frontend/dist holds the real bundle the Go binary embeds
+      # (frontend/embed.go go:embeds frontend/dist), then run the single server.
+      - cd frontend && npm run build
+      - mkdir -p .dev .dev/library
+      - go run ./cmd/omnibus
+
+  frontend:install:
+    desc: Install frontend npm dependencies (skipped when package.json / package-lock.json are unchanged)
+    dir: frontend
+    cmds:
+      - npm install
+    sources:
+      - package.json
+      - package-lock.json
+    generates:
+      - node_modules/.package-lock.json
+
   proto-generate:
     desc: Lint protos and regenerate Go + TS Connect clients via buf v2
+    deps:
+      # buf generate resolves protoc-gen-es / protoc-gen-connect-query from
+      # frontend/node_modules/.bin, so the TS plugins must be installed first.
+      - frontend:install
     cmds:
       - buf lint
       - buf generate
@@ -66,6 +96,8 @@ tasks:
 
   build:
     desc: Build the Go backend and the frontend bundle
+    deps:
+      - frontend:install
     cmds:
       - go build ./...
       - cd frontend && npm run build
