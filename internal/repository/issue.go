@@ -46,6 +46,12 @@ type IssueRepository interface {
 	ListWantedForAutoSearch(ctx context.Context, attemptCap, batch int32) ([]Issue, error)
 	// IncrementSearchAttempts records a no-result auto-search attempt (D-09 backoff).
 	IncrementSearchAttempts(ctx context.Context, id int64) error
+	// IncrementDownloadAttempts records a failed-grab / replacement cycle (D-13). It bumps
+	// the SEPARATE download_attempts counter, distinct from search_attempts.
+	IncrementDownloadAttempts(ctx context.Context, id int64) error
+	// ResetDownloadAttempts clears the download_attempts cool-off so a manual retry can
+	// re-run the pipeline immediately (DL-07 / D-14).
+	ResetDownloadAttempts(ctx context.Context, id int64) error
 	// ListWantedForMatch returns all currently-Wanted issues for RSS feed matching.
 	ListWantedForMatch(ctx context.Context) ([]Issue, error)
 }
@@ -120,6 +126,14 @@ func (r *issueRepository) ListWantedForAutoSearch(ctx context.Context, attemptCa
 
 func (r *issueRepository) IncrementSearchAttempts(ctx context.Context, id int64) error {
 	return r.write.IncrementSearchAttempts(ctx, id)
+}
+
+func (r *issueRepository) IncrementDownloadAttempts(ctx context.Context, id int64) error {
+	return r.write.IncrementDownloadAttempts(ctx, id)
+}
+
+func (r *issueRepository) ResetDownloadAttempts(ctx context.Context, id int64) error {
+	return r.write.ResetDownloadAttempts(ctx, id)
 }
 
 func (r *issueRepository) ListWantedForMatch(ctx context.Context) ([]Issue, error) {

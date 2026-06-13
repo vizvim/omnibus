@@ -10,7 +10,7 @@ import (
 // (idempotent) series import. The series service satisfies it via its exported
 // RunImport method. Defining the interface here — and having the worker depend on it
 // rather than on the concrete series service — keeps internal/jobs free of any import
-// of internal/service/series, avoiding an import cycle.
+// of internal/series, avoiding an import cycle.
 type ImportRunner interface {
 	RunImport(ctx context.Context, seriesID, comicvineVolumeID int64) error
 }

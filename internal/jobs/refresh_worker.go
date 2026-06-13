@@ -9,7 +9,7 @@ import (
 // RefreshRunner is the inverted dependency the refresh worker calls to run the
 // conditional metadata refresh. The series service satisfies it via its exported
 // RunRefresh method. Mirrors ImportRunner so internal/jobs stays free of any import of
-// internal/service/series (no import cycle).
+// internal/series (no import cycle).
 type RefreshRunner interface {
 	RunRefresh(ctx context.Context, seriesID, comicvineVolumeID int64) error
 }

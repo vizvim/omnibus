@@ -11,16 +11,21 @@ import (
 	"github.com/vizvim/omnibus/internal/config"
 )
 
-// NewLogger returns a *slog.Logger writing to w. The handler is JSON unless
-// cfg.LogFormat is "text"; the level is parsed from cfg.LogLevel (default info).
+// NewLogger returns a *slog.Logger writing to w. The handler is selected by
+// cfg.LogFormat: "console" for a colorized human-friendly handler (local dev), "text"
+// for slog's text handler, anything else (default) for JSON. The level is parsed from
+// cfg.LogLevel (default info).
 func NewLogger(cfg config.Config, w io.Writer) *slog.Logger {
-	opts := &slog.HandlerOptions{Level: parseLevel(cfg.LogLevel)}
+	level := parseLevel(cfg.LogLevel)
 
 	var handler slog.Handler
-	if strings.EqualFold(cfg.LogFormat, "text") {
-		handler = slog.NewTextHandler(w, opts)
-	} else {
-		handler = slog.NewJSONHandler(w, opts)
+	switch strings.ToLower(cfg.LogFormat) {
+	case "console":
+		handler = NewConsoleHandler(w, &ConsoleOptions{Level: level})
+	case "text":
+		handler = slog.NewTextHandler(w, &slog.HandlerOptions{Level: level})
+	default:
+		handler = slog.NewJSONHandler(w, &slog.HandlerOptions{Level: level})
 	}
 	return slog.New(handler)
 }

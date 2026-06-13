@@ -8,7 +8,7 @@ import (
 
 // AutoSearchRunner is the inverted dependency the auto-search workers call. The search
 // service satisfies it via RunAutoSearchSweep + RunSearchIssue. Keeping it here (rather
-// than importing internal/service/search) keeps internal/jobs free of service imports,
+// than importing internal/search) keeps internal/jobs free of service imports,
 // mirroring StaleSweepRunner. The runner owns the enqueuer it fans out through (set on
 // the service post-construction, exactly like the series service's enqueuer), so the
 // worker stays free of any job-engine wiring and the service<->jobs cycle resolves the

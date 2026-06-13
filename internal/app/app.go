@@ -24,16 +24,20 @@ import (
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
 	"github.com/vizvim/omnibus/internal/config"
 	"github.com/vizvim/omnibus/internal/db"
+	"github.com/vizvim/omnibus/internal/ddlconfig"
+	"github.com/vizvim/omnibus/internal/download"
+	"github.com/vizvim/omnibus/internal/downloadclient"
+	indexerprovider "github.com/vizvim/omnibus/internal/indexer"
+	"github.com/vizvim/omnibus/internal/indexerconfig"
+	"github.com/vizvim/omnibus/internal/jobhistory"
 	"github.com/vizvim/omnibus/internal/jobs"
-	"github.com/vizvim/omnibus/internal/provider/download"
-	indexerprovider "github.com/vizvim/omnibus/internal/provider/indexer"
-	"github.com/vizvim/omnibus/internal/provider/metadata"
+	"github.com/vizvim/omnibus/internal/metadata"
+	"github.com/vizvim/omnibus/internal/postprocess"
+	"github.com/vizvim/omnibus/internal/renameconfig"
 	"github.com/vizvim/omnibus/internal/repository"
-	"github.com/vizvim/omnibus/internal/service/downloadclient"
-	"github.com/vizvim/omnibus/internal/service/indexer"
-	jobsservice "github.com/vizvim/omnibus/internal/service/jobs"
-	"github.com/vizvim/omnibus/internal/service/search"
-	"github.com/vizvim/omnibus/internal/service/series"
+	"github.com/vizvim/omnibus/internal/search"
+	"github.com/vizvim/omnibus/internal/series"
+	"github.com/vizvim/omnibus/internal/tracking"
 	"github.com/vizvim/omnibus/internal/transport"
 )
 
@@ -46,6 +50,10 @@ const (
 	attemptCap = 5
 	// metadataTTL is the metadata_cache freshness window.
 	metadataTTL = 24 * time.Hour
+	// downloadPollInterval is the cadence of the periodic download-status poll (DL-03/04/08).
+	// Hardcoded constant rather than a config knob (D-13 lean-config posture, Claude's
+	// discretion). Short enough to feel live, light enough for a single-user box.
+	downloadPollInterval = 20 * time.Second
 )
 
 // Run starts the server and blocks until ctx is canceled (e.g. SIGINT/SIGTERM) or a
@@ -93,7 +101,12 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// Build the SABnzbd provider once from a DB-backed resolver so the same instance fronts
 	// both NZB submits (search service) and the connectivity probe (download client Test).
 	sabProvider := download.NewSABnzbdProviderWithResolver(sabnzbdResolver(repos))
-	downloadProviders := newDownloadProviders(sabProvider)
+	// The GetComics DDL provider streams into <data_path>/incomplete on Fetch (D-03). Built
+	// once so the same instance fronts both the provider map (Submit + post-process remove,
+	// a no-op for DDL) and the tracking service's DDLFetchers map (the DDLFetch job's Fetch).
+	ddlProvider := download.NewGetComicsDDLProvider("https://getcomics.org",
+		download.WithDDLDataPath(cfg.DataPath))
+	downloadProviders := newDownloadProviders(sabProvider, ddlProvider)
 
 	// SearchService converges the indexer gateway (Plan 02), the filter/score pipeline
 	// (Plan 03), and the grab handoff (Plan 04) behind manual-search RPCs, and owns the
@@ -109,6 +122,42 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		AutoSearchBatch:   cfg.AutoSearchBatchSize,
 	})
 
+	// TrackingService owns the download-status poll loop (DL-03/04/08): it polls active
+	// downloads via the SAB Tracker, surfaces progress/terminal state on the timeline,
+	// records history, and detects failures (explicit + stall). It is the PollRunner the
+	// periodic DownloadPoll job delegates to. Only SAB has a Tracker this phase.
+	trackingSvc := tracking.New(tracking.Deps{
+		Repos:    repos,
+		Trackers: map[string]download.Tracker{"sabnzbd": sabProvider},
+		// GetComics DDL has no poll-based Tracker; instead the DDLFetch job (RunDDLFetch)
+		// streams via this fetcher then feeds the Completed->post-process path (D-03).
+		DDLFetchers: map[string]tracking.DDLFetcher{"getcomics": ddlProvider},
+		Logger:      logger,
+	})
+
+	// RenameConfigService owns the DB-backed, runtime-editable renaming config (D-09), the
+	// config source the post-process template engine renders against. Built before the
+	// post-process service (its config getter) and the jobs client.
+	renameConfigSvc := renameconfig.New(renameconfig.Deps{Repos: repos, Logger: logger})
+
+	// DDLConfigService owns the DB-backed, runtime-toggleable DDL enable flag (05-07),
+	// the flag the search/grab path reads to gate the built-in GetComics fallback.
+	ddlConfigSvc := ddlconfig.New(ddlconfig.Deps{Repos: repos, Logger: logger})
+
+	// PostProcessService composes the 05-02 units against a real completed download (05-03):
+	// validate -> render -> import -> Snatched->Downloaded -> events -> history -> remove, and
+	// routes a corrupt archive into the shared D-16 replacement path. Built before the jobs
+	// client so it can be the PostProcessRunner; the client is injected back as its
+	// replacement enqueuer below.
+	postProcessSvc := postprocess.New(postprocess.Deps{
+		Repos:        repos,
+		Providers:    downloadProviders,
+		RenameConfig: renameConfigSvc,
+		LibraryPath:  cfg.LibraryPath,
+		AttemptCap:   attemptCap,
+		Logger:       logger,
+	})
+
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewImportWorker(svc))
 	river.AddWorker(workers, jobs.NewRefreshWorker(svc))
@@ -116,31 +165,41 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	river.AddWorker(workers, jobs.NewAutoSearchSweepWorker(searchSvc))
 	river.AddWorker(workers, jobs.NewSearchIssueWorker(searchSvc))
 	river.AddWorker(workers, jobs.NewRSSPollWorker(searchSvc))
+	river.AddWorker(workers, jobs.NewDownloadPollWorker(trackingSvc))
+	river.AddWorker(workers, jobs.NewReplacementWorker(searchSvc))
+	river.AddWorker(workers, jobs.NewPostProcessWorker(postProcessSvc))
+	river.AddWorker(workers, jobs.NewDDLFetchWorker(trackingSvc))
 
 	sweepInterval := time.Duration(cfg.RefreshIntervalHours) * time.Hour
 	autoSearchInterval := time.Duration(cfg.AutoSearchIntervalHours) * time.Hour
 	rssPollInterval := time.Duration(cfg.RSSPollIntervalMinutes) * time.Minute
-	riverClient, err := jobs.New(ctx, database.Write, database.Read, cfg.RiverWorkers, sweepInterval, autoSearchInterval, rssPollInterval, logger, workers)
+	riverClient, err := jobs.New(ctx, database.Write, database.Read, cfg.RiverWorkers, sweepInterval, autoSearchInterval, rssPollInterval, downloadPollInterval, logger, workers)
 	if err != nil {
 		_ = database.Close()
 		return fmt.Errorf("build jobs client: %w", err)
 	}
-	// Resolve the service<->jobs cycle: both services receive the client as their enqueuer.
+	// Resolve the service<->jobs cycle: every service receives the client as its enqueuer.
+	// The tracking service fans out to the replacement search (DL-04 Failed branch, 05-04)
+	// and post-process (05-01 Completed branch); the search service fans out replacement
+	// searches it enqueues from BlacklistRelease (DL-05).
 	svc.SetEnqueuer(riverClient)
 	searchSvc.SetEnqueuer(riverClient)
+	trackingSvc.SetEnqueuer(riverClient)
+	// The post-process service fans out a replacement search on a corrupt archive (D-16).
+	postProcessSvc.SetEnqueuer(riverClient)
 
 	// JobService reads run history from River's tables (via the jobs client).
-	jobSvc := jobsservice.New(riverClient)
+	jobSvc := jobhistory.New(riverClient)
 
 	// IndexerService owns DB-backed indexer CRUD (ADR 0007 domain segmentation).
-	indexerSvc := indexer.New(indexer.Deps{Repos: repos, Logger: logger})
+	indexerSvc := indexerconfig.New(indexerconfig.Deps{Repos: repos, Logger: logger})
 
 	// DownloadClientService owns the singleton DB-backed SABnzbd config (ADR 0007),
 	// editable at runtime (supersedes D-16). The same SAB provider is injected as the
 	// connectivity prober so Test probes the live, DB-resolved config.
 	downloadClientSvc := downloadclient.New(downloadclient.Deps{Repos: repos, Logger: logger, Prober: sabProvider})
 
-	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, searchSvc, repos.Cover)
+	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, renameConfigSvc, ddlConfigSvc, searchSvc, repos.Cover)
 	if err != nil {
 		_ = database.Close()
 		return err
@@ -199,7 +258,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 // newServer builds the h2c-wrapped HTTP server hosting the SeriesService + JobService
 // Connect handlers (with slog + otel interceptors) and the cover handler serving blobs
 // from SQLite, with CORS scoped to the Vite dev origin.
-func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, indexerSvc *indexer.Service, downloadClientSvc *downloadclient.Service, searchSvc *search.Service, covers transport.CoverStore) (*http.Server, error) {
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobhistory.Service, indexerSvc *indexerconfig.Service, downloadClientSvc *downloadclient.Service, renameConfigSvc *renameconfig.Service, ddlConfigSvc *ddlconfig.Service, searchSvc *search.Service, covers transport.CoverStore) (*http.Server, error) {
 	interceptors, err := transport.NewInterceptors(logger)
 	if err != nil {
 		return nil, fmt.Errorf("build interceptors: %w", err)
@@ -224,6 +283,14 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 	downloadClientHandler := transport.NewDownloadClientHandler(downloadClientSvc)
 	downloadClientPath, downloadClientH := omnibusv1connect.NewDownloadClientServiceHandler(downloadClientHandler, connect.WithInterceptors(interceptors...))
 	mux.Handle("/api"+downloadClientPath, http.StripPrefix("/api", downloadClientH))
+
+	renameConfigHandler := transport.NewRenameConfigHandler(renameConfigSvc)
+	renameConfigPath, renameConfigH := omnibusv1connect.NewRenameConfigServiceHandler(renameConfigHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+renameConfigPath, http.StripPrefix("/api", renameConfigH))
+
+	ddlConfigHandler := transport.NewDDLConfigHandler(ddlConfigSvc)
+	ddlConfigPath, ddlConfigH := omnibusv1connect.NewDDLConfigServiceHandler(ddlConfigHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+ddlConfigPath, http.StripPrefix("/api", ddlConfigH))
 
 	searchHandler := transport.NewSearchHandler(searchSvc)
 	searchPath, searchH := omnibusv1connect.NewSearchServiceHandler(searchHandler, connect.WithInterceptors(interceptors...))
@@ -278,10 +345,10 @@ func sabnzbdResolver(repos *repository.Repositories) download.SABnzbdConfigResol
 // into the search service. The SABnzbd provider is passed in (so the same instance also
 // fronts the connectivity probe). GetComics DDL needs no secret. No polling is started
 // here (Phase 5).
-func newDownloadProviders(sab download.DownloadProvider) map[string]download.DownloadProvider {
+func newDownloadProviders(sab, ddl download.DownloadProvider) map[string]download.DownloadProvider {
 	return map[string]download.DownloadProvider{
 		"sabnzbd":   sab,
-		"getcomics": download.NewGetComicsDDLProvider("https://getcomics.org"),
+		"getcomics": ddl,
 	}
 }
 

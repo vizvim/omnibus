@@ -74,7 +74,6 @@ export function IndexerForm({
           onChange={(e) => set("kind", e.target.value)}
         >
           <option value="newznab">Newznab</option>
-          <option value="getcomics">GetComics</option>
         </select>
       </label>
 

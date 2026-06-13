@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file omnibus/v1/search.proto.
  */
 export const file_omnibus_v1_search: GenFile = /*@__PURE__*/
-  fileDesc("ChdvbW5pYnVzL3YxL3NlYXJjaC5wcm90bxIKb21uaWJ1cy52MSJ0CglDYW5kaWRhdGUSEAoIcHJvdmlkZXIYASABKAkSEwoLcmVsZWFzZV9rZXkYAiABKAkSDQoFdGl0bGUYAyABKAkSEgoKc2l6ZV9ieXRlcxgEIAEoAxINCgVzY29yZRgFIAEoARIOCgZyZWFzb24YBiABKAkieQoKSXNzdWVFdmVudBIKCgJpZBgBIAEoAxIQCghpc3N1ZV9pZBgCIAEoAxIoCgR0eXBlGAMgASgOMhoub21uaWJ1cy52MS5Jc3N1ZUV2ZW50VHlwZRITCgtvY2N1cnJlZF9hdBgEIAEoCRIOCgZkZXRhaWwYBSABKAkicwoIRG93bmxvYWQSCgoCaWQYASABKAMSEAoIaXNzdWVfaWQYAiABKAMSEAoIcHJvdmlkZXIYAyABKAkSEwoLcmVsZWFzZV9rZXkYBCABKAkSDgoGc3RhdHVzGAUgASgJEhIKCmNsaWVudF9yZWYYBiABKAkiJgoSU2VhcmNoSXNzdWVSZXF1ZXN0EhAKCGlzc3VlX2lkGAEgASgDImoKE1NlYXJjaElzc3VlUmVzcG9uc2USKQoKY2FuZGlkYXRlcxgBIAMoCzIVLm9tbmlidXMudjEuQ2FuZGlkYXRlEhIKCmFjY2VwdGFibGUYAiABKAgSFAoMZmxvb3JfcmVhc29uGAMgASgJIiwKGFRyaWdnZXJBdXRvU2VhcmNoUmVxdWVzdBIQCghpc3N1ZV9pZBgBIAEoAyJRChlUcmlnZ2VyQXV0b1NlYXJjaFJlc3BvbnNlEg8KB2dyYWJiZWQYASABKAgSDQoFdGl0bGUYAiABKAkSFAoMZmxvb3JfcmVhc29uGAMgASgJIlEKFlNlbGVjdENhbmRpZGF0ZVJlcXVlc3QSEAoIaXNzdWVfaWQYASABKAMSEAoIcHJvdmlkZXIYAiABKAkSEwoLcmVsZWFzZV9rZXkYAyABKAkiQQoXU2VsZWN0Q2FuZGlkYXRlUmVzcG9uc2USJgoIZG93bmxvYWQYASABKAsyFC5vbW5pYnVzLnYxLkRvd25sb2FkIisKF0dldElzc3VlVGltZWxpbmVSZXF1ZXN0EhAKCGlzc3VlX2lkGAEgASgDIkIKGEdldElzc3VlVGltZWxpbmVSZXNwb25zZRImCgZldmVudHMYASADKAsyFi5vbW5pYnVzLnYxLklzc3VlRXZlbnQy/AIKDVNlYXJjaFNlcnZpY2USTgoLU2VhcmNoSXNzdWUSHi5vbW5pYnVzLnYxLlNlYXJjaElzc3VlUmVxdWVzdBofLm9tbmlidXMudjEuU2VhcmNoSXNzdWVSZXNwb25zZRJgChFUcmlnZ2VyQXV0b1NlYXJjaBIkLm9tbmlidXMudjEuVHJpZ2dlckF1dG9TZWFyY2hSZXF1ZXN0GiUub21uaWJ1cy52MS5UcmlnZ2VyQXV0b1NlYXJjaFJlc3BvbnNlEloKD1NlbGVjdENhbmRpZGF0ZRIiLm9tbmlidXMudjEuU2VsZWN0Q2FuZGlkYXRlUmVxdWVzdBojLm9tbmlidXMudjEuU2VsZWN0Q2FuZGlkYXRlUmVzcG9uc2USXQoQR2V0SXNzdWVUaW1lbGluZRIjLm9tbmlidXMudjEuR2V0SXNzdWVUaW1lbGluZVJlcXVlc3QaJC5vbW5pYnVzLnYxLkdldElzc3VlVGltZWxpbmVSZXNwb25zZUI3WjVnaXRodWIuY29tL3ZpenZpbS9vbW5pYnVzL2dlbi9nby9vbW5pYnVzL3YxO29tbmlidXN2MWIGcHJvdG8z", [file_omnibus_v1_common]);
+  fileDesc("ChdvbW5pYnVzL3YxL3NlYXJjaC5wcm90bxIKb21uaWJ1cy52MSJ0CglDYW5kaWRhdGUSEAoIcHJvdmlkZXIYASABKAkSEwoLcmVsZWFzZV9rZXkYAiABKAkSDQoFdGl0bGUYAyABKAkSEgoKc2l6ZV9ieXRlcxgEIAEoAxINCgVzY29yZRgFIAEoARIOCgZyZWFzb24YBiABKAkieQoKSXNzdWVFdmVudBIKCgJpZBgBIAEoAxIQCghpc3N1ZV9pZBgCIAEoAxIoCgR0eXBlGAMgASgOMhoub21uaWJ1cy52MS5Jc3N1ZUV2ZW50VHlwZRITCgtvY2N1cnJlZF9hdBgEIAEoCRIOCgZkZXRhaWwYBSABKAkicwoIRG93bmxvYWQSCgoCaWQYASABKAMSEAoIaXNzdWVfaWQYAiABKAMSEAoIcHJvdmlkZXIYAyABKAkSEwoLcmVsZWFzZV9rZXkYBCABKAkSDgoGc3RhdHVzGAUgASgJEhIKCmNsaWVudF9yZWYYBiABKAkiJgoSU2VhcmNoSXNzdWVSZXF1ZXN0EhAKCGlzc3VlX2lkGAEgASgDImoKE1NlYXJjaElzc3VlUmVzcG9uc2USKQoKY2FuZGlkYXRlcxgBIAMoCzIVLm9tbmlidXMudjEuQ2FuZGlkYXRlEhIKCmFjY2VwdGFibGUYAiABKAgSFAoMZmxvb3JfcmVhc29uGAMgASgJIiwKGFRyaWdnZXJBdXRvU2VhcmNoUmVxdWVzdBIQCghpc3N1ZV9pZBgBIAEoAyJRChlUcmlnZ2VyQXV0b1NlYXJjaFJlc3BvbnNlEg8KB2dyYWJiZWQYASABKAgSDQoFdGl0bGUYAiABKAkSFAoMZmxvb3JfcmVhc29uGAMgASgJIlEKFlNlbGVjdENhbmRpZGF0ZVJlcXVlc3QSEAoIaXNzdWVfaWQYASABKAMSEAoIcHJvdmlkZXIYAiABKAkSEwoLcmVsZWFzZV9rZXkYAyABKAkiQQoXU2VsZWN0Q2FuZGlkYXRlUmVzcG9uc2USJgoIZG93bmxvYWQYASABKAsyFC5vbW5pYnVzLnYxLkRvd25sb2FkIisKF0dldElzc3VlVGltZWxpbmVSZXF1ZXN0EhAKCGlzc3VlX2lkGAEgASgDIkIKGEdldElzc3VlVGltZWxpbmVSZXNwb25zZRImCgZldmVudHMYASADKAsyFi5vbW5pYnVzLnYxLklzc3VlRXZlbnQiUgoXQmxhY2tsaXN0UmVsZWFzZVJlcXVlc3QSEAoIaXNzdWVfaWQYASABKAMSEAoIcHJvdmlkZXIYAiABKAkSEwoLcmVsZWFzZV9rZXkYAyABKAkiGgoYQmxhY2tsaXN0UmVsZWFzZVJlc3BvbnNlIigKFFJldHJ5RG93bmxvYWRSZXF1ZXN0EhAKCGlzc3VlX2lkGAEgASgDIk0KFVJldHJ5RG93bmxvYWRSZXNwb25zZRIPCgdncmFiYmVkGAEgASgIEg0KBXRpdGxlGAIgASgJEhQKDGZsb29yX3JlYXNvbhgDIAEoCTKxBAoNU2VhcmNoU2VydmljZRJOCgtTZWFyY2hJc3N1ZRIeLm9tbmlidXMudjEuU2VhcmNoSXNzdWVSZXF1ZXN0Gh8ub21uaWJ1cy52MS5TZWFyY2hJc3N1ZVJlc3BvbnNlEmAKEVRyaWdnZXJBdXRvU2VhcmNoEiQub21uaWJ1cy52MS5UcmlnZ2VyQXV0b1NlYXJjaFJlcXVlc3QaJS5vbW5pYnVzLnYxLlRyaWdnZXJBdXRvU2VhcmNoUmVzcG9uc2USWgoPU2VsZWN0Q2FuZGlkYXRlEiIub21uaWJ1cy52MS5TZWxlY3RDYW5kaWRhdGVSZXF1ZXN0GiMub21uaWJ1cy52MS5TZWxlY3RDYW5kaWRhdGVSZXNwb25zZRJdChBHZXRJc3N1ZVRpbWVsaW5lEiMub21uaWJ1cy52MS5HZXRJc3N1ZVRpbWVsaW5lUmVxdWVzdBokLm9tbmlidXMudjEuR2V0SXNzdWVUaW1lbGluZVJlc3BvbnNlEl0KEEJsYWNrbGlzdFJlbGVhc2USIy5vbW5pYnVzLnYxLkJsYWNrbGlzdFJlbGVhc2VSZXF1ZXN0GiQub21uaWJ1cy52MS5CbGFja2xpc3RSZWxlYXNlUmVzcG9uc2USVAoNUmV0cnlEb3dubG9hZBIgLm9tbmlidXMudjEuUmV0cnlEb3dubG9hZFJlcXVlc3QaIS5vbW5pYnVzLnYxLlJldHJ5RG93bmxvYWRSZXNwb25zZUI3WjVnaXRodWIuY29tL3ZpenZpbS9vbW5pYnVzL2dlbi9nby9vbW5pYnVzL3YxO29tbmlidXN2MWIGcHJvdG8z", [file_omnibus_v1_common]);
 
 /**
  * Candidate is one ranked release candidate for an issue. score is the pipeline's
@@ -321,6 +321,98 @@ export const GetIssueTimelineResponseSchema: GenMessage<GetIssueTimelineResponse
   messageDesc(file_omnibus_v1_search, 10);
 
 /**
+ * @generated from message omnibus.v1.BlacklistReleaseRequest
+ */
+export type BlacklistReleaseRequest = Message<"omnibus.v1.BlacklistReleaseRequest"> & {
+  /**
+   * @generated from field: int64 issue_id = 1;
+   */
+  issueId: bigint;
+
+  /**
+   * @generated from field: string provider = 2;
+   */
+  provider: string;
+
+  /**
+   * @generated from field: string release_key = 3;
+   */
+  releaseKey: string;
+};
+
+/**
+ * Describes the message omnibus.v1.BlacklistReleaseRequest.
+ * Use `create(BlacklistReleaseRequestSchema)` to create a new message.
+ */
+export const BlacklistReleaseRequestSchema: GenMessage<BlacklistReleaseRequest> = /*@__PURE__*/
+  messageDesc(file_omnibus_v1_search, 11);
+
+/**
+ * @generated from message omnibus.v1.BlacklistReleaseResponse
+ */
+export type BlacklistReleaseResponse = Message<"omnibus.v1.BlacklistReleaseResponse"> & {
+};
+
+/**
+ * Describes the message omnibus.v1.BlacklistReleaseResponse.
+ * Use `create(BlacklistReleaseResponseSchema)` to create a new message.
+ */
+export const BlacklistReleaseResponseSchema: GenMessage<BlacklistReleaseResponse> = /*@__PURE__*/
+  messageDesc(file_omnibus_v1_search, 12);
+
+/**
+ * @generated from message omnibus.v1.RetryDownloadRequest
+ */
+export type RetryDownloadRequest = Message<"omnibus.v1.RetryDownloadRequest"> & {
+  /**
+   * @generated from field: int64 issue_id = 1;
+   */
+  issueId: bigint;
+};
+
+/**
+ * Describes the message omnibus.v1.RetryDownloadRequest.
+ * Use `create(RetryDownloadRequestSchema)` to create a new message.
+ */
+export const RetryDownloadRequestSchema: GenMessage<RetryDownloadRequest> = /*@__PURE__*/
+  messageDesc(file_omnibus_v1_search, 13);
+
+/**
+ * @generated from message omnibus.v1.RetryDownloadResponse
+ */
+export type RetryDownloadResponse = Message<"omnibus.v1.RetryDownloadResponse"> & {
+  /**
+   * grabbed reports whether the immediate re-search cleared the floor and auto-grabbed a
+   * replacement. The search runs inline (bypassing the River queue) and completes before
+   * the response is returned.
+   *
+   * @generated from field: bool grabbed = 1;
+   */
+  grabbed: boolean;
+
+  /**
+   * title is the auto-grabbed release's title when grabbed is true; empty otherwise.
+   *
+   * @generated from field: string title = 2;
+   */
+  title: string;
+
+  /**
+   * floor_reason explains why nothing was grabbed when grabbed is false.
+   *
+   * @generated from field: string floor_reason = 3;
+   */
+  floorReason: string;
+};
+
+/**
+ * Describes the message omnibus.v1.RetryDownloadResponse.
+ * Use `create(RetryDownloadResponseSchema)` to create a new message.
+ */
+export const RetryDownloadResponseSchema: GenMessage<RetryDownloadResponse> = /*@__PURE__*/
+  messageDesc(file_omnibus_v1_search, 14);
+
+/**
  * SearchService owns manual search, candidate selection, auto-search triggering, and the
  * per-issue timeline (SRCH-06, OBS-01). GetIssueTimeline is folded in here for this phase
  * (the only timeline consumer; DownloadService lands in Phase 5).
@@ -370,6 +462,28 @@ export const SearchService: GenService<{
     methodKind: "unary";
     input: typeof GetIssueTimelineRequestSchema;
     output: typeof GetIssueTimelineResponseSchema;
+  },
+  /**
+   * BlacklistRelease blacklists a specific release for an issue (per-issue scope, D-11) and
+   * enqueues a replacement search so omnibus auto-replaces the bad grab (DL-05).
+   *
+   * @generated from rpc omnibus.v1.SearchService.BlacklistRelease
+   */
+  blacklistRelease: {
+    methodKind: "unary";
+    input: typeof BlacklistReleaseRequestSchema;
+    output: typeof BlacklistReleaseResponseSchema;
+  },
+  /**
+   * RetryDownload manually retries a failed download (DL-07): it resets the cool-off
+   * (download_attempts) and re-runs the search pipeline immediately, inline.
+   *
+   * @generated from rpc omnibus.v1.SearchService.RetryDownload
+   */
+  retryDownload: {
+    methodKind: "unary";
+    input: typeof RetryDownloadRequestSchema;
+    output: typeof RetryDownloadResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_omnibus_v1_search, 0);

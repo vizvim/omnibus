@@ -155,7 +155,7 @@ export function Indexers() {
       {indexers.length === 0 && formMode === "closed" ? (
         <EmptyState
           heading="No indexers configured"
-          body="Add a Newznab or GetComics indexer to start finding releases. omnibus searches every enabled indexer."
+          body="Add a Newznab indexer to start finding releases. omnibus searches every enabled indexer."
           cta={
             <button
               type="button"

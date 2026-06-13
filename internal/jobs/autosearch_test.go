@@ -65,7 +65,7 @@ func TestEnqueueSearchIssueRunsWorker(t *testing.T) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewSearchIssueWorker(runner))
 
-	c, err := jobs.New(ctx, d.Write, d.Read, 2, 0, 0, 0, testLogger(), workers)
+	c, err := jobs.New(ctx, d.Write, d.Read, 2, 0, 0, 0, 0, testLogger(), workers)
 	require.NoError(t, err)
 	require.NoError(t, c.Start(ctx))
 	t.Cleanup(func() {
@@ -98,7 +98,7 @@ func TestEnqueueSearchIssueIsUnique(t *testing.T) {
 
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewSearchIssueWorker(newRecordingSearchRunner()))
-	c, err := jobs.New(ctx, d.Write, d.Read, 2, 0, 0, 0, testLogger(), workers)
+	c, err := jobs.New(ctx, d.Write, d.Read, 2, 0, 0, 0, 0, testLogger(), workers)
 	require.NoError(t, err)
 
 	require.NoError(t, c.EnqueueSearchIssue(ctx, 5))
@@ -127,7 +127,7 @@ func TestAutoSearchSweepFansOutViaEnqueuer(t *testing.T) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, jobs.NewSearchIssueWorker(runner))
 
-	c, err := jobs.New(ctx, d.Write, d.Read, 2, 0, 0, 0, testLogger(), workers)
+	c, err := jobs.New(ctx, d.Write, d.Read, 2, 0, 0, 0, 0, testLogger(), workers)
 	require.NoError(t, err)
 	require.NoError(t, c.Start(ctx))
 	t.Cleanup(func() {

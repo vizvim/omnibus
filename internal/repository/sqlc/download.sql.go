@@ -90,6 +90,153 @@ func (q *Queries) GetDownloadByID(ctx context.Context, id int64) (Download, erro
 	return i, err
 }
 
+const getLatestCompletedStorageForIssue = `-- name: GetLatestCompletedStorageForIssue :one
+SELECT detail FROM download_history
+WHERE issue_id = ? AND provider = ? AND release_key = ? AND result = 'completed'
+ORDER BY occurred_at DESC, id DESC
+LIMIT 1
+`
+
+type GetLatestCompletedStorageForIssueParams struct {
+	IssueID    int64
+	Provider   string
+	ReleaseKey string
+}
+
+// The storage path the poll loop captured when a download for this issue completed
+// (DL-03: written into download_history.detail with result='completed'). The post-process
+// orchestrator (05-03) reads it to locate the file on disk for validate->render->import.
+// Most-recent-first so a re-grabbed release uses the latest completion. detail may be NULL
+// if the client reported an empty storage path.
+func (q *Queries) GetLatestCompletedStorageForIssue(ctx context.Context, arg GetLatestCompletedStorageForIssueParams) (sql.NullString, error) {
+	row := q.db.QueryRowContext(ctx, getLatestCompletedStorageForIssue, arg.IssueID, arg.Provider, arg.ReleaseKey)
+	var detail sql.NullString
+	err := row.Scan(&detail)
+	return detail, err
+}
+
+const insertDownloadHistory = `-- name: InsertDownloadHistory :one
+INSERT INTO download_history (
+  issue_id, provider, release_key, result, detail, occurred_at
+) VALUES (
+  ?, ?, ?, ?, ?, ?
+)
+RETURNING id, issue_id, provider, release_key, result, detail, occurred_at
+`
+
+type InsertDownloadHistoryParams struct {
+	IssueID    int64
+	Provider   string
+	ReleaseKey string
+	Result     string
+	Detail     sql.NullString
+	OccurredAt string
+}
+
+// Append-only download history (DL-03): record what was grabbed, from where, the outcome,
+// and when. Never updated or deleted; it is the audit trail of every grab + terminal flip.
+func (q *Queries) InsertDownloadHistory(ctx context.Context, arg InsertDownloadHistoryParams) (DownloadHistory, error) {
+	row := q.db.QueryRowContext(ctx, insertDownloadHistory,
+		arg.IssueID,
+		arg.Provider,
+		arg.ReleaseKey,
+		arg.Result,
+		arg.Detail,
+		arg.OccurredAt,
+	)
+	var i DownloadHistory
+	err := row.Scan(
+		&i.ID,
+		&i.IssueID,
+		&i.Provider,
+		&i.ReleaseKey,
+		&i.Result,
+		&i.Detail,
+		&i.OccurredAt,
+	)
+	return i, err
+}
+
+const listActiveDownloads = `-- name: ListActiveDownloads :many
+SELECT id, issue_id, provider, release_key, release_title, size_bytes, status, client_ref, created_at, updated_at FROM downloads
+WHERE status IN ('Queued','Downloading')
+ORDER BY updated_at
+`
+
+// The active poll set: rows still in flight (Queued/Downloading) that the DownloadPoll
+// job polls SAB for each tick. Ordered oldest-updated-first so the most stale rows are
+// reconciled first within a bounded tick (D-01).
+func (q *Queries) ListActiveDownloads(ctx context.Context) ([]Download, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveDownloads)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Download{}
+	for rows.Next() {
+		var i Download
+		if err := rows.Scan(
+			&i.ID,
+			&i.IssueID,
+			&i.Provider,
+			&i.ReleaseKey,
+			&i.ReleaseTitle,
+			&i.SizeBytes,
+			&i.Status,
+			&i.ClientRef,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDeadReleaseKeysForIssue = `-- name: ListDeadReleaseKeysForIssue :many
+SELECT provider, release_key FROM downloads
+WHERE issue_id = ? AND status IN ('Failed','Blacklisted')
+`
+
+type ListDeadReleaseKeysForIssueRow struct {
+	Provider   string
+	ReleaseKey string
+}
+
+// The (provider, release_key) pairs already known-bad for an issue: rows with a
+// Failed/Blacklisted downloads status. The replacement search excludes these so a
+// retry cannot re-pick a release that already failed for this issue (D-12 loop-prevention:
+// dedup against the downloads table, NOT the blacklists table).
+func (q *Queries) ListDeadReleaseKeysForIssue(ctx context.Context, issueID int64) ([]ListDeadReleaseKeysForIssueRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDeadReleaseKeysForIssue, issueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDeadReleaseKeysForIssueRow{}
+	for rows.Next() {
+		var i ListDeadReleaseKeysForIssueRow
+		if err := rows.Scan(&i.Provider, &i.ReleaseKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDownloadsByIssue = `-- name: ListDownloadsByIssue :many
 SELECT id, issue_id, provider, release_key, release_title, size_bytes, status, client_ref, created_at, updated_at FROM downloads WHERE issue_id = ? ORDER BY created_at
 `
@@ -126,4 +273,37 @@ func (q *Queries) ListDownloadsByIssue(ctx context.Context, issueID int64) ([]Do
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateDownloadStatus = `-- name: UpdateDownloadStatus :one
+UPDATE downloads
+SET status = ?, updated_at = ?
+WHERE id = ?
+RETURNING id, issue_id, provider, release_key, release_title, size_bytes, status, client_ref, created_at, updated_at
+`
+
+type UpdateDownloadStatusParams struct {
+	Status    string
+	UpdatedAt string
+	ID        int64
+}
+
+// Flip a download row status (and bump updated_at). All Phase-5 status writes route
+// through the download-status state machine then this query, never a raw caller UPDATE.
+func (q *Queries) UpdateDownloadStatus(ctx context.Context, arg UpdateDownloadStatusParams) (Download, error) {
+	row := q.db.QueryRowContext(ctx, updateDownloadStatus, arg.Status, arg.UpdatedAt, arg.ID)
+	var i Download
+	err := row.Scan(
+		&i.ID,
+		&i.IssueID,
+		&i.Provider,
+		&i.ReleaseKey,
+		&i.ReleaseTitle,
+		&i.SizeBytes,
+		&i.Status,
+		&i.ClientRef,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

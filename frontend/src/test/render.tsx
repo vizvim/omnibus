@@ -4,9 +4,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderResult } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 
+import { DDLConfigService } from "../gen/omnibus/v1/ddl_config_pb";
 import { DownloadClientService } from "../gen/omnibus/v1/download_client_pb";
 import { IndexerService } from "../gen/omnibus/v1/indexers_pb";
 import { JobService } from "../gen/omnibus/v1/jobs_pb";
+import { RenameConfigService } from "../gen/omnibus/v1/rename_config_pb";
 import { SearchService } from "../gen/omnibus/v1/search_pb";
 import { SeriesService } from "../gen/omnibus/v1/series_pb";
 
@@ -55,6 +57,21 @@ export function makeDownloadClientTransport(
 ): Transport {
   return createRouterTransport(({ service }) => {
     service(DownloadClientService, impl as never);
+  });
+}
+
+// makeSettingsTransport builds an in-memory Connect transport serving the
+// DownloadClientService, RenameConfigService, AND DDLConfigService method stubs, since the
+// Settings page queries all three on mount (an unserved query would hang the test).
+export function makeSettingsTransport(
+  downloadImpl: Record<string, (req: never) => unknown>,
+  renameImpl: Record<string, (req: never) => unknown> = {},
+  ddlImpl: Record<string, (req: never) => unknown> = {},
+): Transport {
+  return createRouterTransport(({ service }) => {
+    service(DownloadClientService, downloadImpl as never);
+    service(RenameConfigService, renameImpl as never);
+    service(DDLConfigService, ddlImpl as never);
   });
 }
 

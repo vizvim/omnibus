@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package omnibus.v1;
+
+option go_package = "github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1";
+
+// RenameConfig is the DB-backed, runtime-editable renaming configuration the
+// post-process template engine (05-02) renders against. Unlike DownloadClientConfig
+// there are NO secrets here — every field is a plain string/bool, so the message is
+// returned verbatim with no masking (T-05-05: accept; single-user app). The defaults
+// shipped on a fresh install are the user's literal Mylar settings (D-06/D-07/D-08).
+message RenameConfig {
+  // folder_format is the token template used to resolve a series' library folder
+  // (e.g. "$Publisher/$Series ($Year)"). Resolved at series add/import time (D-10).
+  string folder_format = 1;
+  // file_format is the token template used to rename each issue file
+  // (e.g. "$Series $VolumeY $Annual #$Issue ($monthname $Year)").
+  string file_format = 2;
+  // rename_enabled is Mylar's "Rename files" master toggle (default on, D-08).
+  bool rename_enabled = 3;
+  // issue_padding_enabled toggles zero-padding of $Issue (default on, D-07).
+  bool issue_padding_enabled = 4;
+  // padding_format is the issue-number padding width: "00x" (3-digit), "0x"
+  // (2-digit) or "x" (none). Default "00x" (D-07).
+  string padding_format = 5;
+  // replace_spaces replaces spaces in the rendered filename (default off, D-08).
+  bool replace_spaces = 6;
+  // lowercase lowercases the rendered filename (default off, D-08).
+  bool lowercase = 7;
+}
+
+message GetRenameConfigRequest {}
+
+message GetRenameConfigResponse {
+  RenameConfig config = 1;
+}
+
+message UpdateRenameConfigRequest {
+  string folder_format = 1;
+  string file_format = 2;
+  bool rename_enabled = 3;
+  bool issue_padding_enabled = 4;
+  string padding_format = 5;
+  bool replace_spaces = 6;
+  bool lowercase = 7;
+}
+
+message UpdateRenameConfigResponse {
+  RenameConfig config = 1;
+}
+
+// RenameConfigService owns the DB-backed renaming config (D-09). It is a
+// domain-segmented service (ADR 0007), separate from DownloadClientService, persisting
+// its values as user_config keys so the post-process engine can consume them at runtime.
+service RenameConfigService {
+  // GetRenameConfig returns the current renaming config, defaulting to the user's
+  // literal Mylar settings (D-06) on a fresh install.
+  rpc GetRenameConfig(GetRenameConfigRequest) returns (GetRenameConfigResponse);
+  // UpdateRenameConfig persists the renaming config at runtime (no restart). An empty
+  // folder/file format while rename is enabled is rejected with InvalidArgument.
+  rpc UpdateRenameConfig(UpdateRenameConfigRequest) returns (UpdateRenameConfigResponse);
+}

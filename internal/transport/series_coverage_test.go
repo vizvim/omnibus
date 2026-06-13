@@ -12,7 +12,7 @@ import (
 
 	omnibusv1 "github.com/vizvim/omnibus/gen/go/omnibus/v1"
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
-	"github.com/vizvim/omnibus/internal/service/series"
+	"github.com/vizvim/omnibus/internal/series"
 	"github.com/vizvim/omnibus/internal/transport"
 )
 

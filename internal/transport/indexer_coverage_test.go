@@ -12,7 +12,7 @@ import (
 
 	omnibusv1 "github.com/vizvim/omnibus/gen/go/omnibus/v1"
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
-	"github.com/vizvim/omnibus/internal/service/indexer"
+	"github.com/vizvim/omnibus/internal/indexerconfig"
 	"github.com/vizvim/omnibus/internal/transport"
 )
 
@@ -20,33 +20,33 @@ import (
 // exercising the Update/Delete/Test handler branches (including the masked mapping and
 // error translation) deterministically without a DB or real HTTP prober.
 type fakeIndexerServicer struct {
-	list    []indexer.Indexer
+	list    []indexerconfig.Indexer
 	listErr error
 
-	created    indexer.Indexer
+	created    indexerconfig.Indexer
 	createErr  error
-	updated    indexer.Indexer
+	updated    indexerconfig.Indexer
 	updateErr  error
 	deleteErr  error
-	testResult indexer.TestResult
+	testResult indexerconfig.TestResult
 	testErr    error
 }
 
-func (f *fakeIndexerServicer) List(context.Context) ([]indexer.Indexer, error) {
+func (f *fakeIndexerServicer) List(context.Context) ([]indexerconfig.Indexer, error) {
 	return f.list, f.listErr
 }
 
-func (f *fakeIndexerServicer) Create(context.Context, indexer.Input) (indexer.Indexer, error) {
+func (f *fakeIndexerServicer) Create(context.Context, indexerconfig.Input) (indexerconfig.Indexer, error) {
 	return f.created, f.createErr
 }
 
-func (f *fakeIndexerServicer) Update(context.Context, int64, indexer.Input) (indexer.Indexer, error) {
+func (f *fakeIndexerServicer) Update(context.Context, int64, indexerconfig.Input) (indexerconfig.Indexer, error) {
 	return f.updated, f.updateErr
 }
 
 func (f *fakeIndexerServicer) Delete(context.Context, int64) error { return f.deleteErr }
 
-func (f *fakeIndexerServicer) Test(context.Context, int64) (indexer.TestResult, error) {
+func (f *fakeIndexerServicer) Test(context.Context, int64) (indexerconfig.TestResult, error) {
 	return f.testResult, f.testErr
 }
 
@@ -69,7 +69,7 @@ func TestIndexerHandlerUpdate(t *testing.T) {
 
 	t.Run("maps updated indexer", func(t *testing.T) {
 		t.Parallel()
-		client := newFakeIndexerClient(t, &fakeIndexerServicer{updated: indexer.Indexer{
+		client := newFakeIndexerClient(t, &fakeIndexerServicer{updated: indexerconfig.Indexer{
 			ID: 1, Name: "nzb", Kind: "newznab", BaseURL: "http://nzb.test", Enabled: true, Priority: 5,
 		}})
 		resp, err := client.UpdateIndexer(ctx, connect.NewRequest(&omnibusv1.UpdateIndexerRequest{
@@ -102,7 +102,7 @@ func TestIndexerHandlerUpdate(t *testing.T) {
 
 	t.Run("validation error maps to invalid argument", func(t *testing.T) {
 		t.Parallel()
-		client := newFakeIndexerClient(t, &fakeIndexerServicer{updateErr: indexer.ErrInvalidKind})
+		client := newFakeIndexerClient(t, &fakeIndexerServicer{updateErr: indexerconfig.ErrInvalidKind})
 		_, err := client.UpdateIndexer(ctx, connect.NewRequest(&omnibusv1.UpdateIndexerRequest{
 			Id: 1, Name: "x", Kind: "bogus", BaseUrl: "http://nzb.test",
 		}))
@@ -155,7 +155,7 @@ func TestIndexerHandlerTest(t *testing.T) {
 
 	t.Run("ok probe in body", func(t *testing.T) {
 		t.Parallel()
-		client := newFakeIndexerClient(t, &fakeIndexerServicer{testResult: indexer.TestResult{OK: true, Detail: "reachable"}})
+		client := newFakeIndexerClient(t, &fakeIndexerServicer{testResult: indexerconfig.TestResult{OK: true, Detail: "reachable"}})
 		resp, err := client.TestIndexer(ctx, connect.NewRequest(&omnibusv1.TestIndexerRequest{Id: 1}))
 		require.NoError(t, err)
 		require.True(t, resp.Msg.GetOk())
@@ -164,7 +164,7 @@ func TestIndexerHandlerTest(t *testing.T) {
 
 	t.Run("failed probe is not a connect error", func(t *testing.T) {
 		t.Parallel()
-		client := newFakeIndexerClient(t, &fakeIndexerServicer{testResult: indexer.TestResult{OK: false, Detail: "401"}})
+		client := newFakeIndexerClient(t, &fakeIndexerServicer{testResult: indexerconfig.TestResult{OK: false, Detail: "401"}})
 		resp, err := client.TestIndexer(ctx, connect.NewRequest(&omnibusv1.TestIndexerRequest{Id: 1}))
 		require.NoError(t, err)
 		require.False(t, resp.Msg.GetOk())

@@ -22,7 +22,7 @@ func (q *Queries) CountIssuesBySeries(ctx context.Context, seriesID int64) (int6
 }
 
 const getIssueByID = `-- name: GetIssueByID :one
-SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at FROM issues WHERE id = ?
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at, download_attempts FROM issues WHERE id = ?
 `
 
 func (q *Queries) GetIssueByID(ctx context.Context, id int64) (Issue, error) {
@@ -49,8 +49,21 @@ func (q *Queries) GetIssueByID(ctx context.Context, id int64) (Issue, error) {
 		&i.SearchAttempts,
 		&i.Location,
 		&i.CreatedAt,
+		&i.DownloadAttempts,
 	)
 	return i, err
+}
+
+const incrementDownloadAttempts = `-- name: IncrementDownloadAttempts :exec
+UPDATE issues SET download_attempts = download_attempts + 1 WHERE id = ?
+`
+
+// Records a failed-grab / replacement cycle for an issue (D-13). download_attempts is
+// SEPARATE from search_attempts: it counts dead downloads, not no-result searches. The
+// growing count crosses the cap and parks the issue in cool-off (D-14).
+func (q *Queries) IncrementDownloadAttempts(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, incrementDownloadAttempts, id)
+	return err
 }
 
 const incrementSearchAttempts = `-- name: IncrementSearchAttempts :exec
@@ -65,7 +78,7 @@ func (q *Queries) IncrementSearchAttempts(ctx context.Context, id int64) error {
 }
 
 const listIssuesBySeries = `-- name: ListIssuesBySeries :many
-SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at FROM issues
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at, download_attempts FROM issues
 WHERE series_id = ?
 ORDER BY issue_number_sort, COALESCE(issue_number_qual, '')
 `
@@ -100,6 +113,7 @@ func (q *Queries) ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Iss
 			&i.SearchAttempts,
 			&i.Location,
 			&i.CreatedAt,
+			&i.DownloadAttempts,
 		); err != nil {
 			return nil, err
 		}
@@ -115,7 +129,7 @@ func (q *Queries) ListIssuesBySeries(ctx context.Context, seriesID int64) ([]Iss
 }
 
 const listWantedForAutoSearch = `-- name: ListWantedForAutoSearch :many
-SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at FROM issues
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at, download_attempts FROM issues
 WHERE status = 'Wanted' AND search_attempts < ?
 ORDER BY search_attempts ASC, created_at ASC
 LIMIT ?
@@ -159,6 +173,67 @@ func (q *Queries) ListWantedForAutoSearch(ctx context.Context, arg ListWantedFor
 			&i.SearchAttempts,
 			&i.Location,
 			&i.CreatedAt,
+			&i.DownloadAttempts,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWantedForDownloadRetry = `-- name: ListWantedForDownloadRetry :many
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at, download_attempts FROM issues
+WHERE download_attempts < ?
+ORDER BY download_attempts ASC, created_at ASC
+LIMIT ?
+`
+
+type ListWantedForDownloadRetryParams struct {
+	DownloadAttempts int64
+	Limit            int64
+}
+
+// A bounded batch of issues eligible for an attempt-capped replacement, mirroring the
+// search backoff but on the SEPARATE download_attempts counter (D-13/D-14): fewest
+// download_attempts first (then oldest), excluding issues at or above the cap (cool-off).
+func (q *Queries) ListWantedForDownloadRetry(ctx context.Context, arg ListWantedForDownloadRetryParams) ([]Issue, error) {
+	rows, err := q.db.QueryContext(ctx, listWantedForDownloadRetry, arg.DownloadAttempts, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Issue{}
+	for rows.Next() {
+		var i Issue
+		if err := rows.Scan(
+			&i.ID,
+			&i.SeriesID,
+			&i.ComicvineIssueID,
+			&i.IssueNumberRaw,
+			&i.IssueNumberSort,
+			&i.IssueNumberQual,
+			&i.Title,
+			&i.CoverDate,
+			&i.StoreDate,
+			&i.ReleaseDate,
+			&i.Description,
+			&i.ImageUrl,
+			&i.CvLastUpdated,
+			&i.IssueType,
+			&i.AltIssueNumber,
+			&i.PageCount,
+			&i.Status,
+			&i.SearchAttempts,
+			&i.Location,
+			&i.CreatedAt,
+			&i.DownloadAttempts,
 		); err != nil {
 			return nil, err
 		}
@@ -174,7 +249,7 @@ func (q *Queries) ListWantedForAutoSearch(ctx context.Context, arg ListWantedFor
 }
 
 const listWantedForMatch = `-- name: ListWantedForMatch :many
-SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at FROM issues
+SELECT id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at, download_attempts FROM issues
 WHERE status = 'Wanted'
 ORDER BY series_id, issue_number_sort
 `
@@ -210,6 +285,7 @@ func (q *Queries) ListWantedForMatch(ctx context.Context) ([]Issue, error) {
 			&i.SearchAttempts,
 			&i.Location,
 			&i.CreatedAt,
+			&i.DownloadAttempts,
 		); err != nil {
 			return nil, err
 		}
@@ -222,6 +298,17 @@ func (q *Queries) ListWantedForMatch(ctx context.Context) ([]Issue, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const resetDownloadAttempts = `-- name: ResetDownloadAttempts :exec
+UPDATE issues SET download_attempts = 0 WHERE id = ?
+`
+
+// Clears the download_attempts cool-off so a manual retry can re-run the pipeline
+// immediately (DL-07 / D-14): the user's explicit retry is the intended cap reset.
+func (q *Queries) ResetDownloadAttempts(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, resetDownloadAttempts, id)
+	return err
 }
 
 const updateIssueStatus = `-- name: UpdateIssueStatus :exec
@@ -262,7 +349,7 @@ ON CONFLICT(comicvine_issue_id) DO UPDATE SET
   issue_type        = excluded.issue_type,
   alt_issue_number  = excluded.alt_issue_number,
   page_count        = excluded.page_count
-RETURNING id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at
+RETURNING id, series_id, comicvine_issue_id, issue_number_raw, issue_number_sort, issue_number_qual, title, cover_date, store_date, release_date, description, image_url, cv_last_updated, issue_type, alt_issue_number, page_count, status, search_attempts, location, created_at, download_attempts
 `
 
 type UpsertIssueParams struct {
@@ -328,6 +415,7 @@ func (q *Queries) UpsertIssue(ctx context.Context, arg UpsertIssueParams) (Issue
 		&i.SearchAttempts,
 		&i.Location,
 		&i.CreatedAt,
+		&i.DownloadAttempts,
 	)
 	return i, err
 }

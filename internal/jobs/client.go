@@ -40,7 +40,7 @@ type Client struct {
 // job (the stale-refresh sweep, the auto-search sweep, and the RSS poll respectively) at
 // that interval. None run on start, to avoid a burst of external calls right after boot.
 // The returned client is not yet started — call Start to begin working jobs.
-func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, sweepInterval, autoSearchInterval, rssPollInterval time.Duration, logger *slog.Logger, workers *river.Workers) (*Client, error) {
+func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, sweepInterval, autoSearchInterval, rssPollInterval, downloadPollInterval time.Duration, logger *slog.Logger, workers *river.Workers) (*Client, error) {
 	if maxWorkers < 1 {
 		maxWorkers = 1
 	}
@@ -83,12 +83,24 @@ func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, sweepInte
 			&river.PeriodicJobOpts{RunOnStart: false},
 		))
 	}
+	if downloadPollInterval > 0 {
+		// The periodic download-status poll (DL-03/04/08). RunOnStart false (no boot burst).
+		periodicJobs = append(periodicJobs, river.NewPeriodicJob(
+			river.PeriodicInterval(downloadPollInterval),
+			func() (river.JobArgs, *river.InsertOpts) { return DownloadPollArgs{}, nil },
+			&river.PeriodicJobOpts{RunOnStart: false},
+		))
+	}
 
 	riverClient, err := river.NewClient(driver, &river.Config{
 		Logger:      logger,
 		MaxAttempts: defaultMaxAttempts,
 		Queues: map[string]river.QueueConfig{
 			river.QueueDefault: {MaxWorkers: maxWorkers},
+			// The DDL queue is serialized (MaxWorkers:1) so at most one GetComics direct
+			// download streams at a time, mirroring Mylar's DDL_LOCK to avoid IP/bandwidth
+			// thrash (RESEARCH Pattern 5 / Pitfall 6).
+			ddlQueue: {MaxWorkers: 1},
 		},
 		Workers:      workers,
 		PeriodicJobs: periodicJobs,
@@ -153,6 +165,54 @@ func (c *Client) EnqueueSearchIssue(ctx context.Context, issueID int64) error {
 	_, err := c.river.Insert(ctx, SearchIssueArgs{IssueID: issueID}, nil)
 	if err != nil {
 		return fmt.Errorf("enqueue search for issue %d: %w", issueID, err)
+	}
+	return nil
+}
+
+// EnqueueReplacementSearch durably enqueues a reactive, attempt-capped replacement search
+// for an issue whose download failed (poll reap, 05-01) or was blacklisted (DL-05). Duplicate
+// enqueues for the same issue collapse via ReplacementSearchArgs' unique-by-args opts, so a
+// failed download and a user blacklist racing to enqueue coalesce into one job (D-12/D-14).
+func (c *Client) EnqueueReplacementSearch(ctx context.Context, issueID int64) error {
+	_, err := c.river.Insert(ctx, ReplacementSearchArgs{IssueID: issueID}, nil)
+	if err != nil {
+		return fmt.Errorf("enqueue replacement search for issue %d: %w", issueID, err)
+	}
+	return nil
+}
+
+// EnqueuePostProcess durably enqueues a post-process job for a completed download — the
+// reactive fan-out the tracking service's Completed branch calls (05-01 seam). Duplicate
+// enqueues for the same download collapse via PostProcessArgs' unique-by-args opts, so a
+// re-poll of an already-completed row (or a retried poll tick) coalesces into the in-flight
+// job (idempotent re-run safe: Process no-ops on an already-Downloaded issue).
+func (c *Client) EnqueuePostProcess(ctx context.Context, downloadID int64) error {
+	_, err := c.river.Insert(ctx, PostProcessArgs{DownloadID: downloadID}, nil)
+	if err != nil {
+		return fmt.Errorf("enqueue post-process for download %d: %w", downloadID, err)
+	}
+	return nil
+}
+
+// EnqueueDDLFetch durably enqueues a GetComics direct-download fetch for a download row (D-03).
+// The job runs on the serialized "ddl" queue (MaxWorkers:1). Duplicate enqueues for the same
+// download collapse via DDLFetchArgs' unique-by-args opts, so a re-grab or a re-poll of the
+// same getcomics download does not start a second stream.
+func (c *Client) EnqueueDDLFetch(ctx context.Context, downloadID int64) error {
+	_, err := c.river.Insert(ctx, DDLFetchArgs{DownloadID: downloadID}, nil)
+	if err != nil {
+		return fmt.Errorf("enqueue ddl fetch for download %d: %w", downloadID, err)
+	}
+	return nil
+}
+
+// EnqueueDownloadPoll reactively enqueues a one-off download-status poll, so a fresh grab
+// can trigger an immediate poll instead of waiting for the next periodic tick. Duplicate
+// enqueues collapse via DownloadPollArgs' unique-by-kind opts (no stacked polls).
+func (c *Client) EnqueueDownloadPoll(ctx context.Context) error {
+	_, err := c.river.Insert(ctx, DownloadPollArgs{}, nil)
+	if err != nil {
+		return fmt.Errorf("enqueue download poll: %w", err)
 	}
 	return nil
 }

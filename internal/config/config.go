@@ -22,9 +22,14 @@ const envPrefix = "OMNIBUS_"
 // Config is the typed runtime configuration. koanf tags map snake_case keys (from
 // file or the OMNIBUS_-prefixed, lowercased env vars) onto these fields.
 type Config struct {
-	HTTPAddr        string `koanf:"http_addr"`
-	DBPath          string `koanf:"db_path"`
-	DataPath        string `koanf:"data_path"`
+	HTTPAddr string `koanf:"http_addr"`
+	DBPath   string `koanf:"db_path"`
+	DataPath string `koanf:"data_path"`
+	// LibraryPath is the root of the organized comic library — the destination
+	// post-processing renames/moves completed downloads into (D-13). Distinct from
+	// DataPath (working/runtime state): the library is the user's curated collection.
+	// Default "/comics", env-overridable via OMNIBUS_LIBRARY_PATH. Non-secret.
+	LibraryPath     string `koanf:"library_path"`
 	LogLevel        string `koanf:"log_level"`
 	LogFormat       string `koanf:"log_format"`
 	ComicVineAPIKey string `koanf:"comicvine_api_key"`
@@ -75,6 +80,7 @@ func Load(filePath string) (Config, error) {
 		"http_addr":                  ":8080",
 		"db_path":                    "/data/omnibus.db",
 		"data_path":                  "/data",
+		"library_path":               "/comics",
 		"log_level":                  "info",
 		"log_format":                 "json",
 		"river_workers":              2,
@@ -128,6 +134,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("http_addr", c.HTTPAddr),
 		slog.String("db_path", c.DBPath),
 		slog.String("data_path", c.DataPath),
+		slog.String("library_path", c.LibraryPath),
 		slog.String("log_level", c.LogLevel),
 		slog.String("log_format", c.LogFormat),
 		slog.String("comicvine_api_key", key),

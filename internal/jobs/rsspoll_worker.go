@@ -8,7 +8,7 @@ import (
 
 // RSSPollRunner is the inverted dependency the RSS poll worker calls. The search service
 // satisfies it via RunRSSPoll. Declared here so internal/jobs stays free of any import of
-// internal/service/search.
+// internal/search.
 type RSSPollRunner interface {
 	RunRSSPoll(ctx context.Context) error
 }

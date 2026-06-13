@@ -2,14 +2,20 @@ version: "3"
 
 env:
   # Local-dev defaults: keep runtime data in ./.dev (not the container's /data),
-  # human-readable logs at debug level. Override any of these in your shell.
+  # colorized human-readable logs at debug level. Override any of these in your shell.
   # Secrets stay env-only: export OMNIBUS_COMICVINE_API_KEY in your shell — it
   # is inherited here and never written to the Taskfile.
   OMNIBUS_HTTP_ADDR: ":8080"
   OMNIBUS_DB_PATH: .dev/omnibus.db
   OMNIBUS_DATA_PATH: .dev
+  # Keep the organized library under ./.dev too. The production default is
+  # /comics (a mounted volume in Docker), which is not writable in local dev —
+  # without this, post-process import fails with "create library dir: permission
+  # denied" and River retries the PostProcess job forever.
+  OMNIBUS_LIBRARY_PATH: .dev/library
   OMNIBUS_LOG_LEVEL: debug
-  OMNIBUS_LOG_FORMAT: text
+  # console = the colorized, human-friendly slog handler (zerolog-style) for local dev.
+  OMNIBUS_LOG_FORMAT: console
 
 tasks:
   default:
@@ -25,7 +31,7 @@ tasks:
       - dev:frontend
 
   dev:backend:
-    desc: Run the Go server with local-friendly defaults (text logs, ./.dev data dir)
+    desc: Run the Go server with local-friendly defaults (colorized console logs, ./.dev data dir)
     cmds:
       - mkdir -p .dev
       - go run ./cmd/omnibus
