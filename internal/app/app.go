@@ -31,6 +31,7 @@ import (
 	"github.com/vizvim/omnibus/internal/ddlconfig"
 	"github.com/vizvim/omnibus/internal/download"
 	"github.com/vizvim/omnibus/internal/downloadclient"
+	"github.com/vizvim/omnibus/internal/events"
 	indexerprovider "github.com/vizvim/omnibus/internal/indexer"
 	"github.com/vizvim/omnibus/internal/indexerconfig"
 	"github.com/vizvim/omnibus/internal/jobhistory"
@@ -75,6 +76,12 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	}
 
 	repos := repository.NewRepositories(database)
+
+	// The in-process event bus is the live-status fan-out (UI-05, D-08): the tracking poll loop
+	// and the jobs client Publish typed envelopes to it, and the EventService stream handler
+	// Subscribes and Sends them to subscribed SPAs. It is purely additive observability — a
+	// slow/dead subscriber never blocks producers (drop-on-full, T-6-21).
+	eventBus := events.NewBus()
 
 	// The gateway is the single ComicVine chokepoint (limiter + cache).
 	provider := metadata.NewComicVineProvider(cfg.ComicVineAPIKey)
@@ -149,6 +156,9 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		// streams via this fetcher then feeds the Completed->post-process path (D-03).
 		DDLFetchers: map[string]tracking.DDLFetcher{kindGetComics: ddlProvider},
 		Logger:      logger,
+		// Live-status fan-out: download progress / issue status / timeline events from the poll
+		// loop are published to the bus the EventService stream subscribes to (UI-05).
+		Publisher: eventBus,
 	})
 
 	// RenameConfigService owns the DB-backed, runtime-editable renaming config (D-09), the
@@ -215,6 +225,9 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	trackingSvc.SetEnqueuer(riverClient)
 	// The post-process service fans out a replacement search on a corrupt archive (D-16).
 	postProcessSvc.SetEnqueuer(riverClient)
+	// Wire the live-status publisher into the jobs client so enqueued jobs emit a JobStateEvent
+	// the Activity view consumes live (UI-05/D-08).
+	riverClient.SetPublisher(eventBus)
 
 	// JobService reads run history from River's tables (via the jobs client).
 	jobSvc := jobhistory.New(riverClient)
@@ -227,7 +240,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// connectivity prober so Test probes the live, DB-resolved config.
 	downloadClientSvc := downloadclient.New(downloadclient.Deps{Repos: repos, Logger: logger, Prober: sabProvider})
 
-	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, renameConfigSvc, ddlConfigSvc, searchSvc, authSvc, repos.Cover)
+	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, renameConfigSvc, ddlConfigSvc, searchSvc, authSvc, eventBus, repos.Cover)
 	if err != nil {
 		_ = database.Close()
 		return err
@@ -286,7 +299,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 // newServer builds the h2c-wrapped HTTP server hosting the SeriesService + JobService
 // Connect handlers (with slog + otel interceptors) and the cover handler serving blobs
 // from SQLite, with CORS scoped to the Vite dev origin.
-func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobhistory.Service, indexerSvc *indexerconfig.Service, downloadClientSvc *downloadclient.Service, renameConfigSvc *renameconfig.Service, ddlConfigSvc *ddlconfig.Service, searchSvc *search.Service, authSvc *auth.Service, covers transport.CoverStore) (*http.Server, error) {
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobhistory.Service, indexerSvc *indexerconfig.Service, downloadClientSvc *downloadclient.Service, renameConfigSvc *renameconfig.Service, ddlConfigSvc *ddlconfig.Service, searchSvc *search.Service, authSvc *auth.Service, eventBus *events.Bus, covers transport.CoverStore) (*http.Server, error) {
 	interceptors, err := transport.NewInterceptors(logger)
 	if err != nil {
 		return nil, fmt.Errorf("build interceptors: %w", err)
@@ -327,6 +340,14 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 	authHandler := transport.NewAuthHandler(authSvc)
 	authPath, authH := omnibusv1connect.NewAuthServiceHandler(authHandler, connect.WithInterceptors(interceptors...))
 	mux.Handle("/api"+authPath, http.StripPrefix("/api", authH))
+
+	// EventService is the unified live-status server stream (UI-05, D-08). It is mounted under
+	// /api like every other handler, so the auth gate (Plan 02) that wraps the whole mux gates
+	// it uniformly — the session cookie on the initial stream request is validated once
+	// (T-6-20, no ungated side-channel).
+	eventHandler := transport.NewEventHandler(eventBus)
+	eventPath, eventH := omnibusv1connect.NewEventServiceHandler(eventHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+eventPath, http.StripPrefix("/api", eventH))
 
 	mux.Handle("/covers/", transport.NewCoverHandler(covers))
 

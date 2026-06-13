@@ -4,6 +4,13 @@ modules:
 lint:
   use:
     - STANDARD
+  # The unified live-status stream (UI-05, D-08) streams a discriminated-union
+  # `EventEnvelope` rather than a per-RPC `StreamEventsResponse`. The envelope name is
+  # load-bearing (the oneof event type the SPA switches on), so the response-standard-name
+  # rule is waived for this one streaming RPC only (scoped to events.proto).
+  ignore_only:
+    RPC_RESPONSE_STANDARD_NAME:
+      - proto/omnibus/v1/events.proto
 breaking:
   use:
     - FILE
