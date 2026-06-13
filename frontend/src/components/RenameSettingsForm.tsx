@@ -1,8 +1,9 @@
 import { useState } from "react";
 
-// RenameSettingsFormValues is the editable renaming-config payload the form collects
-// (D-09). It mirrors the RenameConfig proto message one-to-one — every field is a plain
-// string/boolean, no secrets.
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+
+// RenameSettingsFormValues mirrors the RenameConfig proto message one-to-one (D-09).
 export interface RenameSettingsFormValues {
   folderFormat: string;
   fileFormat: string;
@@ -30,10 +31,15 @@ const emptyValues: RenameSettingsFormValues = {
   lowercase: false,
 };
 
-// RenameSettingsForm is the functional-minimal edit form for the renaming config (D-09),
-// mirroring DownloadClientForm. It exposes the Rename master toggle, folder/file format
-// templates, Replace Spaces, Lowercase, and the Issue Number Padding toggle + format
-// dropdown. Polish (dark mode / a11y) is deferred to Phase 6.
+const fieldLabel = "flex flex-col gap-1.5 text-sm font-medium text-foreground";
+const checkRow = "flex items-center gap-2.5 text-sm font-medium text-foreground";
+const checkboxClass = "size-4 shrink-0 rounded border-input accent-[#7aa2f7]";
+const selectClass =
+  "h-9 rounded-md border border-input bg-tn-night/60 px-3 text-sm text-foreground transition-colors focus-visible:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40";
+
+// RenameSettingsForm is the edit form for the renaming config (D-09): the Rename master
+// toggle, folder/file format templates, Replace Spaces, Lowercase, and the Issue Number
+// Padding toggle + format dropdown.
 export function RenameSettingsForm({
   initial,
   pending = false,
@@ -61,55 +67,57 @@ export function RenameSettingsForm({
 
   return (
     <form
-      className="flex flex-col gap-3 rounded border border-slate-200 bg-white p-4"
+      className="flex flex-col gap-4 rounded-xl border border-border bg-card/70 p-5"
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit(values);
       }}
     >
-      <label className="flex items-center gap-2 text-sm font-semibold">
+      <label className={checkRow}>
         <input
           type="checkbox"
+          className={checkboxClass}
           checked={values.renameEnabled}
           onChange={(e) => set("renameEnabled", e.target.checked)}
         />
         Rename files
       </label>
 
-      <label className="flex flex-col gap-1 text-sm font-semibold">
+      <label className={fieldLabel}>
         Folder Format
-        <input
-          className="rounded border border-slate-300 px-3 py-2 text-sm font-normal"
+        <Input
           value={values.folderFormat}
           onChange={(e) => set("folderFormat", e.target.value)}
           placeholder="$Publisher/$Series ($Year)"
+          className="font-mono"
         />
       </label>
 
-      <label className="flex flex-col gap-1 text-sm font-semibold">
+      <label className={fieldLabel}>
         File Format
-        <input
-          className="rounded border border-slate-300 px-3 py-2 text-sm font-normal"
+        <Input
           value={values.fileFormat}
           onChange={(e) => set("fileFormat", e.target.value)}
           placeholder="$Series $VolumeY $Annual #$Issue ($monthname $Year)"
+          className="font-mono"
         />
       </label>
 
-      <label className="flex items-center gap-2 text-sm font-semibold">
+      <label className={checkRow}>
         <input
           type="checkbox"
+          className={checkboxClass}
           checked={values.issuePaddingEnabled}
           onChange={(e) => set("issuePaddingEnabled", e.target.checked)}
         />
         Issue Number Padding
       </label>
 
-      <label className="flex flex-col gap-1 text-sm font-semibold">
+      <label className={fieldLabel}>
         Padding Format
         <select
           aria-label="Padding Format"
-          className="rounded border border-slate-300 px-3 py-2 text-sm font-normal"
+          className={selectClass}
           value={values.paddingFormat}
           onChange={(e) => set("paddingFormat", e.target.value)}
         >
@@ -121,41 +129,35 @@ export function RenameSettingsForm({
         </select>
       </label>
 
-      <label className="flex items-center gap-2 text-sm font-semibold">
+      <label className={checkRow}>
         <input
           type="checkbox"
+          className={checkboxClass}
           checked={values.replaceSpaces}
           onChange={(e) => set("replaceSpaces", e.target.checked)}
         />
         Replace Spaces
       </label>
 
-      <label className="flex items-center gap-2 text-sm font-semibold">
+      <label className={checkRow}>
         <input
           type="checkbox"
+          className={checkboxClass}
           checked={values.lowercase}
           onChange={(e) => set("lowercase", e.target.checked)}
         />
         Lowercase filename
       </label>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-tn-red">{error}</p> : null}
 
       <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded bg-slate-100 px-4 py-2 text-sm font-semibold"
-        >
+        <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
+        </Button>
+        <Button type="submit" disabled={pending}>
           Save renaming settings
-        </button>
+        </Button>
       </div>
     </form>
   );

@@ -1,9 +1,12 @@
 import { useQuery } from "@connectrpc/connect-query";
+import { Waves, WifiOff } from "lucide-react";
 
 import { EmptyState } from "../components/EmptyState";
 import { JobStateBadge } from "../components/JobStateBadge";
+import { PageHeader } from "../components/layout/PageHeader";
 import { JobRunState } from "../gen/omnibus/v1/jobs_pb";
 import { listJobRuns } from "../gen/omnibus/v1/jobs-JobService_connectquery";
+import { relativeTime } from "../lib/time";
 
 // kindLabel maps the engine job kind to a human label.
 function kindLabel(kind: string): string {
@@ -19,9 +22,20 @@ function kindLabel(kind: string): string {
   }
 }
 
-// Activity is the functional-minimal job-run history page (D-08.2): a single-column
-// list of recent runs (kind, state badge, timestamps, error). It reuses EmptyState for
-// the empty + error cases and polls only while a run is still running.
+// timeLabel renders a short started/finished line, preferring relative time but keeping the
+// raw value as a tooltip.
+function timeLabel(startedAt: string, finishedAt: string): string {
+  const started = startedAt ? relativeTime(startedAt) || startedAt : "";
+  const parts: string[] = [];
+  parts.push(started ? `Started ${started}` : "Not started");
+  if (finishedAt) {
+    parts.push(`Finished ${relativeTime(finishedAt) || finishedAt}`);
+  }
+  return parts.join(" · ");
+}
+
+// Activity is the job-run history page (D-08.2): a single-column list of recent runs (kind,
+// state badge, timestamps, error). It polls only while a run is still running.
 export function Activity() {
   const runs = useQuery(
     listJobRuns,
@@ -38,50 +52,59 @@ export function Activity() {
 
   if (runs.isError) {
     return (
-      <EmptyState
-        heading="Couldn't load activity"
-        body="Couldn't reach the server. Check your connection, then try again."
-      />
+      <div className="flex flex-col gap-8">
+        <PageHeader eyebrow="Background jobs" title="Activity" />
+        <EmptyState
+          icon={<WifiOff />}
+          heading="Couldn't load activity"
+          body="Couldn't reach the server. Check your connection, then try again."
+        />
+      </div>
     );
   }
 
   const list = runs.data?.runs ?? [];
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Activity</h1>
-      <section className="flex flex-col gap-4">
-        <h2 className="text-xl font-semibold">Recent job runs</h2>
-        {list.length === 0 ? (
-          <EmptyState
-            heading="No job runs yet"
-            body="Background jobs like metadata refresh will appear here once they run. Add or refresh a series to kick one off."
-          />
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {list.map((run) => (
-              <li
-                key={run.id}
-                className="flex flex-col gap-1 rounded border border-slate-200 bg-slate-50 p-4"
-              >
-                <div className="flex items-center gap-4">
-                  <span className="text-base">{kindLabel(run.kind)}</span>
-                  <JobStateBadge state={run.state} />
-                </div>
-                <span className="text-sm text-slate-600">
-                  {run.startedAt ? `Started ${run.startedAt}` : "Not started"}
-                  {run.finishedAt ? ` · Finished ${run.finishedAt}` : ""}
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        eyebrow="Background jobs"
+        title="Activity"
+        description="Imports, metadata refreshes, and scheduled sweeps run here."
+      />
+
+      {list.length === 0 ? (
+        <EmptyState
+          icon={<Waves />}
+          heading="No job runs yet"
+          body="Background jobs like metadata refresh will appear here once they run. Add or refresh a series to kick one off."
+        />
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {list.map((run) => (
+            <li
+              key={run.id}
+              className="flex flex-col gap-2 rounded-xl border border-border bg-card/60 p-4 transition-colors hover:border-border-strong/70"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-foreground">{kindLabel(run.kind)}</span>
+                <JobStateBadge state={run.state} />
+                <span className="ml-auto font-mono text-xs text-muted-foreground">
+                  {timeLabel(run.startedAt, run.finishedAt)}
                 </span>
-                {run.state === JobRunState.FAILED && run.error ? (
-                  <span className="truncate text-sm text-red-600" title={run.error}>
-                    {run.error}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+              </div>
+              {run.state === JobRunState.FAILED && run.error ? (
+                <span
+                  className="truncate rounded-md border border-tn-red/25 bg-tn-red/10 px-2.5 py-1.5 font-mono text-xs text-tn-red"
+                  title={run.error}
+                >
+                  {run.error}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -1,1 +1,268 @@
 @import "tailwindcss";
+
+/*
+  omnibus — Tokyo Night Storm.
+
+  The product is a comic-fetching tool, and Tokyo Night is, at heart, a code-editor
+  theme — so the UI leans into a "midnight reading room rendered by your editor" idea:
+  deep blue-charcoal surfaces, cover art that glows against them, and monospaced type
+  for every piece of machine data (issue numbers, scores, sizes, timestamps).
+
+  Palette is the canonical folke/tokyonight Storm variant. Always dark.
+*/
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* --- raw Tokyo Night Storm palette --- */
+  --tn-night: #1a1b26; /* deepest base */
+  --tn-bg: #24283b; /* storm surface */
+  --tn-bg-dark: #1f2335; /* sidebar / panels */
+  --tn-bg-highlight: #292e42; /* hover / elevated */
+  --tn-gutter: #3b4261;
+  --tn-terminal-black: #414868;
+  --tn-fg: #c0caf5;
+  --tn-fg-dark: #a9b1d6;
+  --tn-dark3: #545c7e;
+  --tn-comment: #565f89;
+  --tn-dark5: #737aa2;
+
+  --tn-blue: #7aa2f7;
+  --tn-cyan: #7dcfff;
+  --tn-blue1: #2ac3de;
+  --tn-blue5: #89ddff;
+  --tn-blue6: #b4f9f8;
+  --tn-magenta: #bb9af7;
+  --tn-purple: #9d7cd8;
+  --tn-orange: #ff9e64;
+  --tn-yellow: #e0af68;
+  --tn-green: #9ece6a;
+  --tn-teal: #73daca;
+  --tn-red: #f7768e;
+
+  /* --- shadcn semantic tokens --- */
+  --background: var(--tn-night);
+  --foreground: var(--tn-fg);
+  --card: var(--tn-bg-dark);
+  --card-foreground: var(--tn-fg);
+  --popover: #1d2030;
+  --popover-foreground: var(--tn-fg);
+  --primary: var(--tn-blue);
+  --primary-foreground: #16161e;
+  --secondary: var(--tn-bg-highlight);
+  --secondary-foreground: var(--tn-fg);
+  --muted: var(--tn-bg-highlight);
+  --muted-foreground: #7b83ad;
+  --accent: #2c324a;
+  --accent-foreground: #d7defa;
+  --destructive: var(--tn-red);
+  --destructive-foreground: #16161e;
+  --border: #2a2f44;
+  --border-strong: var(--tn-gutter);
+  --input: #2e3450;
+  --ring: var(--tn-blue);
+
+  --radius: 0.7rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* expose the raw palette as utilities (text-tn-green, bg-tn-magenta/10, …) */
+  --color-tn-night: var(--tn-night);
+  --color-tn-bg: var(--tn-bg);
+  --color-tn-fg: var(--tn-fg);
+  --color-tn-fg-dark: var(--tn-fg-dark);
+  --color-tn-comment: var(--tn-comment);
+  --color-tn-blue: var(--tn-blue);
+  --color-tn-cyan: var(--tn-cyan);
+  --color-tn-magenta: var(--tn-magenta);
+  --color-tn-purple: var(--tn-purple);
+  --color-tn-orange: var(--tn-orange);
+  --color-tn-yellow: var(--tn-yellow);
+  --color-tn-green: var(--tn-green);
+  --color-tn-teal: var(--tn-teal);
+  --color-tn-red: var(--tn-red);
+
+  --font-sans: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Clash Display", "Hanken Grotesk", ui-sans-serif, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --animate-fade-up: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in 0.35s ease both;
+  --animate-pop: pop 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-overlay: overlay-in 0.22s ease;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "ss01", "cv11";
+    /* layered ambient glow — a faint blue/magenta aurora behind everything */
+    background-image:
+      radial-gradient(900px 520px at 12% -8%, rgba(122, 162, 247, 0.1), transparent 60%),
+      radial-gradient(720px 480px at 100% 0%, rgba(187, 154, 247, 0.07), transparent 55%),
+      radial-gradient(600px 600px at 50% 120%, rgba(42, 195, 222, 0.05), transparent 60%);
+    background-attachment: fixed;
+  }
+
+  /* very fine grain so the flat surfaces never read as dead pixels */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  #root {
+    position: relative;
+    z-index: 1;
+  }
+
+  ::selection {
+    background: rgba(122, 162, 247, 0.28);
+    color: #ffffff;
+  }
+
+  /* themed scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--tn-gutter) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--tn-gutter);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--tn-terminal-black);
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  /* a thin neon top-edge highlight used on cards/panels for depth */
+  .surface-sheen {
+    box-shadow:
+      inset 0 1px 0 0 rgba(192, 202, 245, 0.04),
+      0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  }
+
+  .glow-primary {
+    box-shadow:
+      0 0 0 1px rgba(122, 162, 247, 0.4),
+      0 8px 30px -8px rgba(122, 162, 247, 0.35);
+  }
+
+  /* moving sheen for skeletons */
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .skeleton-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(192, 202, 245, 0.06),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
+  }
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

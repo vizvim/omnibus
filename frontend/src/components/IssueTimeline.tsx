@@ -1,14 +1,13 @@
 import { useQuery } from "@connectrpc/connect-query";
+import { WifiOff } from "lucide-react";
 
 import { getIssueTimeline } from "../gen/omnibus/v1/search-SearchService_connectquery";
 import { EmptyState } from "./EmptyState";
 import { TimelineEvent } from "./TimelineEvent";
 
 // IssueTimeline renders the per-issue event timeline (OBS-01): a single-column
-// chronological list, most-recent at the top (the focal point). It polls
-// GetIssueTimeline the same way SeriesDetail polls GetSeries so new events appear as the
-// loop runs. The never-searched / empty state reuses the "Nothing here yet" empty state;
-// an RPC error shows the locked server-error copy.
+// chronological list, most-recent at the top (the focal point). It polls GetIssueTimeline
+// so new events appear as the search loop runs.
 export function IssueTimeline({ issueId }: { issueId: bigint }) {
   const timeline = useQuery(
     getIssueTimeline,
@@ -19,6 +18,7 @@ export function IssueTimeline({ issueId }: { issueId: bigint }) {
   if (timeline.isError) {
     return (
       <EmptyState
+        icon={<WifiOff />}
         heading="Couldn't reach the server"
         body="Couldn't reach the server. Check your connection, then try again."
       />
