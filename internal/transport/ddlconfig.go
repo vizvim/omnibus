@@ -7,7 +7,7 @@ import (
 
 	omnibusv1 "github.com/vizvim/omnibus/gen/go/omnibus/v1"
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
-	"github.com/vizvim/omnibus/internal/service/ddlconfig"
+	"github.com/vizvim/omnibus/internal/ddlconfig"
 )
 
 // DDLConfigServicer is the subset of ddlconfig.Service the handler depends on. The

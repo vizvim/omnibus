@@ -8,7 +8,7 @@ import (
 
 	omnibusv1 "github.com/vizvim/omnibus/gen/go/omnibus/v1"
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
-	"github.com/vizvim/omnibus/internal/service/search"
+	"github.com/vizvim/omnibus/internal/search"
 )
 
 // SearchServicer is the subset of search.Service the handler depends on. The transport

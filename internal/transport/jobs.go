@@ -7,7 +7,7 @@ import (
 
 	omnibusv1 "github.com/vizvim/omnibus/gen/go/omnibus/v1"
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
-	jobsvc "github.com/vizvim/omnibus/internal/service/jobs"
+	"github.com/vizvim/omnibus/internal/jobhistory"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 // the handler stays testable). The transport layer depends only on the service
 // package, never on the internal/jobs engine.
 type JobServicer interface {
-	ListJobRuns(ctx context.Context, limit int32) ([]jobsvc.JobRunView, error)
+	ListJobRuns(ctx context.Context, limit int32) ([]jobhistory.JobRunView, error)
 }
 
 // JobHandler implements the generated JobServiceHandler by delegating to the jobs
@@ -66,17 +66,17 @@ func (h *JobHandler) ListJobRuns(
 	return connect.NewResponse(&omnibusv1.ListJobRunsResponse{Runs: out}), nil
 }
 
-func jobRunStateToProto(s jobsvc.JobRunState) omnibusv1.JobRunState {
+func jobRunStateToProto(s jobhistory.JobRunState) omnibusv1.JobRunState {
 	switch s {
-	case jobsvc.StateQueued:
+	case jobhistory.StateQueued:
 		return omnibusv1.JobRunState_JOB_RUN_STATE_QUEUED
-	case jobsvc.StateRunning:
+	case jobhistory.StateRunning:
 		return omnibusv1.JobRunState_JOB_RUN_STATE_RUNNING
-	case jobsvc.StateCompleted:
+	case jobhistory.StateCompleted:
 		return omnibusv1.JobRunState_JOB_RUN_STATE_COMPLETED
-	case jobsvc.StateFailed:
+	case jobhistory.StateFailed:
 		return omnibusv1.JobRunState_JOB_RUN_STATE_FAILED
-	case jobsvc.StateCancelled:
+	case jobhistory.StateCancelled:
 		return omnibusv1.JobRunState_JOB_RUN_STATE_CANCELLED //nolint:misspell // generated proto enum value
 
 	default:

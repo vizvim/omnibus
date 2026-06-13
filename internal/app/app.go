@@ -24,20 +24,20 @@ import (
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
 	"github.com/vizvim/omnibus/internal/config"
 	"github.com/vizvim/omnibus/internal/db"
+	"github.com/vizvim/omnibus/internal/ddlconfig"
+	"github.com/vizvim/omnibus/internal/download"
+	"github.com/vizvim/omnibus/internal/downloadclient"
+	indexerprovider "github.com/vizvim/omnibus/internal/indexer"
+	"github.com/vizvim/omnibus/internal/indexerconfig"
+	"github.com/vizvim/omnibus/internal/jobhistory"
 	"github.com/vizvim/omnibus/internal/jobs"
-	"github.com/vizvim/omnibus/internal/provider/download"
-	indexerprovider "github.com/vizvim/omnibus/internal/provider/indexer"
-	"github.com/vizvim/omnibus/internal/provider/metadata"
+	"github.com/vizvim/omnibus/internal/metadata"
+	"github.com/vizvim/omnibus/internal/postprocess"
+	"github.com/vizvim/omnibus/internal/renameconfig"
 	"github.com/vizvim/omnibus/internal/repository"
-	"github.com/vizvim/omnibus/internal/service/ddlconfig"
-	"github.com/vizvim/omnibus/internal/service/downloadclient"
-	"github.com/vizvim/omnibus/internal/service/indexer"
-	jobsservice "github.com/vizvim/omnibus/internal/service/jobs"
-	"github.com/vizvim/omnibus/internal/service/postprocess"
-	"github.com/vizvim/omnibus/internal/service/renameconfig"
-	"github.com/vizvim/omnibus/internal/service/search"
-	"github.com/vizvim/omnibus/internal/service/series"
-	"github.com/vizvim/omnibus/internal/service/tracking"
+	"github.com/vizvim/omnibus/internal/search"
+	"github.com/vizvim/omnibus/internal/series"
+	"github.com/vizvim/omnibus/internal/tracking"
 	"github.com/vizvim/omnibus/internal/transport"
 )
 
@@ -189,10 +189,10 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	postProcessSvc.SetEnqueuer(riverClient)
 
 	// JobService reads run history from River's tables (via the jobs client).
-	jobSvc := jobsservice.New(riverClient)
+	jobSvc := jobhistory.New(riverClient)
 
 	// IndexerService owns DB-backed indexer CRUD (ADR 0007 domain segmentation).
-	indexerSvc := indexer.New(indexer.Deps{Repos: repos, Logger: logger})
+	indexerSvc := indexerconfig.New(indexerconfig.Deps{Repos: repos, Logger: logger})
 
 	// DownloadClientService owns the singleton DB-backed SABnzbd config (ADR 0007),
 	// editable at runtime (supersedes D-16). The same SAB provider is injected as the
@@ -258,7 +258,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 // newServer builds the h2c-wrapped HTTP server hosting the SeriesService + JobService
 // Connect handlers (with slog + otel interceptors) and the cover handler serving blobs
 // from SQLite, with CORS scoped to the Vite dev origin.
-func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobsservice.Service, indexerSvc *indexer.Service, downloadClientSvc *downloadclient.Service, renameConfigSvc *renameconfig.Service, ddlConfigSvc *ddlconfig.Service, searchSvc *search.Service, covers transport.CoverStore) (*http.Server, error) {
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobhistory.Service, indexerSvc *indexerconfig.Service, downloadClientSvc *downloadclient.Service, renameConfigSvc *renameconfig.Service, ddlConfigSvc *ddlconfig.Service, searchSvc *search.Service, covers transport.CoverStore) (*http.Server, error) {
 	interceptors, err := transport.NewInterceptors(logger)
 	if err != nil {
 		return nil, fmt.Errorf("build interceptors: %w", err)

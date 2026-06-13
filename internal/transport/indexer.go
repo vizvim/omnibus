@@ -8,17 +8,17 @@ import (
 
 	omnibusv1 "github.com/vizvim/omnibus/gen/go/omnibus/v1"
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
-	"github.com/vizvim/omnibus/internal/service/indexer"
+	"github.com/vizvim/omnibus/internal/indexerconfig"
 )
 
-// IndexerServicer is the subset of indexer.Service the handler depends on. The
+// IndexerServicer is the subset of indexerconfig.Service the handler depends on. The
 // transport layer depends only on the service package, never on repository/db.
 type IndexerServicer interface {
-	List(ctx context.Context) ([]indexer.Indexer, error)
-	Create(ctx context.Context, in indexer.Input) (indexer.Indexer, error)
-	Update(ctx context.Context, id int64, in indexer.Input) (indexer.Indexer, error)
+	List(ctx context.Context) ([]indexerconfig.Indexer, error)
+	Create(ctx context.Context, in indexerconfig.Input) (indexerconfig.Indexer, error)
+	Update(ctx context.Context, id int64, in indexerconfig.Input) (indexerconfig.Indexer, error)
 	Delete(ctx context.Context, id int64) error
-	Test(ctx context.Context, id int64) (indexer.TestResult, error)
+	Test(ctx context.Context, id int64) (indexerconfig.TestResult, error)
 }
 
 // IndexerHandler implements the generated IndexerServiceHandler over the service.
@@ -56,7 +56,7 @@ func (h *IndexerHandler) CreateIndexer(
 	if m.GetName() == "" || m.GetBaseUrl() == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("name and base_url must not be empty"))
 	}
-	got, err := h.svc.Create(ctx, indexer.Input{
+	got, err := h.svc.Create(ctx, indexerconfig.Input{
 		Name:       m.GetName(),
 		Kind:       m.GetKind(),
 		BaseURL:    m.GetBaseUrl(),
@@ -83,7 +83,7 @@ func (h *IndexerHandler) UpdateIndexer(
 	if m.GetName() == "" || m.GetBaseUrl() == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("name and base_url must not be empty"))
 	}
-	got, err := h.svc.Update(ctx, m.GetId(), indexer.Input{
+	got, err := h.svc.Update(ctx, m.GetId(), indexerconfig.Input{
 		Name:       m.GetName(),
 		Kind:       m.GetKind(),
 		BaseURL:    m.GetBaseUrl(),
@@ -128,7 +128,7 @@ func (h *IndexerHandler) TestIndexer(
 
 // indexerToProto maps a masked domain indexer to its proto message. The proto Indexer
 // has no api_key field, so masking is structural.
-func indexerToProto(i indexer.Indexer) *omnibusv1.Indexer {
+func indexerToProto(i indexerconfig.Indexer) *omnibusv1.Indexer {
 	return &omnibusv1.Indexer{
 		Id:         i.ID,
 		Name:       i.Name,
@@ -145,7 +145,7 @@ func indexerToProto(i indexer.Indexer) *omnibusv1.Indexer {
 
 // indexerServiceError maps validation errors to InvalidArgument and the rest to internal.
 func indexerServiceError(err error) error {
-	if errors.Is(err, indexer.ErrInvalidKind) || errors.Is(err, indexer.ErrMissingField) {
+	if errors.Is(err, indexerconfig.ErrInvalidKind) || errors.Is(err, indexerconfig.ErrMissingField) {
 		return connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	return connect.NewError(connect.CodeInternal, err)

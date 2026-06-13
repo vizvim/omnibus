@@ -8,7 +8,7 @@ import (
 
 	omnibusv1 "github.com/vizvim/omnibus/gen/go/omnibus/v1"
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
-	"github.com/vizvim/omnibus/internal/service/renameconfig"
+	"github.com/vizvim/omnibus/internal/renameconfig"
 )
 
 // RenameConfigServicer is the subset of renameconfig.Service the handler depends on.

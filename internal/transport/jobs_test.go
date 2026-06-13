@@ -11,17 +11,17 @@ import (
 
 	omnibusv1 "github.com/vizvim/omnibus/gen/go/omnibus/v1"
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
-	jobsvc "github.com/vizvim/omnibus/internal/service/jobs"
+	"github.com/vizvim/omnibus/internal/jobhistory"
 	"github.com/vizvim/omnibus/internal/transport"
 )
 
 // recordingJobSvc records the limit it was called with and returns canned runs.
 type recordingJobSvc struct {
 	lastLimit int32
-	runs      []jobsvc.JobRunView
+	runs      []jobhistory.JobRunView
 }
 
-func (s *recordingJobSvc) ListJobRuns(_ context.Context, limit int32) ([]jobsvc.JobRunView, error) {
+func (s *recordingJobSvc) ListJobRuns(_ context.Context, limit int32) ([]jobhistory.JobRunView, error) {
 	s.lastLimit = limit
 	return s.runs, nil
 }
@@ -59,9 +59,9 @@ func TestListJobRunsClampsHighLimit(t *testing.T) {
 
 func TestListJobRunsMapsRunsToProto(t *testing.T) {
 	t.Parallel()
-	svc := &recordingJobSvc{runs: []jobsvc.JobRunView{
-		{ID: "1", Kind: "import_series", State: jobsvc.StateCompleted, StartedAt: "a", FinishedAt: "b", Attempt: 1},
-		{ID: "2", Kind: "refresh_series", State: jobsvc.StateFailed, Error: "boom", Attempt: 3},
+	svc := &recordingJobSvc{runs: []jobhistory.JobRunView{
+		{ID: "1", Kind: "import_series", State: jobhistory.StateCompleted, StartedAt: "a", FinishedAt: "b", Attempt: 1},
+		{ID: "2", Kind: "refresh_series", State: jobhistory.StateFailed, Error: "boom", Attempt: 3},
 	}}
 	client := newJobClient(t, svc)
 

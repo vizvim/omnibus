@@ -8,7 +8,7 @@ import (
 
 // ReplacementRunner is the inverted dependency the replacement-search worker calls. The
 // search service satisfies it via RunReplacement. Declaring the interface here (rather than
-// importing internal/service/search) keeps internal/jobs free of any service import,
+// importing internal/search) keeps internal/jobs free of any service import,
 // mirroring AutoSearchRunner/PollRunner and avoiding an import cycle.
 type ReplacementRunner interface {
 	// RunReplacement runs the attempt-capped replacement search for an issue whose download

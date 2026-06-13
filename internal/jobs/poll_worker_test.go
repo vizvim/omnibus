@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vizvim/omnibus/internal/db"
-	"github.com/vizvim/omnibus/internal/provider/download"
+	"github.com/vizvim/omnibus/internal/download"
 	"github.com/vizvim/omnibus/internal/repository"
-	"github.com/vizvim/omnibus/internal/service/tracking"
+	"github.com/vizvim/omnibus/internal/tracking"
 )
 
 const pollTS = "2026-01-01T00:00:00Z"

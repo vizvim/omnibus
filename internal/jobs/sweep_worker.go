@@ -9,7 +9,7 @@ import (
 // StaleSweepRunner is the inverted dependency the sweep worker calls to run the
 // scheduled stale-only refresh sweep. The series service satisfies it via RunSweep.
 // Mirrors the Import/RefreshRunner inversion so internal/jobs stays free of any import
-// of internal/service/series.
+// of internal/series.
 type StaleSweepRunner interface {
 	RunSweep(ctx context.Context) error
 }

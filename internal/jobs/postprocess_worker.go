@@ -8,7 +8,7 @@ import (
 
 // PostProcessRunner is the inverted dependency the post-process worker calls. The
 // postprocess service satisfies it via Process. Declaring the interface here (rather than
-// importing internal/service/postprocess) keeps internal/jobs free of any service import,
+// importing internal/postprocess) keeps internal/jobs free of any service import,
 // mirroring ImportRunner/PollRunner/ReplacementRunner and avoiding an import cycle.
 type PostProcessRunner interface {
 	// RunPostProcess validates, renames, imports, and files a completed download, flipping

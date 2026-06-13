@@ -19,9 +19,9 @@ import (
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
 	"github.com/vizvim/omnibus/internal/db"
 	"github.com/vizvim/omnibus/internal/jobs"
-	"github.com/vizvim/omnibus/internal/provider/metadata"
+	"github.com/vizvim/omnibus/internal/metadata"
 	"github.com/vizvim/omnibus/internal/repository"
-	"github.com/vizvim/omnibus/internal/service/series"
+	"github.com/vizvim/omnibus/internal/series"
 	"github.com/vizvim/omnibus/internal/transport"
 )
 
@@ -33,7 +33,7 @@ func newClient(t *testing.T) (omnibusv1connect.SeriesServiceClient, *series.Serv
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = d.Close() })
 
-	fake, err := metadata.NewFakeProvider("../provider/metadata/testdata/fixtures")
+	fake, err := metadata.NewFakeProvider("../metadata/testdata/fixtures")
 	require.NoError(t, err)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	gw := metadata.NewGateway(fake, repository.NewMetadataCacheRepository(d), rate.NewLimiter(rate.Inf, 1), logger, time.Hour)
