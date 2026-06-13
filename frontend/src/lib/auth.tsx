@@ -70,6 +70,13 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
+// useAuthOptional reads the auth context but returns undefined (instead of throwing) when no
+// AuthProvider is mounted — for chrome like the topbar account menu that must simply render
+// nothing in provider-less component tests rather than crash.
+export function useAuthOptional(): AuthContextValue | undefined {
+  return useContext(AuthContext);
+}
+
 // useAuthGate reads the auth gate state without requiring an AuthProvider: when none is
 // mounted (e.g. focused component tests that only stub a single service) it falls open to
 // the shell — never to a spurious Login screen. The server middleware remains the real

@@ -1,8 +1,63 @@
-import { Plus, Search } from "lucide-react";
+import { useMutation } from "@connectrpc/connect-query";
+import { LogOut, Plus, Search, UserRound } from "lucide-react";
 
+import { logout } from "../../gen/omnibus/v1/auth-AuthService_connectquery";
+import { useAuthOptional } from "../../lib/auth";
 import { Button } from "../ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 import { ConnectionState } from "./ConnectionState";
 import type { Navigate } from "./nav";
+
+// AccountMenu is the topbar account/Sign-out affordance, rendered only when auth is enabled
+// AND the session is active (D-07). Sign-out is non-destructive (no blocking confirm): it
+// clears the session via the generated Logout RPC, then signals unauthenticated so the App
+// gate short-circuits back to the Login screen.
+function AccountMenu() {
+  const auth = useAuthOptional();
+  const signOut = useMutation(logout, {
+    // Whether or not the RPC succeeds, drop the local session so the gate engages.
+    onSettled: () => auth?.signalUnauthenticated(),
+  });
+
+  // Render nothing unless auth is enabled AND the session is active (D-07), and only when an
+  // AuthProvider is actually mounted (provider-less component tests render the shell alone).
+  if (!auth || !auth.enabled || !auth.authed) {
+    return null;
+  }
+  const { username } = auth;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Account menu"
+          // Ensure a >=44px touch target on coarse pointers (UI-SPEC), padding the hit area
+          // without shrinking the visible chrome.
+          className="size-11 sm:size-9"
+        >
+          <UserRound className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {username ? <DropdownMenuLabel>{username}</DropdownMenuLabel> : null}
+        {username ? <DropdownMenuSeparator /> : null}
+        <DropdownMenuItem onSelect={() => signOut.mutate({})}>
+          <LogOut className="size-4" />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function Topbar({
   onNavigate,
@@ -34,6 +89,7 @@ export function Topbar({
           <Plus className="size-4" />
           <span className="hidden sm:inline">Add series</span>
         </Button>
+        <AccountMenu />
       </div>
     </header>
   );
