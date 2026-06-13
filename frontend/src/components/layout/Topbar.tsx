@@ -1,6 +1,7 @@
 import { Plus, Search } from "lucide-react";
 
 import { Button } from "../ui/button";
+import { ConnectionState } from "./ConnectionState";
 import type { Navigate } from "./nav";
 
 export function Topbar({
@@ -26,10 +27,9 @@ export function Topbar({
       </button>
 
       <div className="ml-auto flex items-center gap-2">
-        <div className="mr-1 hidden items-center gap-2 sm:flex">
-          <span className="size-2 rounded-full bg-tn-green shadow-[0_0_8px_0_rgba(158,206,106,0.8)]" />
-          <span className="font-mono text-xs text-muted-foreground">online</span>
-        </div>
+        {/* Live-status indicator bound to the unified stream (UI-05): replaces the
+            hardcoded "online" dot with live/reconnecting/offline (D-08/D-09). */}
+        <ConnectionState />
         <Button onClick={() => onNavigate("search")} className="gap-1.5">
           <Plus className="size-4" />
           <span className="hidden sm:inline">Add series</span>

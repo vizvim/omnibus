@@ -7,6 +7,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { JobRunState } from "../gen/omnibus/v1/jobs_pb";
 import { listJobRuns } from "../gen/omnibus/v1/jobs-JobService_connectquery";
 import { relativeTime } from "../lib/time";
+import { useConnectionState } from "../lib/transport";
 
 // kindLabel maps the engine job kind to a human label.
 function kindLabel(kind: string): string {
@@ -35,14 +36,22 @@ function timeLabel(startedAt: string, finishedAt: string): string {
 }
 
 // Activity is the job-run history page (D-08.2): a single-column list of recent runs (kind,
-// state badge, timestamps, error). It polls only while a run is still running.
+// state badge, timestamps, error). The live stream now drives updates — JobStateEvents
+// invalidate this query so runs update without polling (D-08/D-10). Polling is demoted to an
+// offline-only fallback: while the stream is live no periodic GET fires; only when the stream
+// is disconnected does it fall back to polling running jobs.
 export function Activity() {
+  const connection = useConnectionState();
   const runs = useQuery(
     listJobRuns,
     { limit: 50 },
     {
       retry: false,
       refetchInterval: (query) => {
+        // Stream drives updates while connected; only fall back to polling when offline (D-10).
+        if (connection !== "offline") {
+          return false;
+        }
         const list = query.state.data?.runs ?? [];
         const anyRunning = list.some((r) => r.state === JobRunState.RUNNING);
         return anyRunning ? 2000 : false;
