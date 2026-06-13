@@ -55,8 +55,8 @@ func (im *Importer) Import(src, dst, root string) error {
 	if linkErr := im.linker(src, cleanDst); linkErr == nil {
 		return nil // instant hardlink (same filesystem)
 	} else if errors.Is(linkErr, os.ErrExist) {
-		// The destination already exists. A prior run that hardlinked the same source
-		// makes this re-import a no-op; only a different file at the destination is an error.
+		// The destination already exists. A prior run that created the same hardlink makes this
+		// re-import a no-op; only a different file at the destination is an error.
 		return im.resolveExisting(src, cleanDst, linkErr)
 	} else if !isEXDEV(linkErr) {
 		// A real error (permissions, missing parent, etc.) — surface it.
@@ -78,13 +78,13 @@ func (im *Importer) Import(src, dst, root string) error {
 // resolveExisting decides whether an "already exists" destination is the identical file from a
 // prior import (return nil, idempotent) or a genuinely different file (return the existing error,
 // preserving no-clobber). It first tries the cheap inode-identity check (os.SameFile, true when a
-// prior run hardlinked the same source) and falls back to a streaming content/size comparison for
+// prior run created the same hardlink) and falls back to a streaming content/size comparison for
 // the copy case where inodes necessarily differ.
 func (im *Importer) resolveExisting(src, dst string, existsErr error) error {
 	si, srcErr := os.Stat(src)
 	di, dstErr := os.Stat(dst)
 	if srcErr == nil && dstErr == nil && os.SameFile(si, di) {
-		return nil // already hardlinked to this source by a prior run
+		return nil // a prior run already created this hardlink to the source
 	}
 
 	same, cmpErr := sameContent(src, dst)
