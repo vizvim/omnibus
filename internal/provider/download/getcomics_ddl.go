@@ -91,45 +91,42 @@ var errRejectedTarget = errors.New("getcomics ddl: rejected target (ssrf guard)"
 // literal IP (or every resolved IP) — rejects loopback, link-local, private-range, and
 // unspecified addresses (e.g. the 169.254.169.254 cloud-metadata endpoint). A page parsed
 // off a remote-influenced GetComics post is NOT a trust boundary, so this runs for every URL.
-func safeMirrorURL(raw string, allowPrivate bool) (*url.URL, error) {
+func safeMirrorURL(ctx context.Context, raw string, allowPrivate bool) error {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
-		return nil, fmt.Errorf("%w: parse %q: %v", errRejectedTarget, raw, err)
+		return fmt.Errorf("%w: parse %q: %w", errRejectedTarget, raw, err)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, fmt.Errorf("%w: scheme %q", errRejectedTarget, u.Scheme)
+		return fmt.Errorf("%w: scheme %q", errRejectedTarget, u.Scheme)
 	}
 	host := u.Hostname()
 	if host == "" {
-		return nil, fmt.Errorf("%w: no host", errRejectedTarget)
+		return fmt.Errorf("%w: no host", errRejectedTarget)
 	}
 	if allowPrivate {
 		// Test seam: scheme + host already validated; skip the private-range rejection so
 		// httptest servers on 127.0.0.1 are reachable.
-		return u, nil
+		return nil
 	}
-	if err := assertPublicHost(host); err != nil {
-		return nil, err
-	}
-	return u, nil
+	return assertPublicHost(ctx, host)
 }
 
 // assertPublicHost rejects a host that resolves (or is) a loopback/link-local/private/
 // unspecified IP — the SSRF sink set (internal services, the 169.254.169.254 metadata IP).
 // A hostname is resolved and rejected if ANY resolved address is internal (fail-closed).
-func assertPublicHost(host string) error {
+func assertPublicHost(ctx context.Context, host string) error {
 	if ip := net.ParseIP(host); ip != nil {
 		return assertPublicIP(ip)
 	}
-	ips, err := net.LookupIP(host)
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 	if err != nil {
-		return fmt.Errorf("%w: resolve %q: %v", errRejectedTarget, host, err)
+		return fmt.Errorf("%w: resolve %q: %w", errRejectedTarget, host, err)
 	}
 	if len(ips) == 0 {
 		return fmt.Errorf("%w: host %q resolved to no addresses", errRejectedTarget, host)
 	}
 	for _, ip := range ips {
-		if err := assertPublicIP(ip); err != nil {
+		if err := assertPublicIP(ip.IP); err != nil {
 			return err
 		}
 	}
@@ -158,7 +155,7 @@ func ssrfGuardedClient(base *http.Client, allowPrivate bool) *http.Client {
 		if len(via) >= 10 {
 			return fmt.Errorf("%w: too many redirects", errRejectedTarget)
 		}
-		if _, err := safeMirrorURL(req.URL.String(), allowPrivate); err != nil {
+		if err := safeMirrorURL(req.Context(), req.URL.String(), allowPrivate); err != nil {
 			return err
 		}
 		return nil
@@ -226,7 +223,7 @@ func (p *GetComicsDDLProvider) Fetch(ctx context.Context, clientRef string, prog
 // links in preference order. Only links parsed from the trusted GetComics post page are
 // followed (T-05-15 SSRF mitigation: no arbitrary user-supplied redirect targets).
 func (p *GetComicsDDLProvider) resolveMirrors(ctx context.Context, postURL string) ([]string, error) {
-	if _, err := safeMirrorURL(postURL, p.allowPrivateHosts); err != nil {
+	if err := safeMirrorURL(ctx, postURL, p.allowPrivateHosts); err != nil {
 		return nil, fmt.Errorf("reject getcomics post url: %w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, postURL, http.NoBody)
@@ -253,7 +250,7 @@ func (p *GetComicsDDLProvider) resolveMirrors(ctx context.Context, postURL strin
 // (Mylar treats a missing Content-Length as a bad/ad page, T-05-17). On success it returns
 // the local path. The body is streamed with io.Copy — never fully buffered.
 func (p *GetComicsDDLProvider) streamMirror(ctx context.Context, mirrorURL, dir string, progress func(done, total int64)) (string, error) {
-	if _, err := safeMirrorURL(mirrorURL, p.allowPrivateHosts); err != nil {
+	if err := safeMirrorURL(ctx, mirrorURL, p.allowPrivateHosts); err != nil {
 		return "", fmt.Errorf("reject mirror url: %w", err)
 	}
 	// A per-mirror cancellable context backs the stall watchdog (WR-01): if the stream goes
