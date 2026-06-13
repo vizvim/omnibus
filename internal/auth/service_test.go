@@ -152,6 +152,57 @@ func TestUpdateConfigEnableWithoutCredentialRejected(t *testing.T) {
 	require.ErrorIs(t, err, auth.ErrMissingUsername)
 }
 
+// TestSignSessionRoundTrips asserts a signed token verifies back to its username under the
+// same secret.
+func TestSignSessionRoundTrips(t *testing.T) {
+	t.Parallel()
+	svc := newService(t)
+
+	token := svc.SignSession("admin")
+	user, err := svc.VerifySession(token)
+	require.NoError(t, err)
+	require.Equal(t, "admin", user)
+}
+
+// TestVerifySessionRejectsTamper asserts a token whose payload or signature is altered is
+// rejected (HMAC integrity).
+func TestVerifySessionRejectsTamper(t *testing.T) {
+	t.Parallel()
+	svc := newService(t)
+
+	token := svc.SignSession("admin")
+
+	// Flip a byte in the token; it must no longer verify.
+	tampered := token[:len(token)-1] + "X"
+	_, err := svc.VerifySession(tampered)
+	require.ErrorIs(t, err, auth.ErrInvalidSession)
+
+	// A malformed token (wrong shape) is rejected.
+	_, err = svc.VerifySession("not.a.valid.token.shape")
+	require.ErrorIs(t, err, auth.ErrInvalidSession)
+	_, err = svc.VerifySession("")
+	require.ErrorIs(t, err, auth.ErrInvalidSession)
+}
+
+// TestVerifySessionRejectsForeignSecret asserts a token signed under a different secret is
+// rejected — only this server's secret produces valid sessions (V6).
+func TestVerifySessionRejectsForeignSecret(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "svc.db")
+	require.NoError(t, db.Migrate(context.Background(), path))
+	d, err := db.Open(context.Background(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = d.Close() })
+	repos := repository.NewRepositories(d)
+
+	signer := auth.New(auth.Deps{Repos: repos, SessionSecret: "secret-A"})
+	verifier := auth.New(auth.Deps{Repos: repos, SessionSecret: "secret-B"})
+
+	token := signer.SignSession("admin")
+	_, err = verifier.VerifySession(token)
+	require.ErrorIs(t, err, auth.ErrInvalidSession, "a token signed under a foreign secret is rejected")
+}
+
 // TestUpdateConfigRoundTrips asserts a persisted config Gets back its stored values.
 func TestUpdateConfigRoundTrips(t *testing.T) {
 	t.Parallel()

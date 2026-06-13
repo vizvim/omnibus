@@ -77,6 +77,21 @@ func TestSabnzbdKeyNeverLogged(t *testing.T) {
 	require.Contains(t, buf.String(), "REDACTED", "secret should be masked")
 }
 
+func TestAuthSessionSecretNeverLogged(t *testing.T) {
+	const sessionSecret = "TOPSECRET-session-signing-abcdef"
+	t.Setenv("OMNIBUS_AUTH_SESSION_SECRET", sessionSecret)
+	cfg, err := config.Load("")
+	require.NoError(t, err)
+	require.Equal(t, sessionSecret, cfg.AuthSessionSecret)
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	logger.Info("loaded config", slog.Any("config", cfg))
+
+	require.NotContains(t, buf.String(), sessionSecret, "auth session secret must never appear in logs")
+	require.Contains(t, buf.String(), "REDACTED", "secret should be masked")
+}
+
 func TestNewLoggerProducesValidLogger(t *testing.T) {
 	for _, format := range []string{"json", "text"} {
 		cfg := config.Config{LogLevel: "debug", LogFormat: format}
