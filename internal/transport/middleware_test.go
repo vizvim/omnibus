@@ -92,6 +92,32 @@ func TestAuthMiddlewareFailClosed(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, rec3.Code)
 }
 
+// TestAuthMiddlewareAllowsAuthServiceWhenGated asserts the AuthService endpoints stay
+// reachable even with auth On and no session — otherwise a gated instance could never be
+// logged into (Login/GetAuthConfig must work).
+func TestAuthMiddlewareAllowsAuthServiceWhenGated(t *testing.T) {
+	t.Parallel()
+	gate := &fakeAuthGate{cfg: auth.Config{Mode: auth.ModeOn}, validToken: "good-token"}
+
+	for _, path := range []string{
+		"/api/omnibus.v1.AuthService/Login",
+		"/api/omnibus.v1.AuthService/GetAuthConfig",
+		"/api/omnibus.v1.AuthService/Logout",
+	} {
+		r := httptest.NewRequest(http.MethodPost, path, http.NoBody)
+		r.RemoteAddr = "203.0.113.7:5555" // public, no cookie
+		_, called := serve(t, gate, false, r)
+		require.True(t, called, "%s must be reachable when gated (login must work)", path)
+	}
+
+	// A non-AuthService /api path is still gated.
+	r := httptest.NewRequest(http.MethodPost, "/api/omnibus.v1.SeriesService/ListSeries", http.NoBody)
+	r.RemoteAddr = "203.0.113.7:5555"
+	rec, called := serve(t, gate, false, r)
+	require.False(t, called, "a protected /api path is still gated")
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
 // TestAuthMiddlewareOnValidSessionPasses asserts a valid signed cookie passes the gate.
 func TestAuthMiddlewareOnValidSessionPasses(t *testing.T) {
 	t.Parallel()

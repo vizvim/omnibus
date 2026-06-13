@@ -7,6 +7,9 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -22,6 +25,7 @@ import (
 	"golang.org/x/time/rate"
 
 	omnibusv1connect "github.com/vizvim/omnibus/gen/go/omnibus/v1/omnibusv1connect"
+	"github.com/vizvim/omnibus/internal/auth"
 	"github.com/vizvim/omnibus/internal/config"
 	"github.com/vizvim/omnibus/internal/db"
 	"github.com/vizvim/omnibus/internal/ddlconfig"
@@ -156,6 +160,18 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// the flag the search/grab path reads to gate the built-in GetComics fallback.
 	ddlConfigSvc := ddlconfig.New(ddlconfig.Deps{Repos: repos, Logger: logger})
 
+	// AuthService owns the optional single-user auth gate (AUTH-01, ADR 0008). The
+	// session-signing secret comes from config; when unset we generate one and persist it
+	// in user_config so the gate works out of the box and survives restarts (D-03). The
+	// same authSvc instance backs both the Login handler (which writes cookies) and the
+	// gate middleware (which verifies them), so a freshly-issued session validates.
+	sessionSecret, err := resolveSessionSecret(ctx, repos, cfg, logger)
+	if err != nil {
+		_ = database.Close()
+		return fmt.Errorf("resolve auth session secret: %w", err)
+	}
+	authSvc := auth.New(auth.Deps{Repos: repos, Logger: logger, SessionSecret: sessionSecret})
+
 	// PostProcessService composes the 05-02 units against a real completed download (05-03):
 	// validate -> render -> import -> Snatched->Downloaded -> events -> history -> remove, and
 	// routes a corrupt archive into the shared D-16 replacement path. Built before the jobs
@@ -211,7 +227,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// connectivity prober so Test probes the live, DB-resolved config.
 	downloadClientSvc := downloadclient.New(downloadclient.Deps{Repos: repos, Logger: logger, Prober: sabProvider})
 
-	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, renameConfigSvc, ddlConfigSvc, searchSvc, repos.Cover)
+	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, renameConfigSvc, ddlConfigSvc, searchSvc, authSvc, repos.Cover)
 	if err != nil {
 		_ = database.Close()
 		return err
@@ -270,7 +286,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 // newServer builds the h2c-wrapped HTTP server hosting the SeriesService + JobService
 // Connect handlers (with slog + otel interceptors) and the cover handler serving blobs
 // from SQLite, with CORS scoped to the Vite dev origin.
-func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobhistory.Service, indexerSvc *indexerconfig.Service, downloadClientSvc *downloadclient.Service, renameConfigSvc *renameconfig.Service, ddlConfigSvc *ddlconfig.Service, searchSvc *search.Service, covers transport.CoverStore) (*http.Server, error) {
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobhistory.Service, indexerSvc *indexerconfig.Service, downloadClientSvc *downloadclient.Service, renameConfigSvc *renameconfig.Service, ddlConfigSvc *ddlconfig.Service, searchSvc *search.Service, authSvc *auth.Service, covers transport.CoverStore) (*http.Server, error) {
 	interceptors, err := transport.NewInterceptors(logger)
 	if err != nil {
 		return nil, fmt.Errorf("build interceptors: %w", err)
@@ -308,6 +324,10 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 	searchPath, searchH := omnibusv1connect.NewSearchServiceHandler(searchHandler, connect.WithInterceptors(interceptors...))
 	mux.Handle("/api"+searchPath, http.StripPrefix("/api", searchH))
 
+	authHandler := transport.NewAuthHandler(authSvc)
+	authPath, authH := omnibusv1connect.NewAuthServiceHandler(authHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+authPath, http.StripPrefix("/api", authH))
+
 	mux.Handle("/covers/", transport.NewCoverHandler(covers))
 
 	// The embedded SPA is the "/" catch-all, mounted LAST so it never shadows the
@@ -315,6 +335,13 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 	// falls back to index.html for client-side routes (D-07). The auth gate (Plan 02)
 	// wraps the whole mux so this route is covered uniformly.
 	mux.Handle("/", NewSPAHandler())
+
+	// The auth gate wraps the WHOLE mux (API + covers + SPA + future stream) BETWEEN the
+	// mux and CORS/h2c, so it is the single fail-closed enforcement seam covering every
+	// route uniformly (AUTH-01, ADR 0008, D-07). When auth is Off (default) it passes
+	// everything; the AuthService itself stays reachable so a gated instance can be logged
+	// into.
+	gated := transport.NewAuthMiddleware(authSvc, cfg.AuthTrustProxy, mux)
 
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins: []string{"http://localhost:5173"},
@@ -328,7 +355,7 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 			"X-User-Agent",
 		},
 		ExposedHeaders: []string{"Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
-	}).Handler(mux)
+	}).Handler(gated)
 
 	return &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -387,6 +414,41 @@ func seedSabnzbdConfig(ctx context.Context, repos *repository.Repositories, cfg 
 	logger.Info("seeded download client config from OMNIBUS_SABNZBD_* on first boot",
 		slog.String("sabnzbd_url", cfg.SabnzbdURL))
 	return nil
+}
+
+// authSessionSecretKey is the user_config key the generated session-signing secret is
+// persisted under when the operator did not configure one via OMNIBUS_AUTH_SESSION_SECRET.
+const authSessionSecretKey = "auth.session_secret" //nolint:gosec // G101: this is a config KEY name, not a credential value
+
+// resolveSessionSecret returns the HMAC session-signing secret for the auth gate. An
+// operator-supplied secret (cfg.AuthSessionSecret) always wins. Otherwise it reuses a
+// secret previously generated and persisted in user_config, or — on first boot — generates
+// a 32-byte random secret, persists it, and returns it. This makes the gate work out of
+// the box with no operator setup while keeping sessions valid across restarts. The secret
+// is never logged (config redaction + this code never logs the value).
+func resolveSessionSecret(ctx context.Context, repos *repository.Repositories, cfg config.Config, logger *slog.Logger) (string, error) {
+	if cfg.AuthSessionSecret != "" {
+		return cfg.AuthSessionSecret, nil
+	}
+
+	existing, err := repos.UserConfig.Get(ctx, authSessionSecretKey)
+	if err == nil && existing != "" {
+		return existing, nil
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("read session secret: %w", err)
+	}
+
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generate session secret: %w", err)
+	}
+	secret := base64.RawURLEncoding.EncodeToString(buf)
+	if err := repos.UserConfig.Set(ctx, authSessionSecretKey, secret); err != nil {
+		return "", fmt.Errorf("persist session secret: %w", err)
+	}
+	logger.Info("generated and persisted a new auth session-signing secret (no OMNIBUS_AUTH_SESSION_SECRET set)")
+	return secret, nil
 }
 
 // parseRate maps the OMNIBUS_COMICVINE_RATE config (a Go duration like "2s") to the

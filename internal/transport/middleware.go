@@ -17,18 +17,35 @@ type AuthGate interface {
 	VerifySession(token string) (string, error)
 }
 
+// authServicePathPrefix is the AuthService mount prefix that MUST stay reachable even when
+// the gate is On with no session — otherwise a user could never log in (Login) nor learn
+// the gate is enabled (GetAuthConfig). This is the one deliberate, narrow exemption to the
+// otherwise-uniform gate; it exposes only credential verification (which fails closed on
+// its own) and the read config (which never returns the hash), not any protected resource.
+const authServicePathPrefix = "/api/omnibus.v1.AuthService/"
+
 // NewAuthMiddleware wraps next with the single fail-closed optional-auth gate (AUTH-01,
 // ADR 0008). It is the ONLY enforcement seam and uniformly covers everything in the mux —
 // /api, /covers, the embedded SPA, and the long-lived stream — because it sits as an
 // http.Handler in front of the whole mux (a Connect interceptor could see neither the SPA
-// nor the raw socket peer, 06-RESEARCH.md Architectural Responsibility Map).
+// nor the raw socket peer, 06-RESEARCH.md Architectural Responsibility Map). The lone
+// exemption is the AuthService itself (Login/GetAuthConfig/Logout) so the gate is
+// unlock-able.
 //
-// Decision order (Pattern 3): (1) load config; on ANY load error -> 401 (fail-closed);
-// if Off -> pass; (2) if BypassLocal and the REAL peer IP is loopback/RFC1918 -> pass;
-// (3) validate the signed session cookie -> pass on valid, else 401. No code path returns
-// without either calling next (pass) or writing a 401 (deny) — there is no fail-open.
+// Decision order (Pattern 3): (0) let the AuthService through (login must work); (1) load
+// config; on ANY load error -> 401 (fail-closed); if Off -> pass; (2) if BypassLocal and
+// the REAL peer IP is loopback/RFC1918 -> pass; (3) validate the signed session cookie ->
+// pass on valid, else 401. No code path returns without either calling next (pass) or
+// writing a 401 (deny) — there is no fail-open.
 func NewAuthMiddleware(gate AuthGate, trustProxy bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The AuthService endpoints must always be reachable so a gated instance can be
+		// logged into; they are credential-verifying/read-only and fail closed themselves.
+		if strings.HasPrefix(r.URL.Path, authServicePathPrefix) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		cfg, err := gate.GetConfig(r.Context())
 		if err != nil {
 			// Fail-closed: we cannot determine the auth posture, so deny (D-04).
