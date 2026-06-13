@@ -28,9 +28,28 @@ type fakeGateway struct {
 	perQuery   map[string][]indexer.Candidate
 	gotQueries []string
 	err        error
+
+	// getComicsCands are returned for a Search targeting the built-in GetComics provider;
+	// getComicsCalls counts how many times the GetComics source was consulted (the DDL
+	// fallback). A non-getcomics Search uses candidates/perQuery as before.
+	getComicsCands []indexer.Candidate
+	getComicsCalls int
 }
 
-func (f *fakeGateway) Search(_ context.Context, _ []indexer.IndexerProvider, query string) ([]indexer.Candidate, error) {
+func (f *fakeGateway) Search(_ context.Context, providers []indexer.IndexerProvider, query string) ([]indexer.Candidate, error) {
+	// Record whether this Search call targeted the built-in GetComics source (the fallback
+	// gather passes a single getcomics provider) so tests can assert it was/wasn't consulted.
+	for _, p := range providers {
+		if p.Kind() == indexer.GetComicsKind {
+			f.getComicsCalls++
+			f.gotQueries = append(f.gotQueries, query)
+			if f.err != nil {
+				return nil, f.err
+			}
+			return f.getComicsCands, nil
+		}
+	}
+
 	f.gotQueries = append(f.gotQueries, query)
 	if f.err != nil {
 		return nil, f.err
@@ -280,6 +299,118 @@ func TestOneShotIssueComposesSeriesNameOnly(t *testing.T) {
 
 	// "The" is stripped; no issue number is appended for a one-shot.
 	require.Equal(t, []string{"Killing Joke"}, gwOut.gotQueries)
+}
+
+// gcCand builds a GetComics candidate (provider "getcomics") for an issue. A DDL grab
+// routes through the getcomics download provider and enqueues a DDLFetch.
+func gcCand(releaseKey, format string, size int64) indexer.Candidate {
+	return indexer.Candidate{
+		Provider:       "getcomics",
+		ReleaseKey:     releaseKey,
+		Title:          "Saga #7 (" + format + ")",
+		IssueNumberRaw: "7",
+		Format:         format,
+		SizeBytes:      size,
+		DownloadURL:    "https://getcomics.org/" + releaseKey,
+	}
+}
+
+// newDDLSearchService seeds the standard Saga #7 fixture with an enabled newznab indexer,
+// wires the supplied gateway + a recording enqueuer (so DDL fetches are observable), and
+// sets enable_ddl to the given value. It returns the service, the issue id, the gateway,
+// and the enqueuer.
+func newDDLSearchService(t *testing.T, gw *fakeGateway, ddlEnabled bool) (*search.Service, int64, *fakeGateway, *recordingEnqueuer) {
+	t.Helper()
+	_, repos, issueID, gwOut := newSearchServiceWithGateway(t, gw, issueSeed{
+		seriesName: "Saga", issueNumberRaw: "7", issueNumberSort: 7.0,
+	})
+	// Rebuild the service with the getcomics download provider wired so a DDL grab can
+	// submit + enqueue a DDLFetch (the base helper only wires SABnzbd).
+	svc := search.New(search.Deps{
+		Gateway: gwOut,
+		Repos:   repos,
+		DownloadProviders: map[string]download.DownloadProvider{
+			"sabnzbd":   download.NewFakeProvider("sabnzbd", "nzo_1"),
+			"getcomics": download.NewFakeProvider("getcomics", "ddl_1"),
+		},
+		AttemptCap: 5,
+	})
+	enq := &recordingEnqueuer{}
+	svc.SetEnqueuer(enq)
+	if ddlEnabled {
+		require.NoError(t, repos.UserConfig.Set(context.Background(), "enable_ddl", "true"))
+	}
+	return svc, issueID, gwOut, enq
+}
+
+// TestDDLDisabledNeverConsultsGetComics: with enable_ddl=false, a wanted issue whose only
+// acceptable release is a GetComics one is NOT grabbed, GetComics is never consulted, and
+// no DDLFetch is enqueued.
+func TestDDLDisabledNeverConsultsGetComics(t *testing.T) {
+	t.Parallel()
+	gw := &fakeGateway{
+		candidates:     nil, // no acceptable Newznab candidate
+		getComicsCands: []indexer.Candidate{gcCand("gc-cbz", "cbz", 30*1024*1024)},
+	}
+	svc, issueID, gwOut, enq := newDDLSearchService(t, gw, false)
+	ctx := context.Background()
+
+	res, err := svc.SearchIssue(ctx, issueID)
+	require.NoError(t, err)
+	require.False(t, res.Acceptable, "DDL off: no Newznab candidate ⇒ nothing acceptable")
+	require.Equal(t, 0, gwOut.getComicsCalls, "GetComics must not be consulted when enable_ddl=false")
+	require.Empty(t, enq.ddlFetched, "no DDLFetch may be enqueued when DDL is off")
+
+	// A manual grab of the getcomics release is rejected (no matching candidate).
+	_, err = svc.SelectCandidate(ctx, issueID, "getcomics", "gc-cbz")
+	require.ErrorIs(t, err, search.ErrCrossIssueGrab)
+	require.Empty(t, enq.ddlFetched)
+}
+
+// TestDDLEnabledNewznabAcceptableSkipsGetComics: with enable_ddl=true, when an acceptable
+// Newznab candidate exists, GetComics is NOT consulted (fallback only) and the grabbed pick
+// is the Newznab one.
+func TestDDLEnabledNewznabAcceptableSkipsGetComics(t *testing.T) {
+	t.Parallel()
+	gw := &fakeGateway{
+		candidates:     []indexer.Candidate{svcCand("newznab", "rk-cbz", "cbz", 30*1024*1024)},
+		getComicsCands: []indexer.Candidate{gcCand("gc-cbz", "cbz", 30*1024*1024)},
+	}
+	svc, issueID, gwOut, enq := newDDLSearchService(t, gw, true)
+	ctx := context.Background()
+
+	res, err := svc.SearchIssue(ctx, issueID)
+	require.NoError(t, err)
+	require.True(t, res.Acceptable)
+	require.Equal(t, 0, gwOut.getComicsCalls, "an acceptable Newznab candidate must short-circuit the GetComics fallback")
+
+	dl, err := svc.SelectCandidate(ctx, issueID, "newznab", "rk-cbz")
+	require.NoError(t, err)
+	require.Equal(t, "nzo_1", dl.ClientRef, "the Newznab pick is grabbed via SABnzbd")
+	require.Empty(t, enq.ddlFetched, "a Newznab grab enqueues no DDLFetch")
+}
+
+// TestDDLEnabledNoNewznabFallsBackToGetComics: with enable_ddl=true and NO acceptable
+// Newznab candidate but an acceptable GetComics one, GetComics is consulted as a fallback,
+// the GetComics release is grabbed, and a DDLFetch is enqueued.
+func TestDDLEnabledNoNewznabFallsBackToGetComics(t *testing.T) {
+	t.Parallel()
+	gw := &fakeGateway{
+		candidates:     nil, // no acceptable Newznab candidate
+		getComicsCands: []indexer.Candidate{gcCand("gc-cbz", "cbz", 30*1024*1024)},
+	}
+	svc, issueID, gwOut, enq := newDDLSearchService(t, gw, true)
+	ctx := context.Background()
+
+	res, err := svc.SearchIssue(ctx, issueID)
+	require.NoError(t, err)
+	require.True(t, res.Acceptable, "the GetComics fallback supplies an acceptable candidate")
+	require.GreaterOrEqual(t, gwOut.getComicsCalls, 1, "GetComics must be consulted when Newznab yields nothing acceptable")
+
+	dl, err := svc.SelectCandidate(ctx, issueID, "getcomics", "gc-cbz")
+	require.NoError(t, err)
+	require.Equal(t, "ddl_1", dl.ClientRef, "the GetComics pick is grabbed via the DDL provider")
+	require.Len(t, enq.ddlFetched, 1, "a GetComics grab enqueues exactly one DDLFetch")
 }
 
 // candidateKeys extracts the release keys from a result's candidate views.

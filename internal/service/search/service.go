@@ -2,7 +2,9 @@ package search
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -10,6 +12,12 @@ import (
 	"github.com/vizvim/omnibus/internal/provider/indexer"
 	"github.com/vizvim/omnibus/internal/repository"
 )
+
+// keyEnableDDL is the user_config key the DDL enable toggle is persisted under (05-07,
+// owned by the ddlconfig service). The search/grab path reads it to gate the built-in
+// GetComics fallback. It is duplicated here (a single string) rather than importing the
+// repository's unexported key, matching the layer's read-through-the-repo convention.
+const keyEnableDDL = "enable_ddl"
 
 // IndexerGateway is the search surface the service depends on (satisfied by
 // *indexer.Gateway). Declaring it here keeps the service testable against a fake.
@@ -134,17 +142,15 @@ func (s *Service) SearchIssue(ctx context.Context, issueID int64) (Result, error
 		return Result{}, fmt.Errorf("load issue %d: %w", issueID, err)
 	}
 
-	cands, err := s.gatherCandidates(ctx, issue)
-	if err != nil {
-		return Result{}, err
-	}
-
 	bl, err := s.blacklistFor(ctx, issue.ID)
 	if err != nil {
 		return Result{}, err
 	}
-	target := IssueMatch{Sort: issue.IssueNumberSort, Qual: issue.IssueNumberQual.String}
-	result := Pipeline(cands, target, bl, s.filterOpts, s.scoreOpts, s.floor)
+
+	result, _, err := s.gatherWithDDLFallback(ctx, issue, bl)
+	if err != nil {
+		return Result{}, err
+	}
 
 	if err := s.writeSearchedEvent(ctx, issueID, result); err != nil {
 		return Result{}, err
@@ -161,7 +167,16 @@ func (s *Service) SelectCandidate(ctx context.Context, issueID int64, provider, 
 		return DownloadResult{}, fmt.Errorf("load issue %d: %w", issueID, err)
 	}
 
-	cands, err := s.gatherCandidates(ctx, issue)
+	bl, err := s.blacklistFor(ctx, issue.ID)
+	if err != nil {
+		return DownloadResult{}, err
+	}
+
+	// The candidate set the grab is validated against includes the built-in GetComics
+	// candidates ONLY when enable_ddl is true (gatherWithDDLFallback enforces the
+	// fallback rule). When DDL is off, a getcomics release_key has no matching candidate
+	// and is rejected below by the cross-issue guard.
+	_, cands, err := s.gatherWithDDLFallback(ctx, issue, bl)
 	if err != nil {
 		return DownloadResult{}, err
 	}
@@ -219,11 +234,70 @@ func (s *Service) GetTimeline(ctx context.Context, issueID int64) ([]TimelineEve
 	return out, nil
 }
 
-// gatherCandidates loads the enabled indexers, builds their providers, and searches them
-// via the paced gateway. It composes mylar-style queries from the issue's series name and
-// padded issue-number variants (issue_type aware), runs each query, and unions the results
-// deduped by Candidate.ReleaseKey (first occurrence wins, order preserved).
-func (s *Service) gatherCandidates(ctx context.Context, issue repository.Issue) ([]indexer.Candidate, error) {
+// gatherWithDDLFallback runs the two-stage candidate gather + pipeline that enforces the
+// Mylar-classic fallback rule (05-07): Newznab indexers are always preferred; the built-in
+// GetComics DDL source is consulted ONLY when enable_ddl is true AND no acceptable Newznab
+// candidate was found. It returns the final PipelineResult and the full candidate set the
+// result was computed from (so SelectCandidate can validate a grab against it). It is the
+// single selection path shared by manual search (SearchIssue) and manual grab
+// (SelectCandidate), so both honor the identical fallback rule.
+func (s *Service) gatherWithDDLFallback(ctx context.Context, issue repository.Issue, bl BlacklistSet) (PipelineResult, []indexer.Candidate, error) {
+	target := IssueMatch{Sort: issue.IssueNumberSort, Qual: issue.IssueNumberQual.String}
+
+	// Stage 1: gather + pipeline the Newznab candidates (indexer rows are newznab-only).
+	nzbCands, err := s.gatherNewznabCandidates(ctx, issue)
+	if err != nil {
+		return PipelineResult{}, nil, err
+	}
+	result := Pipeline(nzbCands, target, bl, s.filterOpts, s.scoreOpts, s.floor)
+	if result.Acceptable {
+		// An acceptable Newznab candidate exists — GetComics is NOT consulted (fallback only).
+		return result, nzbCands, nil
+	}
+
+	// Stage 2: no acceptable Newznab candidate. Consult the built-in GetComics source ONLY
+	// when enable_ddl is true, union its candidates with the Newznab set, and re-run the
+	// pipeline so an acceptable GetComics pick (always last) can be selected/grabbed.
+	enabled, err := s.ddlEnabled(ctx)
+	if err != nil {
+		return PipelineResult{}, nil, err
+	}
+	if !enabled {
+		return result, nzbCands, nil
+	}
+
+	ddlCands, err := s.gatherGetComicsCandidates(ctx, issue)
+	if err != nil {
+		return PipelineResult{}, nil, err
+	}
+	if len(ddlCands) == 0 {
+		return result, nzbCands, nil
+	}
+
+	union := unionCandidates(nzbCands, ddlCands)
+	result = Pipeline(union, target, bl, s.filterOpts, s.scoreOpts, s.floor)
+	return result, union, nil
+}
+
+// ddlEnabled reports whether the built-in GetComics DDL fallback is turned on, reading the
+// enable_ddl user_config key. A missing key (never written) is treated as false — the
+// default-OFF posture that matches the ddlconfig service (DDL is opt-in).
+func (s *Service) ddlEnabled(ctx context.Context) (bool, error) {
+	v, err := s.repos.UserConfig.Get(ctx, keyEnableDDL)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("read enable_ddl: %w", err)
+	}
+	return v == "true", nil
+}
+
+// gatherNewznabCandidates loads the enabled (newznab) indexers, builds their providers, and
+// searches them via the paced gateway. It composes mylar-style queries from the issue's
+// series name and padded issue-number variants (issue_type aware), runs each query, and
+// unions the results deduped by Candidate.ReleaseKey (first occurrence wins, order preserved).
+func (s *Service) gatherNewznabCandidates(ctx context.Context, issue repository.Issue) ([]indexer.Candidate, error) {
 	rows, err := s.repos.Indexers.ListEnabled(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list enabled indexers: %w", err)
@@ -232,7 +306,23 @@ func (s *Service) gatherCandidates(ctx context.Context, issue repository.Issue) 
 	if len(providers) == 0 {
 		return nil, nil
 	}
+	return s.searchProviders(ctx, issue, providers)
+}
 
+// gatherGetComicsCandidates searches the built-in GetComics source for the issue. The base
+// URL is the static built-in defaultGetComicsBaseURL constant (NewGetComicsProvider("")),
+// NOT a user-editable indexer-row value — GetComics is config-gated built-in infrastructure
+// (05-07), not an indexer. Candidates are gathered through the same paced gateway as Newznab.
+func (s *Service) gatherGetComicsCandidates(ctx context.Context, issue repository.Issue) ([]indexer.Candidate, error) {
+	providers := []indexer.IndexerProvider{indexer.NewGetComicsProvider("")}
+	return s.searchProviders(ctx, issue, providers)
+}
+
+// searchProviders composes the mylar-style queries for the issue and runs them against the
+// supplied providers via the paced gateway, unioning the results deduped by ReleaseKey
+// (first occurrence wins, order preserved). It is the shared gather body for both the
+// Newznab and built-in GetComics sources.
+func (s *Service) searchProviders(ctx context.Context, issue repository.Issue, providers []indexer.IndexerProvider) ([]indexer.Candidate, error) {
 	ser, err := s.repos.Series.GetByID(ctx, issue.SeriesID)
 	if err != nil {
 		return nil, fmt.Errorf("load series %d: %w", issue.SeriesID, err)
@@ -257,15 +347,37 @@ func (s *Service) gatherCandidates(ctx context.Context, issue repository.Issue) 
 	return union, nil
 }
 
-// buildIndexerProviders constructs an IndexerProvider per enabled indexer row.
+// unionCandidates appends ddl candidates after the nzb candidates, deduped by ReleaseKey
+// (the Newznab survivors keep precedence on a key collision). GetComics is always last so
+// the structural fallback ordering holds even after the union.
+func unionCandidates(nzb, ddl []indexer.Candidate) []indexer.Candidate {
+	out := make([]indexer.Candidate, 0, len(nzb)+len(ddl))
+	seen := make(map[string]struct{}, len(nzb)+len(ddl))
+	for _, c := range nzb {
+		if _, dup := seen[c.ReleaseKey]; dup {
+			continue
+		}
+		seen[c.ReleaseKey] = struct{}{}
+		out = append(out, c)
+	}
+	for _, c := range ddl {
+		if _, dup := seen[c.ReleaseKey]; dup {
+			continue
+		}
+		seen[c.ReleaseKey] = struct{}{}
+		out = append(out, c)
+	}
+	return out
+}
+
+// buildIndexerProviders constructs an IndexerProvider per enabled indexer row. Indexer rows
+// can no longer be getcomics (05-07), so this builds Newznab providers only; GetComics is a
+// config-gated built-in source consulted via gatherGetComicsCandidates, not an indexer row.
 func buildIndexerProviders(rows []repository.IndexerRow) []indexer.IndexerProvider {
 	out := make([]indexer.IndexerProvider, 0, len(rows))
 	for _, row := range rows {
-		switch row.Kind {
-		case indexer.NewznabKind:
+		if row.Kind == indexer.NewznabKind {
 			out = append(out, indexer.NewNewznabProvider(row.BaseURL, row.APIKey, row.Categories))
-		case indexer.GetComicsKind:
-			out = append(out, indexer.NewGetComicsProvider(row.BaseURL))
 		}
 	}
 	return out

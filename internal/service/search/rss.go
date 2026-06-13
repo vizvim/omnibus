@@ -146,17 +146,19 @@ func matchFeedToIssues(cands []indexer.Candidate, wanted []repository.Issue) map
 }
 
 // buildRSSProviders constructs an IndexerProvider per enabled indexer flagged use_for_rss.
+// RSS is Newznab-only (05-07): GetComics has no per-user RSS indexer row, and the built-in
+// GetComics DDL source is a targeted-search fallback (consulted per Wanted issue when no
+// Newznab candidate is acceptable), not an RSS recent-uploads feed. So GetComics is
+// excluded from RSS entirely — there is no enable_ddl gate here because there is no
+// GetComics RSS path to gate.
 func buildRSSProviders(rows []repository.IndexerRow) []indexer.IndexerProvider {
 	out := make([]indexer.IndexerProvider, 0, len(rows))
 	for _, row := range rows {
 		if !row.UseForRSS {
 			continue
 		}
-		switch row.Kind {
-		case indexer.NewznabKind:
+		if row.Kind == indexer.NewznabKind {
 			out = append(out, indexer.NewNewznabProvider(row.BaseURL, row.APIKey, row.Categories))
-		case indexer.GetComicsKind:
-			out = append(out, indexer.NewGetComicsProvider(row.BaseURL))
 		}
 	}
 	return out

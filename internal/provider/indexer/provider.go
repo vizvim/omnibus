@@ -11,7 +11,11 @@ package indexer
 
 import "context"
 
-// Indexer kinds. These are the values stored in indexers.kind and returned by Kind().
+// Indexer kinds reported by a provider's Kind(). NewznabKind is the only value stored in
+// indexers.kind (05-07). GetComicsKind is NOT an indexer-row kind anymore: the GetComics
+// provider still reports Kind()=="getcomics" because it remains the built-in, config-gated
+// DDL source (toggled by enable_ddl, base URL = the static defaultGetComicsBaseURL), but it
+// is never constructed from an indexer row.
 const (
 	NewznabKind   = "newznab"
 	GetComicsKind = "getcomics"

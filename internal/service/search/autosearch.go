@@ -178,17 +178,17 @@ func (s *Service) runSearchIssue(ctx context.Context, issueID int64) (AutoSearch
 		return AutoSearchOutcome{}, fmt.Errorf("load issue %d: %w", issueID, err)
 	}
 
-	cands, err := s.gatherCandidates(ctx, issue)
-	if err != nil {
-		return AutoSearchOutcome{}, err
-	}
-
 	bl, err := s.blacklistFor(ctx, issue.ID)
 	if err != nil {
 		return AutoSearchOutcome{}, err
 	}
-	target := IssueMatch{Sort: issue.IssueNumberSort, Qual: issue.IssueNumberQual.String}
-	result := Pipeline(cands, target, bl, s.filterOpts, s.scoreOpts, s.floor)
+
+	// Same single selection path as manual search/grab: Newznab first, built-in GetComics
+	// consulted only as a fallback when enable_ddl is true and nothing Newznab was acceptable.
+	result, _, err := s.gatherWithDDLFallback(ctx, issue, bl)
+	if err != nil {
+		return AutoSearchOutcome{}, err
+	}
 
 	if err := s.writeSearchedEvent(ctx, issueID, result); err != nil {
 		return AutoSearchOutcome{}, err
