@@ -1,8 +1,8 @@
-// Package tracking owns the download-status poll loop (DL-03/04/08): it reconciles every
-// active (Queued/Downloading) download against its download client via the pull-based
-// Tracker contract (D-01), surfaces progress + lifecycle on the per-issue timeline, records
-// append-only history, and detects failures (explicit client failure + stall). It is the
-// PollRunner the periodic DownloadPoll River job delegates to.
+// Package tracking owns the download-status poll loop: it reconciles every active
+// (Queued/Downloading) download against its download client via the pull-based Tracker
+// contract, surfaces progress + lifecycle on the per-issue timeline, records append-only
+// history, and detects failures (explicit client failure + stall). It is the PollRunner the
+// periodic DownloadPoll River job delegates to.
 package tracking
 
 import (
@@ -19,21 +19,21 @@ import (
 )
 
 // defaultStallWindow is how long a Downloading row may sit with no byte progress before it
-// is reaped as Failed (the *arr stalled-reap behavior, D-04). Hardcoded sensible default
-// (Claude's Discretion); not a config knob this phase (D-13 lean-config posture).
+// is reaped as Failed (the *arr stalled-reap behavior). A hardcoded sensible default; not a
+// config knob (lean-config posture).
 const defaultStallWindow = 30 * time.Minute
 
 // Enqueuer is the reactive seam the poll loop fans out through after a terminal transition.
-// The PostProcess job (05-03) and the replacement-search job (05-04) land later, so the
-// tracking service enqueues by intent here and the jobs client (or a later wiring) provides
-// the implementation. Declaring it here keeps tracking free of any internal/jobs import.
-// A nil enqueuer makes both calls no-ops (the terminal flip + history still happen), so this
-// slice is independently shippable before the downstream jobs exist.
+// The post-process and replacement-search jobs land later, so the tracking service enqueues by
+// intent here and the jobs client (or a later wiring) provides the implementation. Declaring it
+// here keeps tracking free of any internal/jobs import. A nil enqueuer makes both calls no-ops
+// (the terminal flip + history still happen), so this is independently shippable before the
+// downstream jobs exist.
 type Enqueuer interface {
-	// EnqueuePostProcess schedules post-processing of a completed download (05-03).
+	// EnqueuePostProcess schedules post-processing of a completed download.
 	EnqueuePostProcess(ctx context.Context, downloadID int64) error
 	// EnqueueReplacementSearch schedules an attempt-capped replacement search for an issue
-	// whose download failed (05-04), excluding the dead release_keys (D-12).
+	// whose download failed, excluding the dead release_keys.
 	EnqueueReplacementSearch(ctx context.Context, issueID int64) error
 }
 
@@ -54,7 +54,7 @@ type Deps struct {
 	Trackers map[string]download.Tracker
 	// DDLFetchers maps a provider kind ("getcomics") to its DDLFetcher. The DDLFetch job
 	// (RunDDLFetch) resolves+streams via the matching fetcher, then feeds the file into the
-	// SAME Completed->post-process path as a SAB download (D-03).
+	// SAME Completed->post-process path as a SAB download.
 	DDLFetchers map[string]DDLFetcher
 	Logger      *slog.Logger
 	// StallWindow overrides defaultStallWindow when > 0 (test seam).
@@ -104,7 +104,7 @@ func New(d Deps) *Service {
 // fan-out as no-ops.
 func (s *Service) SetEnqueuer(e Enqueuer) { s.enqueuer = e }
 
-// progressPayload is the issue_events.payload_json for an in-progress download event (DL-08).
+// progressPayload is the issue_events.payload_json for an in-progress download event.
 type progressPayload struct {
 	Provider    string  `json:"provider"`
 	ReleaseKey  string  `json:"release_key"`
@@ -112,7 +112,7 @@ type progressPayload struct {
 	ProgressPct float64 `json:"progress_pct"`
 }
 
-// failedPayload is the issue_events.payload_json for a failed download event (DL-04).
+// failedPayload is the issue_events.payload_json for a failed download event.
 type failedPayload struct {
 	Provider   string `json:"provider"`
 	ReleaseKey string `json:"release_key"`
@@ -122,9 +122,9 @@ type failedPayload struct {
 
 // RunDownloadPoll reconciles every active download against its client in one tick. It loads
 // the active set (ListActive), polls each via its Tracker, and applies: progress event +
-// Queued->Downloading on progress (DL-08); Completed -> capture storage + history + enqueue
-// post-process (DL-03); Failed -> failed event + history + enqueue replacement (DL-04);
-// stall -> Failed. A not-ready poll is a no-op (re-poll next tick). One row's error is
+// Queued->Downloading on progress; Completed -> capture storage + history + enqueue
+// post-process; Failed -> failed event + history + enqueue replacement; stall -> Failed. A
+// not-ready poll is a no-op (re-poll next tick). One row's error is
 // logged and skipped so a single bad download does not stall the whole tick.
 func (s *Service) RunDownloadPoll(ctx context.Context) error {
 	active, err := s.repos.Downloads.ListActive(ctx)
@@ -146,7 +146,7 @@ func (s *Service) RunDownloadPoll(ctx context.Context) error {
 }
 
 // RunDDLFetch resolves+streams a GetComics direct download and feeds it into the shared
-// completion path (D-03), or routes mirror exhaustion into the shared failure path (D-04). It
+// completion path, or routes mirror exhaustion into the shared failure path. It
 // is the DDLFetchRunner the serialized "ddl" River job delegates to. The download row is
 // loaded fresh; a row already in a terminal state (Completed/Failed/Blacklisted) is a safe
 // no-op (idempotent re-run), mirroring the poll loop's terminal-state handling.
@@ -175,12 +175,12 @@ func (s *Service) RunDDLFetch(ctx context.Context, downloadID int64) error {
 	// Stream the file. The clientRef is the post URL the resolver re-fetches for mirror links.
 	// Progress is surfaced on the per-issue timeline by reusing the poll loop's progress path
 	// (Queued->Downloading on the first tick, then periodic download-progress + updated_at bumps
-	// so a multi-GB DDL shows real movement and stays liveness-observable, DL-08 / WR-02 / WR-03).
+	// so a multi-GB DDL shows real movement and stays liveness-observable).
 	prog := s.newDDLProgressEmitter(ctx, row, downloadID)
 	path, ferr := fetcher.Fetch(ctx, row.ClientRef, prog)
 	if ferr != nil {
 		if errors.Is(ferr, download.ErrMirrorExhaustion) {
-			// Mirror exhaustion is a handled failure (D-04): route into the shared failure path
+			// Mirror exhaustion is a handled failure: route into the shared failure path
 			// (Failed + replacement) and return nil so River does not retry a dead post.
 			s.logger.Warn("ddl fetch exhausted all mirrors, routing to replacement",
 				slog.Int64("download_id", downloadID), slog.String("client_ref", row.ClientRef))
@@ -196,7 +196,7 @@ func (s *Service) RunDDLFetch(ctx context.Context, downloadID int64) error {
 	}
 
 	// Success: feed the streamed file into the SAME Completed->post-process path as a SAB grab
-	// (D-03) by reusing onCompleted with a synthetic completed PollResult carrying the local
+	// by reusing onCompleted with a synthetic completed PollResult carrying the local
 	// path as storage. Re-load the row so onCompleted transitions from the current status.
 	cur, gerr := s.repos.Downloads.Get(ctx, downloadID)
 	if gerr != nil {
@@ -210,14 +210,14 @@ func (s *Service) RunDDLFetch(ctx context.Context, downloadID int64) error {
 // ddlProgressMinInterval throttles DDL progress emission by elapsed wall time and
 // ddlProgressMinPctDelta by percentage advance: a tick is emitted when EITHER threshold is
 // crossed (or it is the first tick). This keeps a multi-GB stream's timeline meaningful without
-// writing an event per buffer (WR-02 / WR-03).
+// writing an event per buffer.
 const (
 	ddlProgressMinInterval = 5 * time.Second
 	ddlProgressMinPctDelta = 1.0
 )
 
 // newDDLProgressEmitter returns an onProgress(done, total) callback for the DDL Fetch stream
-// that emits periodic, throttled progress to the per-issue timeline (WR-02 / WR-03). The first
+// that emits periodic, throttled progress to the per-issue timeline. The first
 // observed progress drives the Queued->Downloading flip + initial event; subsequent ticks are
 // emitted when at least ddlProgressMinInterval has elapsed OR the percentage advanced by at
 // least ddlProgressMinPctDelta, each bumping updated_at so liveness is observable. The callback
@@ -282,14 +282,14 @@ func (s *Service) pollOne(ctx context.Context, row repository.DownloadRow) error
 		return s.onFailed(ctx, row, res.FailMessage)
 	case download.PollNotReady:
 		// Nothing actionable yet; but a Downloading row stuck past the stall window with no
-		// byte progress is reaped as Failed (D-04 stall branch).
+		// byte progress is reaped as Failed (stall branch).
 		return s.maybeStall(ctx, row)
 	default:
 		return s.maybeStall(ctx, row)
 	}
 }
 
-// onProgress records a progress event (DL-08) and flips Queued->Downloading. updated_at is
+// onProgress records a progress event and flips Queued->Downloading. updated_at is
 // bumped (last-progress) only when the row was still Queued OR real progress is reported, so
 // a Downloading row with no movement keeps its stale updated_at for stall detection.
 func (s *Service) onProgress(ctx context.Context, row repository.DownloadRow, res download.PollResult) error {
@@ -304,7 +304,7 @@ func (s *Service) onProgress(ctx context.Context, row repository.DownloadRow, re
 			return fmt.Errorf("flip download %d to Downloading: %w", row.ID, uerr)
 		}
 		// First observed progress: write the timeline event once on the Queued->Downloading
-		// edge so the per-issue timeline shows the download starting (DL-08).
+		// edge so the per-issue timeline shows the download starting.
 		if eerr := s.writeProgressEvent(ctx, row, res, nowISO); eerr != nil {
 			return eerr
 		}
@@ -312,7 +312,7 @@ func (s *Service) onProgress(ctx context.Context, row repository.DownloadRow, re
 	}
 
 	// Already Downloading: only bump last-progress (updated_at) when bytes actually moved,
-	// so a hung download keeps its stale timestamp and the stall window can trip (D-04).
+	// so a hung download keeps its stale timestamp and the stall window can trip.
 	if res.ProgressPct > 0 {
 		if _, uerr := s.repos.Downloads.UpdateStatus(ctx, row.ID, row.Status, nowISO); uerr != nil {
 			return fmt.Errorf("bump download %d progress: %w", row.ID, uerr)
@@ -322,10 +322,10 @@ func (s *Service) onProgress(ctx context.Context, row repository.DownloadRow, re
 }
 
 // onCompleted flips the row to Completed (carrying nothing extra; storage is captured in
-// history + handed to post-process), records a download_history row (DL-03), and enqueues
-// post-process (05-03). Removal from the client (D-05) is deferred to post-process and runs
-// only AFTER a confirmed successful import (T-05-11), so a file that fails import is never
-// orphaned from the client's history.
+// history + handed to post-process), records a download_history row, and enqueues
+// post-process. Removal from the client is deferred to post-process and runs only AFTER a
+// confirmed successful import, so a file that fails import is never orphaned from the client's
+// history.
 func (s *Service) onCompleted(ctx context.Context, row repository.DownloadRow, res download.PollResult) error {
 	nowISO := s.now().UTC().Format(time.RFC3339)
 
@@ -344,9 +344,9 @@ func (s *Service) onCompleted(ctx context.Context, row repository.DownloadRow, r
 		return fmt.Errorf("record completed history for download %d: %w", row.ID, herr)
 	}
 
-	// Removal from the client (D-05) is intentionally NOT done here: it is deferred to
-	// post-process (05-03) so it runs only after a confirmed successful import (T-05-11).
-	// Removing at SAB-completion would orphan a corrupt archive that later fails import.
+	// Removal from the client is intentionally NOT done here: it is deferred to post-process so
+	// it runs only after a confirmed successful import. Removing at download-client completion
+	// would orphan a corrupt archive that later fails import.
 	if s.enqueuer != nil {
 		if eerr := s.enqueuer.EnqueuePostProcess(ctx, row.ID); eerr != nil {
 			return fmt.Errorf("enqueue post-process for download %d: %w", row.ID, eerr)
@@ -413,7 +413,7 @@ func (s *Service) onFailed(ctx context.Context, row repository.DownloadRow, reas
 }
 
 // maybeStall reaps a Downloading row whose last-progress (updated_at) is older than the
-// stall window as Failed(reason=stall) (D-04). Queued rows are not stalled (they have not
+// stall window as Failed(reason=stall). Queued rows are not stalled (they have not
 // started). A parse failure on updated_at is treated as "not stalled" (conservative).
 func (s *Service) maybeStall(ctx context.Context, row repository.DownloadRow) error {
 	if series.DownloadStatus(row.Status) != series.DownloadDownloading {
@@ -438,7 +438,7 @@ func (s *Service) isStalled(row repository.DownloadRow) bool {
 	return s.now().UTC().Sub(last) >= s.stallWindow
 }
 
-// writeProgressEvent appends an in-progress download event to the per-issue timeline (DL-08).
+// writeProgressEvent appends an in-progress download event to the per-issue timeline.
 func (s *Service) writeProgressEvent(ctx context.Context, row repository.DownloadRow, res download.PollResult, nowISO string) error {
 	payload, err := json.Marshal(progressPayload{
 		Provider: row.Provider, ReleaseKey: row.ReleaseKey, ClientRef: row.ClientRef, ProgressPct: res.ProgressPct,

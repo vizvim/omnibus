@@ -40,8 +40,8 @@ const (
 
 // ErrMirrorExhaustion is returned by Fetch when no candidate mirror on the GetComics post
 // page yields a usable file (all mirrors 4xx/5xx/unreachable or report no Content-Length).
-// This is the D-04 mirror-exhaustion signal the DDLFetch job routes into the shared failure
-// path (download Failed + replacement search).
+// This is the mirror-exhaustion signal the DDLFetch job routes into the shared failure path
+// (download Failed + replacement search).
 var ErrMirrorExhaustion = errors.New("getcomics ddl: all mirrors exhausted")
 
 // GetComicsDDLProvider initiates a GetComics direct-download and, on Fetch, resolves a working
@@ -132,8 +132,8 @@ func withTimeoutTransport(c *http.Client) *http.Client {
 // loopback/link-local/private/metadata destination). Used by CheckRedirect to refuse a hop.
 var errRejectedTarget = errors.New("getcomics ddl: rejected target (ssrf guard)")
 
-// safeMirrorURL validates a post/mirror URL before it is dialed (T-05-15 SSRF mitigation).
-// It enforces an http/https scheme allowlist, requires a host, and — when the host is a
+// safeMirrorURL validates a post/mirror URL before it is dialed (SSRF mitigation). It enforces
+// an http/https scheme allowlist, requires a host, and — when the host is a
 // literal IP (or every resolved IP) — rejects loopback, link-local, private-range, and
 // unspecified addresses (e.g. the 169.254.169.254 cloud-metadata endpoint). A page parsed
 // off a remote-influenced GetComics post is NOT a trust boundary, so this runs for every URL.
@@ -189,7 +189,7 @@ func assertPublicIP(ip net.IP) error {
 }
 
 // ssrfGuardedClient wraps base with a CheckRedirect that re-validates every redirect hop
-// against safeMirrorURL (T-05-15). It clones base so the caller's client is not mutated, and
+// against safeMirrorURL. It clones base so the caller's client is not mutated, and
 // caps the redirect chain. A nil base defaults to http.DefaultClient. allowPrivate threads the
 // test seam through so redirect validation honors the same relaxation as the direct dial.
 func ssrfGuardedClient(base *http.Client, allowPrivate bool) *http.Client {
@@ -231,8 +231,8 @@ func (p *GetComicsDDLProvider) Submit(_ context.Context, req GrabRequest) (strin
 // mirror's Content-Length. It tries candidate mirrors in preference order ("Download Now" /
 // "Mirror Download" first, then cloud hosts) and returns the local path of the first mirror
 // that streams successfully. When every candidate is dead (4xx/5xx/unreachable/no
-// Content-Length) it returns ErrMirrorExhaustion (D-04). The whole body is NEVER buffered in
-// memory — io.Copy streams directly to disk.
+// Content-Length) it returns ErrMirrorExhaustion. The whole body is NEVER buffered in memory —
+// io.Copy streams directly to disk.
 //
 // progress, when non-nil, is called periodically with (bytesWritten, totalBytes). It is
 // optional (a nil progress func is a no-op).
@@ -267,7 +267,7 @@ func (p *GetComicsDDLProvider) Fetch(ctx context.Context, clientRef string, prog
 
 // resolveMirrors fetches the post page (clientRef) and extracts candidate mirror download
 // links in preference order. Only links parsed from the trusted GetComics post page are
-// followed (T-05-15 SSRF mitigation: no arbitrary user-supplied redirect targets).
+// followed (SSRF mitigation: no arbitrary user-supplied redirect targets).
 func (p *GetComicsDDLProvider) resolveMirrors(ctx context.Context, postURL string) ([]string, error) {
 	if err := safeMirrorURL(ctx, postURL, p.allowPrivateHosts); err != nil {
 		return nil, fmt.Errorf("reject getcomics post url: %w", err)
@@ -293,13 +293,13 @@ func (p *GetComicsDDLProvider) resolveMirrors(ctx context.Context, postURL strin
 
 // streamMirror streams a single mirror to <dir>/<sanitized filename>, using Content-Length
 // for progress. A mirror with a non-200 status or an absent/zero Content-Length is rejected
-// (Mylar treats a missing Content-Length as a bad/ad page, T-05-17). On success it returns
+// (Mylar treats a missing Content-Length as a bad/ad page). On success it returns
 // the local path. The body is streamed with io.Copy — never fully buffered.
 func (p *GetComicsDDLProvider) streamMirror(ctx context.Context, mirrorURL, dir string, progress func(done, total int64)) (string, error) {
 	if err := safeMirrorURL(ctx, mirrorURL, p.allowPrivateHosts); err != nil {
 		return "", fmt.Errorf("reject mirror url: %w", err)
 	}
-	// A per-mirror cancellable context backs the stall watchdog (WR-01): if the stream goes
+	// A per-mirror cancellable context backs the stall watchdog: if the stream goes
 	// silent for ddlStallWindow, the watchdog cancels streamCtx, unblocking io.Copy with a
 	// context error instead of hanging the serialized ddl queue forever.
 	streamCtx, cancel := context.WithCancel(ctx)
@@ -354,7 +354,7 @@ func (p *GetComicsDDLProvider) streamMirror(ctx context.Context, mirrorURL, dir 
 // destPath computes the sanitized destination path under dir for a mirror response. The
 // filename is taken from the URL path (preferring a Content-Disposition filename when the
 // server sends one), filepath.Clean'd, stripped of any directory components, and asserted to
-// stay under dir (T-05-16: never trust the remote name verbatim, reject path escapes).
+// stay under dir (never trust the remote name verbatim, reject path escapes).
 func (p *GetComicsDDLProvider) destPath(dir, mirrorURL string, resp *http.Response) (string, error) {
 	name := filenameFromResponse(mirrorURL, resp)
 	// Strip any directory components the remote name carries, then Clean — the result is a
@@ -373,7 +373,7 @@ func (p *GetComicsDDLProvider) destPath(dir, mirrorURL string, resp *http.Respon
 }
 
 // incompleteDir returns (creating if needed) the intermediate dir streamed files land in:
-// <data_path>/incomplete (Claude's discretion, RESEARCH A3). When no data_path was injected
+// <data_path>/incomplete. When no data_path was injected
 // it falls back to the OS temp dir (defensive — app.go always injects data_path).
 func (p *GetComicsDDLProvider) incompleteDir() (string, error) {
 	root := p.dataPath
@@ -510,8 +510,8 @@ func nodeText(n *html.Node) string {
 
 // progressReader wraps an io.Reader to emit (bytesRead, total) progress as bytes flow through
 // io.Copy. It never buffers — it counts as the underlying stream is read. lastRead records the
-// time of the most recent non-zero read so the stall watchdog (WR-01) can detect a silent
-// mirror; it is guarded by mu because the watchdog reads it from another goroutine.
+// time of the most recent non-zero read so the stall watchdog can detect a silent mirror; it
+// is guarded by mu because the watchdog reads it from another goroutine.
 type progressReader struct {
 	r        io.Reader
 	total    int64
@@ -544,7 +544,7 @@ func (pr *progressReader) sinceLastRead(now time.Time) time.Duration {
 }
 
 // startStallWatchdog launches a goroutine that calls cancel() if pr sees no byte progress for
-// window (WR-01). It returns a stop func the caller must invoke once io.Copy returns. The
+// window. It returns a stop func the caller must invoke once io.Copy returns. The
 // watchdog primes lastRead so the first window is measured from stream start.
 func startStallWatchdog(pr *progressReader, window time.Duration, cancel context.CancelFunc) func() {
 	pr.mu.Lock()

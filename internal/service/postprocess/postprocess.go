@@ -26,7 +26,7 @@ var ErrDownloadNotCompleted = errors.New("download is not Completed")
 // its history (the client reported an empty path), so there is nothing to import.
 var ErrNoStoragePath = errors.New("completed download has no storage path")
 
-// RenameConfigGetter resolves the live renaming config (05-05) so user toggles take effect
+// RenameConfigGetter resolves the live renaming config so user toggles take effect
 // without a restart. The renameconfig.Service satisfies it via Get. Declaring the narrow
 // interface here keeps postprocess free of a hard service dependency.
 type RenameConfigGetter interface {
@@ -34,9 +34,9 @@ type RenameConfigGetter interface {
 }
 
 // ReplacementEnqueuer is the seam the corrupt-archive failure branch fans out through: a
-// corrupt download routes into the same D-16 replacement path as a failed grab. The jobs
-// client satisfies it via EnqueueReplacementSearch (05-04). A nil enqueuer leaves the
-// replacement fan-out a no-op (the terminal Failed flip + history still happen).
+// corrupt download routes into the same replacement path as a failed grab. The jobs client
+// satisfies it via EnqueueReplacementSearch. A nil enqueuer leaves the replacement fan-out a
+// no-op (the terminal Failed flip + history still happen).
 type ReplacementEnqueuer interface {
 	EnqueueReplacementSearch(ctx context.Context, issueID int64) error
 }
@@ -46,9 +46,9 @@ type ReplacementEnqueuer interface {
 type Deps struct {
 	Repos *repository.Repositories
 	// Providers maps a provider kind ("sabnzbd"/"getcomics") to its DownloadProvider; the
-	// Tracker capability (RemoveFromHistory, D-05) is type-asserted per provider.
+	// Tracker capability (RemoveFromHistory) is type-asserted per provider.
 	Providers map[string]download.DownloadProvider
-	// RenameConfig resolves the live renaming templates/toggles (05-05).
+	// RenameConfig resolves the live renaming templates/toggles.
 	RenameConfig RenameConfigGetter
 	// LibraryPath is the root of the organized library; the import dst is asserted under it.
 	LibraryPath string
@@ -59,11 +59,11 @@ type Deps struct {
 	Now func() time.Time
 }
 
-// Service composes the 05-02 post-process units against a real completed download: it
-// validates the archive, renders the folder+file templates from the live renameconfig,
-// imports the file into the library, flips the issue to Downloaded via the state machine,
-// writes downloaded+processed timeline events and a download_history row, and removes the
-// item from the client. A corrupt archive routes into the shared D-16 replacement path.
+// Service composes the post-process units against a real completed download: it validates the
+// archive, renders the folder+file templates from the live renameconfig, imports the file into
+// the library, flips the issue to Downloaded via the state machine, writes downloaded+processed
+// timeline events and a download_history row, and removes the item from the client. A corrupt
+// archive routes into the shared replacement path.
 type Service struct {
 	repos       *repository.Repositories
 	providers   map[string]download.DownloadProvider
@@ -135,17 +135,17 @@ func (s *Service) RunPostProcess(ctx context.Context, downloadID int64) error {
 // Process runs the post-process pipeline for a completed download: load the download + its
 // issue + series, validate the archive, render the folder+file templates, import the file
 // into the library, flip the issue to Downloaded, write downloaded+processed events + a
-// success history row (DL-03), and remove the item from the client (D-05). A corrupt archive
-// routes into the shared D-16 failure path (download Failed, attempts++, replacement enqueued)
-// and returns nil — it is a handled failure, not a job error. A re-run on an already-Downloaded
-// issue is a safe no-op.
+// success history row, and remove the item from the client. A corrupt archive routes into the
+// shared failure path (download Failed, attempts++, replacement enqueued) and returns nil — it
+// is a handled failure, not a job error. A re-run on an already-Downloaded issue is a safe
+// no-op.
 func (s *Service) Process(ctx context.Context, downloadID int64) error {
 	row, err := s.repos.Downloads.Get(ctx, downloadID)
 	if err != nil {
 		return fmt.Errorf("load download %d: %w", downloadID, err)
 	}
-	// Idempotency on the download row's own status (CR-03): only a Completed download is
-	// processable. An already-terminal row (Blacklisted from a prior corrupt run, or Failed) is
+	// Idempotency on the download row's own status: only a Completed download is processable.
+	// An already-terminal row (Blacklisted from a prior corrupt run, or Failed) is
 	// a handled no-op so a River retry of a corrupt job — e.g. a worker crash after handleCorrupt
 	// committed the Blacklisted flip but before the job ack — acks cleanly instead of looping on
 	// ErrDownloadNotCompleted and double-counting download_attempts.
@@ -183,7 +183,7 @@ func (s *Service) Process(ctx context.Context, downloadID int64) error {
 	}
 
 	// (1) Validate the archive. A corrupt/truncated/unrecognized archive routes into the
-	// shared D-16 failure path (same as a failed grab).
+	// shared failure path (same as a failed grab).
 	format, verr := detectAndValidate(storagePath)
 	if verr != nil {
 		s.logger.Warn("post-process: archive validation failed, routing to replacement",
@@ -192,7 +192,7 @@ func (s *Service) Process(ctx context.Context, downloadID int64) error {
 		return s.handleCorrupt(ctx, row, issue)
 	}
 
-	// (2) Render the folder + file templates from the live renameconfig (05-05).
+	// (2) Render the folder + file templates from the live renameconfig.
 	srcSeries, err := s.repos.Series.GetByID(ctx, issue.SeriesID)
 	if err != nil {
 		return fmt.Errorf("load series %d: %w", issue.SeriesID, err)
@@ -204,11 +204,11 @@ func (s *Service) Process(ctx context.Context, downloadID int64) error {
 	opts := renderOptsFrom(cfg)
 	values := s.tokenValues(ctx, srcSeries, issue)
 
-	// Folder: prefer the series add-time location (D-10) when present, else recompute from
-	// the folder template. The file keeps the source extension (validation confirmed format).
+	// Folder: prefer the series add-time location when present, else recompute from the folder
+	// template. The file keeps the source extension (validation confirmed format).
 	folder := s.resolveFolder(issue, cfg.FolderFormat, values, opts)
 	fileBase := strings.TrimSpace(Render(cfg.FileFormat, values, opts))
-	// Reject an empty rendered file base (WR-04): otherwise filepath.Join yields a dotfile like
+	// Reject an empty rendered file base: otherwise filepath.Join yields a dotfile like
 	// ".cbz" (or ".cbz" at the library root when folder is empty too), which safeJoin accepts —
 	// filing a comic as a hidden file that silently collides with the next empty-render import.
 	if fileBase == "" {
@@ -221,7 +221,7 @@ func (s *Service) Process(ctx context.Context, downloadID int64) error {
 	relPath := filepath.Join(folder, fileBase+"."+ext)
 
 	// (3) Import (hardlink->copy) into the library, asserting containment under LibraryPath
-	// (the 05-02 importer owns the path-traversal guard, T-05-09).
+	// (the importer owns the path-traversal guard).
 	if ierr := s.importer.Import(storagePath, relPath, s.libraryPath); ierr != nil {
 		return fmt.Errorf("import download %d into library: %w", downloadID, ierr)
 	}
@@ -229,13 +229,13 @@ func (s *Service) Process(ctx context.Context, downloadID int64) error {
 
 	nowISO := s.now().UTC().Format(time.RFC3339)
 
-	// (4) Flip the issue Snatched/Completed->Downloaded via the state machine (ADR 0004),
-	// never a raw UPDATE.
+	// (4) Flip the issue Snatched/Completed->Downloaded via the state machine, never a raw
+	// UPDATE.
 	if terr := s.transitionToDownloaded(ctx, issue); terr != nil {
 		return terr
 	}
 
-	// (5) Write the downloaded + processed timeline events (OBS-01).
+	// (5) Write the downloaded + processed timeline events.
 	if eerr := s.writeEvent(ctx, row.IssueID, "downloaded", downloadedPayload{
 		Provider: row.Provider, ReleaseKey: row.ReleaseKey,
 	}, nowISO); eerr != nil {
@@ -247,7 +247,7 @@ func (s *Service) Process(ctx context.Context, downloadID int64) error {
 		return eerr
 	}
 
-	// (6) Append the terminal success history row (DL-03).
+	// (6) Append the terminal success history row.
 	if _, herr := s.repos.Downloads.InsertHistory(ctx, repository.DownloadHistoryInsert{
 		IssueID: row.IssueID, Provider: row.Provider, ReleaseKey: row.ReleaseKey,
 		Result: "success", Detail: finalPath, OccurredAt: nowISO,
@@ -255,8 +255,8 @@ func (s *Service) Process(ctx context.Context, downloadID int64) error {
 		return fmt.Errorf("record success history for download %d: %w", downloadID, herr)
 	}
 
-	// (7) Remove the item from the client (D-05) — only AFTER a confirmed successful import so
-	// a failed file is never orphaned (T-05-11). A removal failure is non-fatal.
+	// (7) Remove the item from the client — only AFTER a confirmed successful import so a failed
+	// file is never orphaned. A removal failure is non-fatal.
 	s.removeFromClient(ctx, row)
 
 	s.logger.Info("post-process complete",
@@ -265,15 +265,15 @@ func (s *Service) Process(ctx context.Context, downloadID int64) error {
 	return nil
 }
 
-// handleCorrupt routes a corrupt archive into the shared D-16 failure path, exactly mirroring
-// a failed grab: flip the download to Failed(reason=corrupt), bump download_attempts, write a
+// handleCorrupt routes a corrupt archive into the shared failure path, exactly mirroring a
+// failed grab: flip the download to Failed(reason=corrupt), bump download_attempts, write a
 // failed timeline event + a corrupt history row, and enqueue a replacement search. It returns
 // nil — a corrupt archive is a handled failure, not a job error (River must not retry it).
 func (s *Service) handleCorrupt(ctx context.Context, row repository.DownloadRow, issue repository.Issue) error {
 	nowISO := s.now().UTC().Format(time.RFC3339)
 
-	// Partial-replay guard (CR-03): if this download was already routed to Blacklisted by a
-	// prior (interrupted) corrupt run, do not re-bump download_attempts / re-write history /
+	// Partial-replay guard: if this download was already routed to Blacklisted by a prior
+	// (interrupted) corrupt run, do not re-bump download_attempts / re-write history /
 	// re-enqueue a replacement. A re-read of the freshest status closes the window where a crash
 	// between the Blacklisted flip and the job ack would otherwise double-count.
 	if cur, gerr := s.repos.Downloads.Get(ctx, row.ID); gerr == nil {
@@ -287,9 +287,9 @@ func (s *Service) handleCorrupt(ctx context.Context, row repository.DownloadRow,
 	// The download itself genuinely Completed (the bytes arrived) — Completed is terminal in
 	// the download-status machine (Completed->Failed is illegal). A corrupt archive is a
 	// POST-download failure, so we route the download row Completed->Blacklisted (a legal
-	// edge): this both respects the state machine (ADR 0004) and records the dead release_key
-	// so the D-12 replacement dedup (ListDeadReleaseKeys covers Failed/Blacklisted) excludes
-	// this corrupt release from the replacement search.
+	// edge): this both respects the state machine and records the dead release_key so the
+	// replacement dedup (ListDeadReleaseKeys covers Failed/Blacklisted) excludes this corrupt
+	// release from the replacement search.
 	next, terr := series.TransitionDownload(series.DownloadStatus(row.Status), series.DownloadBlacklisted)
 	if terr != nil {
 		return fmt.Errorf("transition download %d to Blacklisted: %w", row.ID, terr)
@@ -312,7 +312,7 @@ func (s *Service) handleCorrupt(ctx context.Context, row repository.DownloadRow,
 		}
 	}
 
-	// Bump download_attempts (D-13) — a corrupt archive counts as a failed download cycle.
+	// Bump download_attempts — a corrupt archive counts as a failed download cycle.
 	if aerr := s.repos.Issue.IncrementDownloadAttempts(ctx, issue.ID); aerr != nil {
 		return fmt.Errorf("bump download_attempts for issue %d: %w", issue.ID, aerr)
 	}
@@ -330,7 +330,7 @@ func (s *Service) handleCorrupt(ctx context.Context, row repository.DownloadRow,
 		return fmt.Errorf("record corrupt history for download %d: %w", row.ID, herr)
 	}
 
-	// Fan out a replacement search through the shared seam (05-04). Nil enqueuer = no-op.
+	// Fan out a replacement search through the shared seam. Nil enqueuer = no-op.
 	if s.enqueuer != nil {
 		if qerr := s.enqueuer.EnqueueReplacementSearch(ctx, row.IssueID); qerr != nil {
 			return fmt.Errorf("enqueue replacement for issue %d: %w", row.IssueID, qerr)
@@ -359,8 +359,8 @@ func (s *Service) transitionToDownloaded(ctx context.Context, issue repository.I
 	return nil
 }
 
-// resolveFolder picks the series add-time location (D-10) when the issue carries one, else
-// recomputes the folder from the folder template. A rendered folder is library-relative.
+// resolveFolder picks the series add-time location when the issue carries one, else recomputes
+// the folder from the folder template. A rendered folder is library-relative.
 func (s *Service) resolveFolder(issue repository.Issue, folderTemplate string, values map[string]string, opts RenderOpts) string {
 	if issue.Location.Valid && strings.TrimSpace(issue.Location.String) != "" {
 		return strings.TrimSpace(issue.Location.String)
@@ -420,8 +420,8 @@ func (s *Service) writeEvent(ctx context.Context, issueID int64, eventType strin
 	return nil
 }
 
-// removeFromClient removes the completed item from the client via the Tracker capability
-// (D-05). Only providers implementing Tracker support removal; a removal failure is non-fatal.
+// removeFromClient removes the completed item from the client via the Tracker capability. Only
+// providers implementing Tracker support removal; a removal failure is non-fatal.
 func (s *Service) removeFromClient(ctx context.Context, row repository.DownloadRow) {
 	provider, ok := s.providers[row.Provider]
 	if !ok {
@@ -437,7 +437,7 @@ func (s *Service) removeFromClient(ctx context.Context, row repository.DownloadR
 	}
 }
 
-// renderOptsFrom maps the live renameconfig.Config to the 05-02 RenderOpts.
+// renderOptsFrom maps the live renameconfig.Config to RenderOpts.
 func renderOptsFrom(cfg renameconfig.Config) RenderOpts {
 	return RenderOpts{
 		RenameEnabled:  cfg.RenameEnabled,
