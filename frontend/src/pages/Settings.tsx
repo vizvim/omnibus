@@ -18,6 +18,10 @@ import {
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/layout/PageHeader";
 import {
+  MetadataSettingsForm,
+  type MetadataSettingsFormValues,
+} from "../components/MetadataSettingsForm";
+import {
   RenameSettingsForm,
   type RenameSettingsFormValues,
 } from "../components/RenameSettingsForm";
@@ -38,11 +42,18 @@ import {
   updateDownloadClientConfig,
 } from "../gen/omnibus/v1/download_client-DownloadClientService_connectquery";
 import {
+  getMetadataProviderConfig,
+  testMetadataProviderConfig,
+  updateMetadataProviderConfig,
+} from "../gen/omnibus/v1/metadata_provider-MetadataProviderService_connectquery";
+import {
   getRenameConfig,
   updateRenameConfig,
 } from "../gen/omnibus/v1/rename_config-RenameConfigService_connectquery";
 
 const SAVE_ERROR = "Couldn't save the download client. Check the URL and API key, then try again.";
+const METADATA_SAVE_ERROR =
+  "Couldn't save the metadata provider. Check the API key, then try again.";
 const RENAME_SAVE_ERROR =
   "Couldn't save the renaming settings. Check the folder and file formats, then try again.";
 const DDL_SAVE_ERROR = "Couldn't save the DDL settings. Try again.";
@@ -117,6 +128,21 @@ export function Settings() {
     onSuccess: (res) => setTestResult({ ok: res.ok, detail: res.detail }),
   });
 
+  const metadataConfig = useQuery(getMetadataProviderConfig, {}, { retry: false });
+  const [editingMetadata, setEditingMetadata] = useState(false);
+  const [metadataTestResult, setMetadataTestResult] = useState<
+    { ok: boolean; detail: string } | undefined
+  >();
+  const metadataUpdate = useMutation(updateMetadataProviderConfig, {
+    onSuccess: () => {
+      setEditingMetadata(false);
+      void metadataConfig.refetch();
+    },
+  });
+  const metadataTest = useMutation(testMetadataProviderConfig, {
+    onSuccess: (res) => setMetadataTestResult({ ok: res.ok, detail: res.detail }),
+  });
+
   const renameConfig = useQuery(getRenameConfig, {}, { retry: false });
   const [editingRename, setEditingRename] = useState(false);
   const renameUpdate = useMutation(updateRenameConfig, {
@@ -149,6 +175,13 @@ export function Settings() {
       url: values.url,
       apiKey: values.apiKey, // empty leaves the stored key unchanged
       category: values.category,
+    });
+  }
+
+  function submitMetadataEdit(values: MetadataSettingsFormValues) {
+    metadataUpdate.mutate({
+      provider: "comicvine",
+      apiKey: values.apiKey, // empty leaves the stored key unchanged
     });
   }
 
@@ -189,6 +222,7 @@ export function Settings() {
   }
 
   const current = config.data?.config;
+  const metadataCurrent = metadataConfig.data?.config;
   const renameCurrent = renameConfig.data?.config;
   const ddlCurrent = ddlConfig.data?.config;
   const authCurrent = authConfig.data?.config;
@@ -255,6 +289,67 @@ export function Settings() {
               ) : (
                 <p className="inline-flex items-center gap-1.5 pt-2 text-sm font-medium text-tn-red">
                   <XCircle className="size-4" /> {testResult.detail}
+                </p>
+              )
+            ) : null}
+          </div>
+        )}
+      </SettingsCard>
+
+      {/* Metadata */}
+      <SettingsCard
+        title="Metadata"
+        description="Where series and issue metadata is sourced from."
+        actions={
+          !editingMetadata && !metadataConfig.isError ? (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => metadataTest.mutate({})}
+                disabled={metadataTest.isPending}
+              >
+                Test connection
+              </Button>
+              <Button
+                size="sm"
+                aria-label="Edit metadata provider"
+                onClick={() => setEditingMetadata(true)}
+                className="gap-1.5"
+              >
+                <Pencil className="size-3.5" />
+                Edit
+              </Button>
+            </>
+          ) : undefined
+        }
+      >
+        {metadataConfig.isError ? (
+          <p className="text-sm text-tn-red">Couldn't load the metadata settings.</p>
+        ) : editingMetadata ? (
+          <MetadataSettingsForm
+            pending={metadataUpdate.isPending}
+            error={metadataUpdate.isError ? METADATA_SAVE_ERROR : undefined}
+            onSubmit={submitMetadataEdit}
+            onCancel={() => setEditingMetadata(false)}
+          />
+        ) : (
+          <div className="rounded-lg border border-border bg-tn-night/30 p-4">
+            <div className="flex items-center gap-2.5 pb-2">
+              <span className="text-sm font-medium text-foreground">ComicVine</span>
+              <Badge variant={metadataCurrent?.configured ? "success" : "neutral"} dot>
+                {metadataCurrent?.configured ? "Configured" : "Not configured"}
+              </Badge>
+            </div>
+            <ReadRow label="Provider">ComicVine</ReadRow>
+            {metadataTestResult ? (
+              metadataTestResult.ok ? (
+                <p className="inline-flex items-center gap-1.5 pt-2 text-sm font-medium text-tn-green">
+                  <CheckCircle2 className="size-4" /> Connected
+                </p>
+              ) : (
+                <p className="inline-flex items-center gap-1.5 pt-2 text-sm font-medium text-tn-red">
+                  <XCircle className="size-4" /> {metadataTestResult.detail}
                 </p>
               )
             ) : null}
