@@ -18,6 +18,13 @@ type Blacklist struct {
 	CreatedAt  string
 }
 
+type ComicvineConfig struct {
+	ID        int64
+	ApiKey    sql.NullString
+	CreatedAt string
+	UpdatedAt string
+}
+
 type Cover struct {
 	EntityType  string
 	EntityID    int64
