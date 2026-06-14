@@ -271,3 +271,43 @@ func TestFakeProviderFromFixtures(t *testing.T) {
 	require.Equal(t, int64(1001), detail.ComicvineIssueID)
 	require.NotEmpty(t, detail.Credits)
 }
+
+func TestComicVineProbeWithExplicitKey(t *testing.T) {
+	t.Parallel()
+	p, _ := cvServer(t, http.StatusOK)
+	ok, detail := p.Probe(context.Background(), "explicit-key")
+	require.True(t, ok)
+	require.Equal(t, "connected", detail)
+}
+
+func TestComicVineProbeBlankFallsBackToResolvedKey(t *testing.T) {
+	t.Parallel()
+	_, srv := cvServer(t, http.StatusOK)
+	// A blank probe key falls back to the live, DB-resolved key via keyFunc.
+	p := metadata.NewComicVineProviderWithKeyFunc(
+		func(context.Context) string { return "resolved-key" },
+		metadata.WithBaseURL(srv.URL), metadata.WithHTTPClient(srv.Client()))
+	ok, detail := p.Probe(context.Background(), "")
+	require.True(t, ok)
+	require.Equal(t, "connected", detail)
+}
+
+func TestComicVineProbeBlankAndNoStoredKeyIsNotConfigured(t *testing.T) {
+	t.Parallel()
+	_, srv := cvServer(t, http.StatusOK)
+	// Blank probe key and an empty resolver: nothing to test against.
+	p := metadata.NewComicVineProviderWithKeyFunc(
+		func(context.Context) string { return "" },
+		metadata.WithBaseURL(srv.URL), metadata.WithHTTPClient(srv.Client()))
+	ok, detail := p.Probe(context.Background(), "")
+	require.False(t, ok)
+	require.Equal(t, "not configured", detail)
+}
+
+func TestComicVineProbeBadKeyMapsToConciseDetail(t *testing.T) {
+	t.Parallel()
+	p, _ := cvServer(t, http.StatusUnauthorized)
+	ok, detail := p.Probe(context.Background(), "bad-key")
+	require.False(t, ok)
+	require.NotContains(t, detail, "bad-key", "the key is never echoed in detail")
+}

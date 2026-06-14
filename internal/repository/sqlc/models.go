@@ -18,13 +18,6 @@ type Blacklist struct {
 	CreatedAt  string
 }
 
-type ComicvineConfig struct {
-	ID        int64
-	ApiKey    sql.NullString
-	CreatedAt string
-	UpdatedAt string
-}
-
 type Cover struct {
 	EntityType  string
 	EntityID    int64
@@ -124,6 +117,13 @@ type MetadataCache struct {
 	Payload         string
 	SourceUpdatedAt sql.NullString
 	FetchedAt       string
+}
+
+type MetadataProviderConfig struct {
+	Provider  string
+	ApiKey    sql.NullString
+	CreatedAt string
+	UpdatedAt string
 }
 
 type Publisher struct {

@@ -17,10 +17,7 @@ import {
 } from "../components/DownloadClientForm";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/layout/PageHeader";
-import {
-  MetadataSettingsForm,
-  type MetadataSettingsFormValues,
-} from "../components/MetadataSettingsForm";
+import { MetadataSettingsForm } from "../components/MetadataSettingsForm";
 import {
   RenameSettingsForm,
   type RenameSettingsFormValues,
@@ -136,11 +133,18 @@ export function Settings() {
   const metadataUpdate = useMutation(updateMetadataProviderConfig, {
     onSuccess: () => {
       setEditingMetadata(false);
+      // The stored key just changed; drop any earlier Test result so a stale
+      // "Connected"/error can't linger against the new key.
+      setMetadataTestResult(undefined);
       void metadataConfig.refetch();
     },
   });
   const metadataTest = useMutation(testMetadataProviderConfig, {
     onSuccess: (res) => setMetadataTestResult({ ok: res.ok, detail: res.detail }),
+    // A transport-level failure (server unreachable) still surfaces feedback rather
+    // than silently clearing the spinner.
+    onError: () =>
+      setMetadataTestResult({ ok: false, detail: "Couldn't reach the server. Try again." }),
   });
 
   const renameConfig = useQuery(getRenameConfig, {}, { retry: false });
@@ -178,10 +182,10 @@ export function Settings() {
     });
   }
 
-  function submitMetadataEdit(values: MetadataSettingsFormValues) {
+  function submitMetadataEdit(apiKey: string) {
     metadataUpdate.mutate({
       provider: "comicvine",
-      apiKey: values.apiKey, // empty leaves the stored key unchanged
+      apiKey, // empty leaves the stored key unchanged
     });
   }
 
@@ -314,7 +318,11 @@ export function Settings() {
               <Button
                 size="sm"
                 aria-label="Edit metadata provider"
-                onClick={() => setEditingMetadata(true)}
+                onClick={() => {
+                  // Drop any prior Test result: it may not match the key being edited.
+                  setMetadataTestResult(undefined);
+                  setEditingMetadata(true);
+                }}
                 className="gap-1.5"
               >
                 <Pencil className="size-3.5" />

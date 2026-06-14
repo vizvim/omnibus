@@ -23,7 +23,6 @@ type Querier interface {
 	DeleteIndexer(ctx context.Context, id int64) error
 	// Removes all credit rows for an issue, so Replace can rebuild them idempotently.
 	DeleteIssueCredits(ctx context.Context, issueID int64) error
-	GetComicVineConfig(ctx context.Context) (ComicvineConfig, error)
 	GetCover(ctx context.Context, arg GetCoverParams) (GetCoverRow, error)
 	GetDownloadByID(ctx context.Context, id int64) (Download, error)
 	GetDownloadClientConfig(ctx context.Context) (DownloadClientConfig, error)
@@ -36,6 +35,7 @@ type Querier interface {
 	// if the client reported an empty storage path.
 	GetLatestCompletedStorageForIssue(ctx context.Context, arg GetLatestCompletedStorageForIssueParams) (sql.NullString, error)
 	GetMetadataCache(ctx context.Context, cacheKey string) (MetadataCache, error)
+	GetMetadataProviderConfig(ctx context.Context, provider string) (MetadataProviderConfig, error)
 	GetPublisherByID(ctx context.Context, id int64) (Publisher, error)
 	GetSeriesByID(ctx context.Context, id int64) (Series, error)
 	GetSeriesByVolumeID(ctx context.Context, comicvineVolumeID int64) (Series, error)
@@ -105,12 +105,12 @@ type Querier interface {
 	UpdateSeriesSettings(ctx context.Context, arg UpdateSeriesSettingsParams) (Series, error)
 	// Idempotent on the immutable comicvine_arc_id.
 	UpsertArc(ctx context.Context, arg UpsertArcParams) (StoryArc, error)
-	UpsertComicVineConfig(ctx context.Context, arg UpsertComicVineConfigParams) (ComicvineConfig, error)
 	// Idempotent upsert of a cover blob keyed on (entity_type, entity_id).
 	UpsertCover(ctx context.Context, arg UpsertCoverParams) error
 	UpsertDownloadClientConfig(ctx context.Context, arg UpsertDownloadClientConfigParams) (DownloadClientConfig, error)
 	// Idempotent upsert keyed on the immutable comicvine_issue_id.
 	UpsertIssue(ctx context.Context, arg UpsertIssueParams) (Issue, error)
+	UpsertMetadataProviderConfig(ctx context.Context, arg UpsertMetadataProviderConfigParams) (MetadataProviderConfig, error)
 	// Idempotent on name (UNIQUE); records the CV publisher id when known.
 	UpsertPublisher(ctx context.Context, arg UpsertPublisherParams) (Publisher, error)
 	// Idempotent upsert keyed on the immutable comicvine_volume_id.

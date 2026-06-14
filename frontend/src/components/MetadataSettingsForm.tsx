@@ -3,23 +3,14 @@ import { useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
-// MetadataSettingsFormValues is the editable metadata-provider payload the form collects.
-// provider is fixed to "comicvine" today; the field is kept so additional providers can be
-// added later.
-export interface MetadataSettingsFormValues {
-  apiKey: string;
-}
-
-const emptyValues: MetadataSettingsFormValues = {
-  apiKey: "",
-};
-
 const fieldLabel = "flex flex-col gap-1.5 text-sm font-medium text-foreground";
 
 // MetadataSettingsForm is the edit form for the ComicVine metadata provider. The API key
 // input is masked (type="password") and never seeded with the stored key — on edit the
 // field starts blank and a blank submit leaves the stored key unchanged server-side
 // (mirrors DownloadClientForm / T-ul5-01). The provider is shown as a read-only label.
+// ComicVine is the only provider today; the read-only select is kept so additional providers
+// can slot in later.
 export function MetadataSettingsForm({
   pending = false,
   error,
@@ -28,27 +19,18 @@ export function MetadataSettingsForm({
 }: {
   pending?: boolean;
   error?: string;
-  onSubmit: (values: MetadataSettingsFormValues) => void;
+  onSubmit: (apiKey: string) => void;
   onCancel: () => void;
 }) {
-  const [values, setValues] = useState<MetadataSettingsFormValues>({
-    ...emptyValues,
-    apiKey: "", // never seed the masked field with a stored key
-  });
-
-  function set<K extends keyof MetadataSettingsFormValues>(
-    key: K,
-    value: MetadataSettingsFormValues[K],
-  ) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  // Never seed the masked field with the stored key; a blank submit keeps it unchanged.
+  const [apiKey, setApiKey] = useState("");
 
   return (
     <form
       className="flex flex-col gap-4 rounded-xl border border-border bg-card/70 p-5"
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit(values);
+        onSubmit(apiKey);
       }}
     >
       <label className={fieldLabel}>
@@ -69,8 +51,8 @@ export function MetadataSettingsForm({
           type="password"
           aria-label="API key"
           placeholder="Leave blank to keep current key"
-          value={values.apiKey}
-          onChange={(e) => set("apiKey", e.target.value)}
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
         />
       </label>
 

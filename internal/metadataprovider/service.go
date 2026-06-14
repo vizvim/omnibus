@@ -1,9 +1,10 @@
-// Package metadataprovider is the domain-segmented service (ADR 0007) that owns the
-// singleton DB-backed metadata-provider config (ComicVine today). It depends only on the
-// repository.ComicVineConfigRepository interface and slog. The api_key is masked at this
-// layer (defense in depth) so it never reaches transport, and is pushed into a
-// hot-swappable KeyHolder on Update so the live provider picks it up on the next search
-// with no restart.
+// Package metadataprovider is the domain-segmented service (ADR 0007) that owns the DB-backed
+// metadata-provider config (ComicVine today; the store is keyed by provider id so others can
+// be added later). It depends only on repository.MetadataProviderConfigRepository and slog.
+// The api_key is masked at this layer (defense in depth) so it never reaches transport. There
+// is no in-memory key cache: the live ComicVine provider resolves its key straight from the
+// DB per request, so a key saved here takes effect on the next search with no restart and
+// nothing to drift.
 package metadataprovider
 
 import (
@@ -18,10 +19,12 @@ import (
 )
 
 // MetadataProber validates a ComicVine API key against live ComicVine. It NEVER returns a Go
-// error — every outcome maps to (ok, detail). The app satisfies it with a real CV probe.
+// error — every outcome maps to (ok, detail). The app satisfies it with a real CV probe that,
+// given a blank key, falls back to the live DB-resolved key — so Test never reads the store
+// itself.
 type MetadataProber interface {
-	// Probe validates apiKey against live ComicVine, returning (ok, concise detail). The
-	// key is never echoed in detail.
+	// Probe validates apiKey against live ComicVine, returning (ok, concise detail). A blank
+	// apiKey probes the currently stored/resolved key. The key is never echoed in detail.
 	Probe(ctx context.Context, apiKey string) (ok bool, detail string)
 }
 
@@ -35,10 +38,6 @@ type TestResult struct {
 type Deps struct {
 	Repos  *repository.Repositories
 	Logger *slog.Logger
-	// Holder is the hot-swappable key holder the live ComicVine provider resolves its key
-	// from. Update writes the resolved key here so it takes effect with no restart. May be
-	// nil (Update then skips the hot-swap).
-	Holder *KeyHolder
 	// Prober validates a supplied/stored key against live ComicVine in Test. May be nil
 	// (Test then reports the probe is unavailable rather than panicking).
 	Prober MetadataProber
@@ -47,11 +46,10 @@ type Deps struct {
 	Now func() time.Time
 }
 
-// Service implements MetadataProviderService domain logic over ComicVineConfigRepository.
+// Service implements MetadataProviderService domain logic over MetadataProviderConfigRepository.
 type Service struct {
-	repo   *repository.ComicVineConfigRepository
+	repo   *repository.MetadataProviderConfigRepository
 	logger *slog.Logger
-	holder *KeyHolder
 	prober MetadataProber
 	now    func() time.Time
 }
@@ -67,9 +65,8 @@ func New(d Deps) *Service {
 		logger = slog.Default()
 	}
 	return &Service{
-		repo:   d.Repos.ComicVineConfig,
+		repo:   d.Repos.MetadataProviderConfig,
 		logger: logger,
-		holder: d.Holder,
 		prober: d.Prober,
 		now:    now,
 	}
@@ -78,66 +75,51 @@ func New(d Deps) *Service {
 // Get returns the masked config. An absent/empty row is treated as a zero config
 // (configured=false), not an error.
 func (s *Service) Get(ctx context.Context) (Config, error) {
-	row, err := s.repo.Get(ctx)
+	row, err := s.repo.Get(ctx, ProviderComicVine)
 	if err != nil {
-		if errors.Is(err, repository.ErrNoComicVineConfig) {
-			return Config{Provider: providerComicVine}, nil
+		if errors.Is(err, repository.ErrNoMetadataProviderConfig) {
+			return Config{Provider: ProviderComicVine}, nil
 		}
-		return Config{}, fmt.Errorf("get comicvine config: %w", err)
+		return Config{}, fmt.Errorf("get metadata provider config: %w", err)
 	}
 	return configFromRow(row), nil
 }
 
 // Update validates and upserts the config. An empty APIKey leaves the stored key unchanged
-// (it is NOT overwritten with a blank value), exactly like downloadclient.Update. On success
-// the resolved key is pushed into the hot-swappable holder so the live provider picks it up
-// on the next search with no restart. The key is never logged.
+// (it is NOT overwritten with a blank value), exactly like downloadclient.Update. The live
+// provider reads the key from the DB per request, so the change takes effect on the next
+// search with no restart. The key is never logged.
 func (s *Service) Update(ctx context.Context, in Input) (Config, error) {
 	apiKey := strings.TrimSpace(in.APIKey)
 	if apiKey == "" {
 		// Preserve the existing key rather than blanking it.
-		existing, getErr := s.repo.Get(ctx)
-		if getErr != nil && !errors.Is(getErr, repository.ErrNoComicVineConfig) {
-			return Config{}, fmt.Errorf("load comicvine config for update: %w", getErr)
+		existing, getErr := s.repo.Get(ctx, ProviderComicVine)
+		if getErr != nil && !errors.Is(getErr, repository.ErrNoMetadataProviderConfig) {
+			return Config{}, fmt.Errorf("load metadata provider config for update: %w", getErr)
 		}
 		apiKey = existing.APIKey
 	}
 
-	row, err := s.repo.Upsert(ctx, repository.ComicVineConfigUpsert{APIKey: apiKey}, s.nowISO())
+	row, err := s.repo.Upsert(ctx, repository.MetadataProviderConfigUpsert{
+		Provider: ProviderComicVine,
+		APIKey:   apiKey,
+	}, s.nowISO())
 	if err != nil {
-		return Config{}, fmt.Errorf("update comicvine config: %w", err)
-	}
-
-	// Hot-swap the live provider's key so the change takes effect on the next search with no
-	// restart. The key value is never logged.
-	if s.holder != nil {
-		s.holder.Set(row.APIKey)
+		return Config{}, fmt.Errorf("update metadata provider config: %w", err)
 	}
 	return configFromRow(row), nil
 }
 
-// Test validates the supplied key (or, when blank, the stored key) against live ComicVine
-// via the injected prober. A nil prober yields a clear ok=false result rather than a panic.
-// A bad key is a normal TestResult, never a Go error. The key is never logged.
+// Test validates the supplied key (or, when blank, the stored key) against live ComicVine via
+// the injected prober. A nil prober yields a clear ok=false result rather than a panic. A bad
+// key — or an unreachable provider — is a normal TestResult, never a Go error, so a transient
+// DB/probe fault is never surfaced to the client as an RPC error. The prober resolves the
+// stored key itself, so this method never reads the config store. The key is never logged.
 func (s *Service) Test(ctx context.Context, apiKey string) (TestResult, error) {
 	if s.prober == nil {
 		return TestResult{OK: false, Detail: "metadata provider probe not available"}, nil
 	}
-	key := strings.TrimSpace(apiKey)
-	if key == "" {
-		row, err := s.repo.Get(ctx)
-		if err != nil {
-			if errors.Is(err, repository.ErrNoComicVineConfig) {
-				return TestResult{OK: false, Detail: "not configured"}, nil
-			}
-			return TestResult{}, fmt.Errorf("load comicvine config for test: %w", err)
-		}
-		key = row.APIKey
-	}
-	if key == "" {
-		return TestResult{OK: false, Detail: "not configured"}, nil
-	}
-	ok, detail := s.prober.Probe(ctx, key)
+	ok, detail := s.prober.Probe(ctx, apiKey)
 	return TestResult{OK: ok, Detail: detail}, nil
 }
 

@@ -34,10 +34,10 @@ const (
 
 // ComicVineProvider is the real ComicVine HTTP MetadataProvider implementation.
 type ComicVineProvider struct {
-	// keyFunc resolves the ComicVine API key per request, so a key saved via
-	// MetadataProviderService takes effect on the next search with no restart. The key is
-	// held only behind this resolver and is never logged.
-	keyFunc func() string
+	// keyFunc resolves the ComicVine API key per request (typically straight from the DB), so
+	// a key saved via MetadataProviderService takes effect on the next search with no restart
+	// and no in-memory cache to drift. The key is read only here and is never logged.
+	keyFunc func(context.Context) string
 	baseURL string
 	client  *http.Client
 }
@@ -55,15 +55,15 @@ func WithHTTPClient(c *http.Client) Option { return func(p *ComicVineProvider) {
 // in a constant resolver so existing callers/tests keep their behavior. It is held for
 // request signing and is never logged.
 func NewComicVineProvider(apiKey string, opts ...Option) *ComicVineProvider {
-	return NewComicVineProviderWithKeyFunc(func() string { return apiKey }, opts...)
+	return NewComicVineProviderWithKeyFunc(func(context.Context) string { return apiKey }, opts...)
 }
 
 // NewComicVineProviderWithKeyFunc builds a ComicVine provider that resolves its API key on
 // each request via keyFunc. This lets the key be DB-backed and runtime-editable: a key saved
 // via MetadataProviderService takes effect on the next search with no restart.
-func NewComicVineProviderWithKeyFunc(keyFunc func() string, opts ...Option) *ComicVineProvider {
+func NewComicVineProviderWithKeyFunc(keyFunc func(context.Context) string, opts ...Option) *ComicVineProvider {
 	if keyFunc == nil {
-		keyFunc = func() string { return "" }
+		keyFunc = func(context.Context) string { return "" }
 	}
 	p := &ComicVineProvider{
 		keyFunc: keyFunc,
@@ -81,16 +81,20 @@ var _ MetadataProvider = (*ComicVineProvider)(nil)
 // Probe validates a ComicVine API key against the live API by issuing a minimal authenticated
 // request. A bad key (or unreachable CV) maps to (false, concise detail); a good key maps to
 // (true, "connected"). It NEVER returns a Go error and never echoes the key in detail — it is
-// the metadataprovider.MetadataProber the app injects. The supplied key is used for this probe
-// only; the provider's own keyFunc is untouched.
+// the metadataprovider.MetadataProber the app injects. A blank apiKey falls back to the live,
+// DB-resolved key (via keyFunc), so the service layer never has to read the stored key itself.
 func (p *ComicVineProvider) Probe(ctx context.Context, apiKey string) (ok bool, detail string) {
 	key := strings.TrimSpace(apiKey)
+	if key == "" {
+		// No explicit key supplied: probe the currently stored/resolved key.
+		key = strings.TrimSpace(p.keyFunc(ctx))
+	}
 	if key == "" {
 		return false, "not configured"
 	}
 	// Issue a tiny authenticated request (limit=1 search) using a one-shot provider that
-	// resolves the supplied key, so the live provider's key holder is untouched.
-	probe := NewComicVineProviderWithKeyFunc(func() string { return key },
+	// resolves the chosen key, so the live provider's resolver is untouched.
+	probe := NewComicVineProviderWithKeyFunc(func(context.Context) string { return key },
 		WithBaseURL(p.baseURL), WithHTTPClient(p.client))
 	q := url.Values{}
 	q.Set("query", "batman")
@@ -183,7 +187,7 @@ func parseYear(s string) int32 {
 // do performs a GET against the CV API path with the given query, returning the body
 // or a typed error on non-200 / CV error status.
 func (p *ComicVineProvider) do(ctx context.Context, path string, q url.Values) ([]byte, error) {
-	q.Set("api_key", p.keyFunc())
+	q.Set("api_key", p.keyFunc(ctx))
 	q.Set("format", "json")
 
 	endpoint := strings.TrimRight(p.baseURL, "/") + path + "?" + q.Encode()

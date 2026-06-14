@@ -2,9 +2,10 @@ package metadataprovider
 
 import "github.com/vizvim/omnibus/internal/repository"
 
-// providerComicVine is the only metadata provider id today. It is present in the domain
-// view so additional providers can be added later.
-const providerComicVine = "comicvine"
+// ProviderComicVine is the only metadata provider id today. The config store is keyed by
+// provider id so additional providers can be added later with no schema change; this constant
+// is the id the service (and the app's seed/resolver wiring) use for the ComicVine row.
+const ProviderComicVine = "comicvine"
 
 // Config is the masked domain view of the metadata-provider config the transport layer
 // consumes. It has NO api-key field by design — the key is write-only and masked
@@ -23,9 +24,9 @@ type Input struct {
 
 // configFromRow maps a repository row to the masked domain Config (drops APIKey and sets
 // Configured = (APIKey != "")). Provider is fixed to "comicvine" today.
-func configFromRow(r repository.ComicVineConfigRow) Config {
+func configFromRow(r repository.MetadataProviderConfigRow) Config {
 	return Config{
-		Provider:   providerComicVine,
+		Provider:   ProviderComicVine,
 		Configured: r.APIKey != "",
 	}
 }
