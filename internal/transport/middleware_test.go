@@ -62,34 +62,74 @@ func TestAuthMiddlewareOffPasses(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 }
 
-// TestAuthMiddlewareFailClosed asserts that with auth On a request without a valid session
-// cookie is rejected (401) and next is NOT called — including on a config-load error.
+// TestAuthMiddlewareFailClosed asserts that with auth On a request for a GATED data
+// resource without a valid session cookie is rejected (401) and next is NOT called —
+// including on a config-load error. It exercises the real security boundary (a protected
+// /api RPC and a /covers blob), NOT the SPA shell (which is intentionally ungated, see
+// TestAuthMiddlewareServesSPAShellWhenGated).
 func TestAuthMiddlewareFailClosed(t *testing.T) {
 	t.Parallel()
 
-	// No cookie at all.
+	// No cookie at all — a protected data RPC.
 	gate := &fakeAuthGate{cfg: auth.Config{Mode: auth.ModeOn}, validToken: "good-token"}
-	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r := httptest.NewRequest(http.MethodPost, "/api/omnibus.v1.SeriesService/ListSeries", http.NoBody)
 	r.RemoteAddr = "203.0.113.7:5555"
 	rec, called := serve(t, gate, false, r)
-	require.False(t, called, "On with no cookie does not call next")
+	require.False(t, called, "On with no cookie does not call next on a protected /api RPC")
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
 
-	// Invalid/tampered cookie.
-	r2 := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	// A gated cover blob with no cookie is also denied.
+	rCov := httptest.NewRequest(http.MethodGet, "/covers/123.jpg", http.NoBody)
+	rCov.RemoteAddr = "203.0.113.7:5555"
+	recCov, calledCov := serve(t, gate, false, rCov)
+	require.False(t, calledCov, "On with no cookie does not call next on a /covers blob")
+	require.Equal(t, http.StatusUnauthorized, recCov.Code)
+
+	// Invalid/tampered cookie on a protected /api RPC.
+	r2 := httptest.NewRequest(http.MethodPost, "/api/omnibus.v1.SeriesService/ListSeries", http.NoBody)
 	r2.RemoteAddr = "203.0.113.7:5555"
 	r2.AddCookie(&http.Cookie{Name: "omnibus_session", Value: "tampered"})
 	rec2, called2 := serve(t, gate, false, r2)
 	require.False(t, called2, "On with an invalid cookie does not call next")
 	require.Equal(t, http.StatusUnauthorized, rec2.Code)
 
-	// Config-load error also fails closed.
+	// Config-load error also fails closed (on a gated /api RPC).
 	errGate := &fakeAuthGate{cfgErr: context.DeadlineExceeded}
-	r3 := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r3 := httptest.NewRequest(http.MethodPost, "/api/omnibus.v1.SeriesService/ListSeries", http.NoBody)
 	r3.RemoteAddr = "127.0.0.1:5555"
 	rec3, called3 := serve(t, errGate, false, r3)
 	require.False(t, called3, "a config-load error fails closed")
 	require.Equal(t, http.StatusUnauthorized, rec3.Code)
+}
+
+// TestAuthMiddlewareServesSPAShellWhenGated asserts the standard SPA-auth pattern: with
+// auth On and NO cookie, the static SPA shell, its assets, and client-side deep routes load
+// ungated (so the in-app login screen is reachable), while the real data boundary — a
+// protected /api RPC and a /covers blob — stays gated (401).
+func TestAuthMiddlewareServesSPAShellWhenGated(t *testing.T) {
+	t.Parallel()
+	gate := &fakeAuthGate{cfg: auth.Config{Mode: auth.ModeOn}, validToken: "good-token"}
+
+	// SPA shell, assets, and client-side deep routes pass ungated (no cookie, public peer).
+	for _, path := range []string{"/", "/index.html", "/assets/app.js", "/series/123"} {
+		r := httptest.NewRequest(http.MethodGet, path, http.NoBody)
+		r.RemoteAddr = "203.0.113.7:5555" // public, no cookie
+		_, called := serve(t, gate, false, r)
+		require.True(t, called, "%s must load ungated so the in-app login screen is reachable", path)
+	}
+
+	// The real data boundary stays gated.
+	rAPI := httptest.NewRequest(http.MethodPost, "/api/omnibus.v1.SeriesService/ListSeries", http.NoBody)
+	rAPI.RemoteAddr = "203.0.113.7:5555"
+	recAPI, calledAPI := serve(t, gate, false, rAPI)
+	require.False(t, calledAPI, "a protected /api RPC stays gated while the shell is ungated")
+	require.Equal(t, http.StatusUnauthorized, recAPI.Code)
+
+	rCov := httptest.NewRequest(http.MethodGet, "/covers/123.jpg", http.NoBody)
+	rCov.RemoteAddr = "203.0.113.7:5555"
+	recCov, calledCov := serve(t, gate, false, rCov)
+	require.False(t, calledCov, "a /covers blob stays gated while the shell is ungated")
+	require.Equal(t, http.StatusUnauthorized, recCov.Code)
 }
 
 // TestAuthMiddlewareAllowsAuthServiceWhenGated asserts the AuthService endpoints stay
@@ -118,11 +158,12 @@ func TestAuthMiddlewareAllowsAuthServiceWhenGated(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
-// TestAuthMiddlewareOnValidSessionPasses asserts a valid signed cookie passes the gate.
+// TestAuthMiddlewareOnValidSessionPasses asserts a valid signed cookie passes the gate on a
+// GATED data RPC (the SPA shell is exempt, so it must be exercised on a real /api path).
 func TestAuthMiddlewareOnValidSessionPasses(t *testing.T) {
 	t.Parallel()
 	gate := &fakeAuthGate{cfg: auth.Config{Mode: auth.ModeOn}, validToken: "good-token"}
-	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r := httptest.NewRequest(http.MethodPost, "/api/omnibus.v1.SeriesService/ListSeries", http.NoBody)
 	r.RemoteAddr = "203.0.113.7:5555"
 	r.AddCookie(&http.Cookie{Name: "omnibus_session", Value: "good-token"})
 
@@ -137,15 +178,17 @@ func TestAuthMiddlewareLocalBypass(t *testing.T) {
 	t.Parallel()
 	gate := &fakeAuthGate{cfg: auth.Config{Mode: auth.ModeBypassLocal}, validToken: "good-token"}
 
+	// Exercise a GATED data RPC so the local-bypass decision (not the SPA shell exemption)
+	// is what lets the request through.
 	for _, addr := range []string{"127.0.0.1:5555", "10.1.2.3:5555", "192.168.1.50:5555", "172.16.5.5:5555"} {
-		r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+		r := httptest.NewRequest(http.MethodPost, "/api/omnibus.v1.SeriesService/ListSeries", http.NoBody)
 		r.RemoteAddr = addr // no cookie — local peer bypasses anyway
 		_, called := serve(t, gate, false, r)
 		require.True(t, called, "local peer %s bypasses the gate", addr)
 	}
 
 	// A public peer with no session is still gated.
-	rPub := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	rPub := httptest.NewRequest(http.MethodPost, "/api/omnibus.v1.SeriesService/ListSeries", http.NoBody)
 	rPub.RemoteAddr = "203.0.113.7:5555"
 	recPub, calledPub := serve(t, gate, false, rPub)
 	require.False(t, calledPub, "a remote peer is still gated in BypassLocal mode")
@@ -158,7 +201,7 @@ func TestAuthMiddlewareIgnoresXFF(t *testing.T) {
 	t.Parallel()
 	gate := &fakeAuthGate{cfg: auth.Config{Mode: auth.ModeBypassLocal}, validToken: "good-token"}
 
-	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r := httptest.NewRequest(http.MethodPost, "/api/omnibus.v1.SeriesService/ListSeries", http.NoBody)
 	r.RemoteAddr = "203.0.113.7:5555"            // real socket peer is public
 	r.Header.Set("X-Forwarded-For", "127.0.0.1") // spoofed claim of localhost
 

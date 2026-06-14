@@ -24,24 +24,60 @@ type AuthGate interface {
 // its own) and the read config (which never returns the hash), not any protected resource.
 const authServicePathPrefix = "/api/omnibus.v1.AuthService/"
 
+// Gated data namespaces — the REAL security boundary. Everything under these prefixes stays
+// fully gated in every mode. /api is the Connect data RPC surface; /covers serves cover
+// image blobs (protected data). The SPA shell exemption below deliberately does NOT cover
+// these.
+const (
+	apiPathPrefix    = "/api/"
+	coversPathPrefix = "/covers/"
+)
+
+// isSPAShellRequest reports whether r is a safe navigation/asset request for the embedded
+// SPA shell (the React bundle, its static assets, and client-side deep routes) rather than
+// a request for protected data. Only idempotent GET/HEAD requests that are NOT under the
+// gated data namespaces (/api, /covers) qualify.
+func isSPAShellRequest(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	p := r.URL.Path
+	return !strings.HasPrefix(p, apiPathPrefix) && !strings.HasPrefix(p, coversPathPrefix)
+}
+
 // NewAuthMiddleware wraps next with the single fail-closed optional-auth gate (AUTH-01,
-// ADR 0008). It is the ONLY enforcement seam and uniformly covers everything in the mux —
-// /api, /covers, the embedded SPA, and the long-lived stream — because it sits as an
-// http.Handler in front of the whole mux (a Connect interceptor could see neither the SPA
-// nor the raw socket peer, 06-RESEARCH.md Architectural Responsibility Map). The lone
-// exemption is the AuthService itself (Login/GetAuthConfig/Logout) so the gate is
-// unlock-able.
+// ADR 0008). It is the ONLY enforcement seam for the data boundary (the /api Connect RPCs,
+// the long-lived stream, and /covers blobs) because it sits as an http.Handler in front of
+// the whole mux (a Connect interceptor could see neither the SPA nor the raw socket peer,
+// 06-RESEARCH.md Architectural Responsibility Map). Two requests fall through ungated: the
+// AuthService itself (Login/GetAuthConfig/Logout, so the gate is unlock-able) and the
+// static SPA shell + assets (so the in-app login screen can load). The SPA shell carries no
+// protected data; the real boundary is the gated /api and /covers namespaces.
 //
-// Decision order (Pattern 3): (0) let the AuthService through (login must work); (1) load
-// config; on ANY load error -> 401 (fail-closed); if Off -> pass; (2) if BypassLocal and
-// the REAL peer IP is loopback/RFC1918 -> pass; (3) validate the signed session cookie ->
-// pass on valid, else 401. No code path returns without either calling next (pass) or
-// writing a 401 (deny) — there is no fail-open.
+// Decision order (Pattern 3): (0) let the AuthService through (login must work); (0b) let
+// the static SPA shell/assets through (safe GET/HEAD outside /api and /covers) so the login
+// UI can load even when gated; (1) load config; on ANY load error -> 401 (fail-closed); if
+// Off -> pass; (2) if BypassLocal and the REAL peer IP is loopback/RFC1918 -> pass; (3)
+// validate the signed session cookie -> pass on valid, else 401. No code path returns
+// without either calling next (pass) or writing a 401 (deny) — there is no fail-open on the
+// gated data namespaces.
 func NewAuthMiddleware(gate AuthGate, trustProxy bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// The AuthService endpoints must always be reachable so a gated instance can be
 		// logged into; they are credential-verifying/read-only and fail closed themselves.
 		if strings.HasPrefix(r.URL.Path, authServicePathPrefix) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// SPA shell exemption (standard SPA-auth pattern): the static React shell, its
+		// JS/CSS assets, and client-side deep routes (any safe GET/HEAD request NOT under
+		// the gated data namespaces) load ungated in every mode, so the in-app login screen
+		// — which is rendered INSIDE the React app — is reachable on a fresh load / new tab
+		// / expired cookie. The shell carries no protected data (HTML/JS/CSS only); the data
+		// RPCs (/api) and cover images (/covers) below remain the enforced security
+		// boundary. The frontend gate is purely defense-in-depth on top of that boundary.
+		if isSPAShellRequest(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
