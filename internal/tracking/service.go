@@ -13,10 +13,20 @@ import (
 	"log/slog"
 	"time"
 
+	omnibusv1 "github.com/vizvim/omnibus/gen/go/omnibus/v1"
 	"github.com/vizvim/omnibus/internal/download"
 	"github.com/vizvim/omnibus/internal/repository"
 	"github.com/vizvim/omnibus/internal/series"
 )
+
+// Publisher is the live-status fan-out seam the poll/fetch loop emits to (UI-05, D-08): it
+// publishes typed envelopes (download progress, issue status, timeline) to the in-process
+// event bus the EventService stream subscribes to. events.Bus satisfies it via Publish. A
+// nil publisher makes every emit a no-op, so tracking stays independently shippable and the
+// bus is a purely additive observability seam (it never affects the poll's correctness).
+type Publisher interface {
+	Publish(env *omnibusv1.EventEnvelope)
+}
 
 // defaultStallWindow is how long a Downloading row may sit with no byte progress before it
 // is reaped as Failed (the *arr stalled-reap behavior). A hardcoded sensible default; not a
@@ -66,6 +76,9 @@ type Deps struct {
 	// SAME Completed->post-process path as a SAB download.
 	DDLFetchers map[string]DDLFetcher
 	Logger      *slog.Logger
+	// Publisher is the live-status event sink (UI-05). Nil disables emission (no-op), so the
+	// poll loop's correctness never depends on it.
+	Publisher Publisher
 	// StallWindow overrides defaultStallWindow when > 0 (test seam).
 	StallWindow time.Duration
 	// Now is an injectable clock for deterministic timestamps in tests.
@@ -79,6 +92,7 @@ type Service struct {
 	pollers     map[string]Poller
 	ddlFetchers map[string]DDLFetcher
 	logger      *slog.Logger
+	publisher   Publisher
 	stallWindow time.Duration
 	now         func() time.Time
 	enqueuer    Enqueuer
@@ -103,9 +117,51 @@ func New(d Deps) *Service {
 		pollers:     d.Pollers,
 		ddlFetchers: d.DDLFetchers,
 		logger:      logger,
+		publisher:   d.Publisher,
 		stallWindow: stall,
 		now:         now,
 	}
+}
+
+// emit publishes a live-status envelope to the bus if a publisher is wired (no-op otherwise).
+// Emission is best-effort observability and never affects the poll loop's correctness.
+func (s *Service) emit(env *omnibusv1.EventEnvelope) {
+	if s.publisher == nil {
+		return
+	}
+	s.publisher.Publish(env)
+}
+
+// emitDownloadProgress publishes a download-progress + timeline envelope pair for a row.
+func (s *Service) emitDownloadProgress(row repository.DownloadRow, pct float64, status, nowISO string) {
+	if s.publisher == nil {
+		return
+	}
+	s.emit(&omnibusv1.EventEnvelope{
+		OccurredAt: nowISO,
+		Event: &omnibusv1.EventEnvelope_DownloadProgress{
+			DownloadProgress: &omnibusv1.DownloadProgressEvent{
+				IssueId:    row.IssueID,
+				DownloadId: row.ID,
+				Percent:    pct,
+				Status:     status,
+			},
+		},
+	})
+}
+
+// emitTimeline publishes a per-issue timeline envelope mirroring an issue_events write.
+func (s *Service) emitTimeline(issueID int64, eventType, payloadJSON, nowISO string) {
+	s.emit(&omnibusv1.EventEnvelope{
+		OccurredAt: nowISO,
+		Event: &omnibusv1.EventEnvelope_Timeline{
+			Timeline: &omnibusv1.TimelineEvent{
+				IssueId:     issueID,
+				EventType:   eventType,
+				PayloadJson: payloadJSON,
+			},
+		},
+	})
 }
 
 // SetEnqueuer wires the reactive enqueuer after construction (mirrors the search/series
@@ -326,6 +382,9 @@ func (s *Service) onProgress(ctx context.Context, row repository.DownloadRow, re
 		if _, uerr := s.repos.Downloads.UpdateStatus(ctx, row.ID, row.Status, nowISO); uerr != nil {
 			return fmt.Errorf("bump download %d progress: %w", row.ID, uerr)
 		}
+		// Live-status fan-out: a Downloading row with real progress emits a download-progress
+		// signal so the UI's progress indicator advances live (UI-05/D-10).
+		s.emitDownloadProgress(row, res.ProgressPct, row.Status, nowISO)
 	}
 	return nil
 }
@@ -361,6 +420,11 @@ func (s *Service) onCompleted(ctx context.Context, row repository.DownloadRow, r
 			return fmt.Errorf("enqueue post-process for download %d: %w", row.ID, eerr)
 		}
 	}
+	// Live-status fan-out (UI-05): emit the terminal completed download-progress so the UI's
+	// progress indicator snaps to done without a refetch (D-08/D-10). The issue's
+	// Snatched->Downloaded status flip is owned by post-process, which emits its own
+	// IssueStatusEvent there.
+	s.emitDownloadProgress(row, 100, string(series.DownloadCompleted), nowISO)
 	s.logger.Info("download completed",
 		slog.Int64("download_id", row.ID), slog.Int64("issue_id", row.IssueID),
 		slog.String("storage", res.StoragePath))
@@ -395,6 +459,10 @@ func (s *Service) onFailed(ctx context.Context, row repository.DownloadRow, reas
 	}); eerr != nil {
 		return fmt.Errorf("write failed event for download %d: %w", row.ID, eerr)
 	}
+	// Live-status fan-out (UI-05): mirror the failed timeline write + the terminal
+	// download-status onto the bus so the UI converges to Failed without a refetch (D-08).
+	s.emitTimeline(row.IssueID, "failed", string(payload), nowISO)
+	s.emitDownloadProgress(row, 0, string(series.DownloadFailed), nowISO)
 
 	if _, herr := s.repos.Downloads.InsertHistory(ctx, repository.DownloadHistoryInsert{
 		IssueID: row.IssueID, Provider: row.Provider, ReleaseKey: row.ReleaseKey,
@@ -460,5 +528,9 @@ func (s *Service) writeProgressEvent(ctx context.Context, row repository.Downloa
 	}); eerr != nil {
 		return fmt.Errorf("write progress event for download %d: %w", row.ID, eerr)
 	}
+	// Live-status fan-out (UI-05): mirror the timeline write + the download-progress signal
+	// onto the bus so subscribed SPAs update without a refetch (D-08/D-10).
+	s.emitTimeline(row.IssueID, "download-progress", string(payload), nowISO)
+	s.emitDownloadProgress(row, res.ProgressPct, string(series.DownloadDownloading), nowISO)
 	return nil
 }

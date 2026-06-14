@@ -4,6 +4,10 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 
 import {
+  AuthSettingsForm,
+  type AuthSettingsFormValues,
+} from "../components/AuthSettingsForm";
+import {
   DDLSettingsForm,
   type DDLSettingsFormValues,
 } from "../components/DDLSettingsForm";
@@ -19,6 +23,11 @@ import {
 } from "../components/RenameSettingsForm";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import {
+  getAuthConfig,
+  updateAuthConfig,
+} from "../gen/omnibus/v1/auth-AuthService_connectquery";
+import { AuthMode } from "../gen/omnibus/v1/auth_pb";
 import {
   getDDLConfig,
   updateDDLConfig,
@@ -37,6 +46,20 @@ const SAVE_ERROR = "Couldn't save the download client. Check the URL and API key
 const RENAME_SAVE_ERROR =
   "Couldn't save the renaming settings. Check the folder and file formats, then try again.";
 const DDL_SAVE_ERROR = "Couldn't save the DDL settings. Try again.";
+const AUTH_SAVE_ERROR =
+  "Couldn't save the authentication settings. Check the username and password, then try again.";
+
+// authModeLabel maps the AuthMode enum to its locked read-view label (UI-SPEC Copywriting).
+function authModeLabel(mode: AuthMode | undefined): string {
+  switch (mode) {
+    case AuthMode.ON:
+      return "On";
+    case AuthMode.BYPASS_LOCAL:
+      return "On, except local addresses";
+    default:
+      return "Off";
+  }
+}
 
 // SettingsCard is the shared section frame: a titled card with a right-aligned actions slot.
 function SettingsCard({
@@ -112,6 +135,15 @@ export function Settings() {
     },
   });
 
+  const authConfig = useQuery(getAuthConfig, {}, { retry: false });
+  const [editingAuth, setEditingAuth] = useState(false);
+  const authUpdate = useMutation(updateAuthConfig, {
+    onSuccess: () => {
+      setEditingAuth(false);
+      void authConfig.refetch();
+    },
+  });
+
   function submitEdit(values: DownloadClientFormValues) {
     update.mutate({
       url: values.url,
@@ -136,6 +168,14 @@ export function Settings() {
     ddlUpdate.mutate({ enabled: values.enabled });
   }
 
+  function submitAuthEdit(values: AuthSettingsFormValues) {
+    authUpdate.mutate({
+      mode: values.mode,
+      username: values.username,
+      password: values.password, // empty leaves the stored credential unchanged (D-02)
+    });
+  }
+
   if (config.isError) {
     return (
       <div className="flex flex-col gap-8">
@@ -151,6 +191,7 @@ export function Settings() {
   const current = config.data?.config;
   const renameCurrent = renameConfig.data?.config;
   const ddlCurrent = ddlConfig.data?.config;
+  const authCurrent = authConfig.data?.config;
 
   return (
     <div className="flex flex-col gap-6">
@@ -313,6 +354,59 @@ export function Settings() {
               GetComics is used as a fallback when no Newznab indexer has an acceptable
               release.
             </span>
+          </div>
+        )}
+      </SettingsCard>
+
+      {/* Authentication */}
+      <SettingsCard
+        title="Authentication"
+        description="Optional single-user sign-in for omnibus."
+        actions={
+          !editingAuth && !authConfig.isError ? (
+            <Button
+              size="sm"
+              aria-label="Edit authentication settings"
+              onClick={() => setEditingAuth(true)}
+              className="gap-1.5"
+            >
+              <Pencil className="size-3.5" />
+              Edit
+            </Button>
+          ) : undefined
+        }
+      >
+        {authConfig.isError ? (
+          <p className="text-sm text-tn-red">Couldn't load the authentication settings.</p>
+        ) : editingAuth ? (
+          <AuthSettingsForm
+            initial={{
+              mode: authCurrent?.mode ?? AuthMode.OFF,
+              username: authCurrent?.username ?? "",
+            }}
+            pending={authUpdate.isPending}
+            error={authUpdate.isError ? AUTH_SAVE_ERROR : undefined}
+            onSubmit={submitAuthEdit}
+            onCancel={() => setEditingAuth(false)}
+          />
+        ) : (
+          <div className="rounded-lg border border-border bg-tn-night/30 p-4">
+            <div className="flex items-center gap-2.5 pb-2">
+              <span className="text-sm font-medium text-foreground">
+                {authModeLabel(authCurrent?.mode)}
+              </span>
+              <Badge variant={authCurrent?.configured ? "success" : "neutral"} dot>
+                {authCurrent?.configured ? "Configured" : "Not configured"}
+              </Badge>
+            </div>
+            <ReadRow label="Mode">{authModeLabel(authCurrent?.mode)}</ReadRow>
+            <ReadRow label="Username">{authCurrent?.username || "—"}</ReadRow>
+            {!authCurrent?.configured ? (
+              <p className="pt-2 text-sm text-muted-foreground">
+                Authentication is off. Set a username and password and switch it on to
+                require sign-in.
+              </p>
+            ) : null}
           </div>
         )}
       </SettingsCard>

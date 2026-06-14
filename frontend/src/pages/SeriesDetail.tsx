@@ -13,6 +13,7 @@ import { Skeleton } from "../components/ui/skeleton";
 import { triggerAutoSearch } from "../gen/omnibus/v1/search-SearchService_connectquery";
 import { getSeries, refreshSeries } from "../gen/omnibus/v1/series-SeriesService_connectquery";
 import { relativeTime } from "../lib/time";
+import { useConnectionState } from "../lib/transport";
 
 // SeriesDetail renders the GetSeries header + issue grid. While the series is still
 // importing (have < total) it polls GetSeries so issues + covers appear as they land, then
@@ -26,16 +27,27 @@ export function SeriesDetail({
 }) {
   const [selectedIssueId, setSelectedIssueId] = useState<bigint | null>(null);
   const [searchActive, setSearchActive] = useState(false);
+  const connection = useConnectionState();
 
   const detail = useQuery(
     getSeries,
     { seriesId },
     {
       retry: false,
+      // Live status (download/job/issue) is stream-driven: the unified stream's
+      // issue-status / download-progress / job-state events invalidate this query so the issue
+      // grid + header converge without polling (D-08/D-10). The steady-state 30s/2s poll is
+      // therefore removed. The ONE retained fallback is the initial-import sync: while the
+      // series is still importing AND the live stream is not connected, fall back to a 2s poll
+      // so issues still appear as they land. When the stream is live it drives import progress
+      // (job/issue events), and once caught up nothing polls.
       refetchInterval: (query) => {
+        if (connection !== "offline") {
+          return false; // stream drives updates while connected (D-10)
+        }
         const series = query.state.data?.series;
         if (series && series.haveIssues < series.totalIssues) {
-          return 2000; // keep polling while syncing
+          return 2000; // offline fallback: keep polling while syncing
         }
         return false; // caught up — stop polling
       },
@@ -196,7 +208,7 @@ export function SeriesDetail({
       {/* issues */}
       <section className="flex flex-col gap-4">
         <h2 className="font-display text-xl font-semibold tracking-tight">Issues</h2>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(140px,1fr))]">
           {issues.map((issue) => (
             <Fragment key={issue.id.toString()}>
               <button
