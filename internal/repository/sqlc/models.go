@@ -119,6 +119,13 @@ type MetadataCache struct {
 	FetchedAt       string
 }
 
+type MetadataProviderConfig struct {
+	Provider  string
+	ApiKey    sql.NullString
+	CreatedAt string
+	UpdatedAt string
+}
+
 type Publisher struct {
 	ID                   int64
 	ComicvinePublisherID sql.NullInt64

@@ -35,6 +35,7 @@ type Querier interface {
 	// if the client reported an empty storage path.
 	GetLatestCompletedStorageForIssue(ctx context.Context, arg GetLatestCompletedStorageForIssueParams) (sql.NullString, error)
 	GetMetadataCache(ctx context.Context, cacheKey string) (MetadataCache, error)
+	GetMetadataProviderConfig(ctx context.Context, provider string) (MetadataProviderConfig, error)
 	GetPublisherByID(ctx context.Context, id int64) (Publisher, error)
 	GetSeriesByID(ctx context.Context, id int64) (Series, error)
 	GetSeriesByVolumeID(ctx context.Context, comicvineVolumeID int64) (Series, error)
@@ -109,6 +110,7 @@ type Querier interface {
 	UpsertDownloadClientConfig(ctx context.Context, arg UpsertDownloadClientConfigParams) (DownloadClientConfig, error)
 	// Idempotent upsert keyed on the immutable comicvine_issue_id.
 	UpsertIssue(ctx context.Context, arg UpsertIssueParams) (Issue, error)
+	UpsertMetadataProviderConfig(ctx context.Context, arg UpsertMetadataProviderConfigParams) (MetadataProviderConfig, error)
 	// Idempotent on name (UNIQUE); records the CV publisher id when known.
 	UpsertPublisher(ctx context.Context, arg UpsertPublisherParams) (Publisher, error)
 	// Idempotent upsert keyed on the immutable comicvine_volume_id.

@@ -18,7 +18,7 @@ import (
 var allTables = []string{
 	"blacklists", "covers", "download_client_config", "download_history", "downloads", "indexers",
 	"issue_credits", "issue_events", "issues",
-	"metadata_cache", "publishers", "series",
+	"metadata_cache", "metadata_provider_config", "publishers", "series",
 	"story_arc_issues", "story_arcs", "user_config",
 }
 

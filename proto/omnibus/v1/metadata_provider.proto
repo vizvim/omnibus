@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package omnibus.v1;
+
+option go_package = "github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1";
+
+// MetadataProviderConfig is the masked, DB-backed metadata-provider configuration view.
+// The api_key is intentionally absent: it is write-only and masked, never returned in a
+// response — exactly like DownloadClientConfig (D-17 / T-ul5-01). It is accepted only on
+// the update request message. ComicVine is the only provider today; provider is present so
+// additional metadata providers can be added later.
+message MetadataProviderConfig {
+  // provider is the provider id ("comicvine" is the only value now).
+  string provider = 1;
+  // configured is true once a non-empty api key has been stored.
+  bool configured = 2;
+}
+
+message GetMetadataProviderConfigRequest {}
+
+message GetMetadataProviderConfigResponse {
+  MetadataProviderConfig config = 1;
+}
+
+message UpdateMetadataProviderConfigRequest {
+  // provider is reserved for future multi-provider routing; ignored/defaults to
+  // "comicvine" today.
+  string provider = 1;
+  // api_key may be empty to leave the stored key unchanged (exactly like
+  // UpdateDownloadClientConfig). Write-only; stored but never returned.
+  string api_key = 2;
+}
+
+message UpdateMetadataProviderConfigResponse {
+  MetadataProviderConfig config = 1;
+}
+
+message TestMetadataProviderConfigRequest {
+  // api_key is the key to validate; empty means "use the stored key".
+  string api_key = 1;
+}
+
+// TestMetadataProviderConfigResponse carries the key-validation outcome. A bad key is a
+// normal response (ok=false + a concise detail), never an RPC error. The api_key is never
+// echoed: detail is concise status text only.
+message TestMetadataProviderConfigResponse {
+  bool ok = 1;
+  string detail = 2;
+}
+
+// MetadataProviderService owns the singleton DB-backed metadata-provider config (ComicVine
+// today). It is a domain-segmented service (ADR 0007). The api_key is write-only and never
+// echoed in any response.
+service MetadataProviderService {
+  // GetMetadataProviderConfig returns the current config (api_key never included).
+  rpc GetMetadataProviderConfig(GetMetadataProviderConfigRequest) returns (GetMetadataProviderConfigResponse);
+  // UpdateMetadataProviderConfig edits the config; an empty api_key leaves the stored key
+  // unchanged. The saved key takes effect on the next metadata search with no restart.
+  rpc UpdateMetadataProviderConfig(UpdateMetadataProviderConfigRequest) returns (UpdateMetadataProviderConfigResponse);
+  // TestMetadataProviderConfig validates a supplied (or stored) key against live ComicVine.
+  // A bad key returns ok=false + detail, never an RPC error.
+  rpc TestMetadataProviderConfig(TestMetadataProviderConfigRequest) returns (TestMetadataProviderConfigResponse);
+}
