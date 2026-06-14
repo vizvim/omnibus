@@ -337,7 +337,7 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 	searchPath, searchH := omnibusv1connect.NewSearchServiceHandler(searchHandler, connect.WithInterceptors(interceptors...))
 	mux.Handle("/api"+searchPath, http.StripPrefix("/api", searchH))
 
-	authHandler := transport.NewAuthHandler(authSvc)
+	authHandler := transport.NewAuthHandler(authSvc, cfg.AuthTrustProxy)
 	authPath, authH := omnibusv1connect.NewAuthServiceHandler(authHandler, connect.WithInterceptors(interceptors...))
 	mux.Handle("/api"+authPath, http.StripPrefix("/api", authH))
 

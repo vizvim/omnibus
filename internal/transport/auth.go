@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"connectrpc.com/connect"
 
@@ -38,11 +39,17 @@ type AuthServicer interface {
 type AuthHandler struct {
 	omnibusv1connect.UnimplementedAuthServiceHandler
 	svc AuthServicer
+	// trustProxy mirrors the gate's policy: only when the operator vouches for the proxy
+	// chain do we honor X-Forwarded-Proto to decide the cookie's Secure flag (WR-02),
+	// consistent with the X-Forwarded-For trust policy in the middleware.
+	trustProxy bool
 }
 
-// NewAuthHandler builds the AuthService Connect handler.
-func NewAuthHandler(svc AuthServicer) *AuthHandler {
-	return &AuthHandler{svc: svc}
+// NewAuthHandler builds the AuthService Connect handler. trustProxy controls whether the
+// forwarded X-Forwarded-Proto header is honored when deciding the session cookie's Secure
+// flag (see secureCookie).
+func NewAuthHandler(svc AuthServicer, trustProxy bool) *AuthHandler {
+	return &AuthHandler{svc: svc, trustProxy: trustProxy}
 }
 
 // GetAuthConfig handles the get RPC. On a fresh DB the service returns the D-01 default
@@ -87,33 +94,51 @@ func (h *AuthHandler) Login(
 	}
 
 	resp := connect.NewResponse(&omnibusv1.LoginResponse{})
-	cookie := &http.Cookie{ //nolint:gosec // G124: Secure omitted intentionally for LAN-http self-host; HttpOnly+SameSite=Lax set (see below)
+	cookie := &http.Cookie{ //nolint:gosec // G124: Secure is set conditionally (secureCookie) — true over HTTPS, false on plain-HTTP LAN self-hosts by design (WR-02); HttpOnly+SameSite=Lax always set.
 		Name:     sessionCookieName,
 		Value:    h.svc.SignSession(req.Msg.GetUsername()),
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		// Secure is intentionally NOT set unconditionally: self-hosted omnibus often runs
-		// on plain HTTP on a LAN, where an unconditional Secure flag silently breaks login
-		// (Anti-Patterns, 06-RESEARCH.md). HttpOnly + SameSite=Lax carry the XSS/CSRF
-		// defenses; TLS termination is the operator's reverse-proxy concern.
+		// Secure is set conditionally (WR-02): when the request arrived over HTTPS we mark
+		// the cookie Secure so it can never leak over an accidental plaintext request. On a
+		// plain-HTTP LAN install (no TLS, no trusted X-Forwarded-Proto) Secure stays false so
+		// login keeps working — an unconditional Secure flag silently breaks plain-HTTP
+		// self-hosts (Anti-Patterns, 06-RESEARCH.md). HttpOnly + SameSite=Lax carry the
+		// XSS/CSRF defenses regardless.
+		Secure: h.secureCookie(req),
 		MaxAge: sessionMaxAge,
 	}
 	resp.Header().Set("Set-Cookie", cookie.String())
 	return resp, nil
 }
 
-// Logout clears the session cookie (MaxAge < 0 expires it immediately).
+// secureCookie reports whether the session cookie should carry the Secure flag for this
+// request — i.e. whether the connection is HTTPS. It honors X-Forwarded-Proto == "https"
+// only when the handler is configured to trust the proxy (trustProxy), mirroring the gate's
+// X-Forwarded-For trust policy so an untrusted client cannot influence the flag. Plain-HTTP
+// local dev (no trusted forwarded-proto) yields false so login still works.
+func (h *AuthHandler) secureCookie(req interface{ Header() http.Header }) bool {
+	if h.trustProxy && strings.EqualFold(req.Header().Get("X-Forwarded-Proto"), "https") {
+		return true
+	}
+	return false
+}
+
+// Logout clears the session cookie (MaxAge < 0 expires it immediately). The expiring cookie
+// carries the same Secure attribute as the one Login set (WR-02) so the browser reliably
+// matches and clears it on an HTTPS deployment.
 func (h *AuthHandler) Logout(
-	_ context.Context, _ *connect.Request[omnibusv1.LogoutRequest],
+	_ context.Context, req *connect.Request[omnibusv1.LogoutRequest],
 ) (*connect.Response[omnibusv1.LogoutResponse], error) {
 	resp := connect.NewResponse(&omnibusv1.LogoutResponse{})
-	cookie := &http.Cookie{ //nolint:gosec // G124: Secure omitted intentionally for LAN-http self-host; this expires the cookie (MaxAge<0)
+	cookie := &http.Cookie{ //nolint:gosec // G124: Secure mirrors Login's conditional value (secureCookie); this expires the cookie (MaxAge<0). HttpOnly+SameSite=Lax always set.
 		Name:     sessionCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   h.secureCookie(req),
 		MaxAge:   -1,
 	}
 	resp.Header().Set("Set-Cookie", cookie.String())

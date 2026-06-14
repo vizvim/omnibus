@@ -51,7 +51,14 @@ func (f *fakeAuthServicer) SignSession(string) string {
 
 func newAuthTestClient(t *testing.T, svc transport.AuthServicer) omnibusv1connect.AuthServiceClient {
 	t.Helper()
-	handler := transport.NewAuthHandler(svc)
+	return newAuthTestClientTrustProxy(t, svc, false)
+}
+
+func newAuthTestClientTrustProxy(
+	t *testing.T, svc transport.AuthServicer, trustProxy bool,
+) omnibusv1connect.AuthServiceClient {
+	t.Helper()
+	handler := transport.NewAuthHandler(svc, trustProxy)
 	path, h := omnibusv1connect.NewAuthServiceHandler(handler)
 
 	mux := http.NewServeMux()
@@ -77,6 +84,47 @@ func TestAuthLoginSetsCookie(t *testing.T) {
 	require.Contains(t, setCookie, "omnibus_session=abc.123.def")
 	require.Contains(t, strings.ToLower(setCookie), "httponly")
 	require.Contains(t, strings.ToLower(setCookie), "samesite=lax")
+}
+
+// TestAuthLoginCookieSecureOnHTTPS asserts the session cookie carries the Secure flag when
+// the request arrived over HTTPS via a trusted proxy (X-Forwarded-Proto: https), so it
+// cannot leak over accidental plaintext (WR-02).
+func TestAuthLoginCookieSecureOnHTTPS(t *testing.T) {
+	t.Parallel()
+	client := newAuthTestClientTrustProxy(t, &fakeAuthServicer{verifyOK: true}, true)
+
+	req := connect.NewRequest(&omnibusv1.LoginRequest{Username: "admin", Password: "pw"})
+	req.Header().Set("X-Forwarded-Proto", "https")
+	resp, err := client.Login(context.Background(), req)
+	require.NoError(t, err)
+	require.Contains(t, strings.ToLower(resp.Header().Get("Set-Cookie")), "secure")
+}
+
+// TestAuthLoginCookieNotSecureOnPlainHTTP asserts the cookie omits Secure on a plain-HTTP
+// install (no TLS, no trusted forwarded-proto) so login still works on a LAN (WR-02).
+func TestAuthLoginCookieNotSecureOnPlainHTTP(t *testing.T) {
+	t.Parallel()
+	client := newAuthTestClient(t, &fakeAuthServicer{verifyOK: true})
+
+	resp, err := client.Login(context.Background(),
+		connect.NewRequest(&omnibusv1.LoginRequest{Username: "admin", Password: "pw"}))
+	require.NoError(t, err)
+	require.NotContains(t, strings.ToLower(resp.Header().Get("Set-Cookie")), "secure")
+}
+
+// TestAuthLoginCookieSecureIgnoresUntrustedProto asserts that without trustProxy a
+// client-supplied X-Forwarded-Proto: https does NOT make the cookie Secure (a client cannot
+// influence the flag), mirroring the gate's X-Forwarded-For trust policy (WR-02).
+func TestAuthLoginCookieSecureIgnoresUntrustedProto(t *testing.T) {
+	t.Parallel()
+	// newAuthTestClient uses trustProxy=false, so an untrusted forwarded-proto is ignored.
+	client := newAuthTestClient(t, &fakeAuthServicer{verifyOK: true})
+
+	req := connect.NewRequest(&omnibusv1.LoginRequest{Username: "admin", Password: "pw"})
+	req.Header().Set("X-Forwarded-Proto", "https")
+	resp, err := client.Login(context.Background(), req)
+	require.NoError(t, err)
+	require.NotContains(t, strings.ToLower(resp.Header().Get("Set-Cookie")), "secure")
 }
 
 // TestAuthLoginBadCredsGenericError asserts bad credentials return Unauthenticated with a
