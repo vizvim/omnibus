@@ -16,7 +16,7 @@ import (
 // no jobs/job_history tables here: the River engine owns its own jobs schema via
 // its own migrator (ADR 0006), not golang-migrate.
 var allTables = []string{
-	"blacklists", "covers", "download_client_config", "download_history", "downloads", "indexers",
+	"blacklists", "comicvine_config", "covers", "download_client_config", "download_history", "downloads", "indexers",
 	"issue_credits", "issue_events", "issues",
 	"metadata_cache", "publishers", "series",
 	"story_arc_issues", "story_arcs", "user_config",

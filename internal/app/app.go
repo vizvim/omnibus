@@ -37,6 +37,7 @@ import (
 	"github.com/vizvim/omnibus/internal/jobhistory"
 	"github.com/vizvim/omnibus/internal/jobs"
 	"github.com/vizvim/omnibus/internal/metadata"
+	"github.com/vizvim/omnibus/internal/metadataprovider"
 	"github.com/vizvim/omnibus/internal/postprocess"
 	"github.com/vizvim/omnibus/internal/renameconfig"
 	"github.com/vizvim/omnibus/internal/repository"
@@ -83,8 +84,24 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// slow/dead subscriber never blocks producers (drop-on-full, T-6-21).
 	eventBus := events.NewBus()
 
-	// The gateway is the single ComicVine chokepoint (limiter + cache).
-	provider := metadata.NewComicVineProvider(cfg.ComicVineAPIKey)
+	// ComicVine config is now DB-backed and runtime-editable via MetadataProviderService.
+	// On first boot, seed the DB row from OMNIBUS_COMICVINE_API_KEY so existing deployments
+	// keep working; thereafter the DB is the source of truth. The resolved key is held in a
+	// hot-swappable holder the provider resolves per request, so a key saved in the UI takes
+	// effect on the next search with no restart.
+	if seedErr := seedComicVineConfig(ctx, repos, cfg, logger); seedErr != nil {
+		_ = database.Close()
+		return fmt.Errorf("seed comicvine config: %w", seedErr)
+	}
+	cvKeyHolder, err := newComicVineKeyHolder(ctx, repos, cfg)
+	if err != nil {
+		_ = database.Close()
+		return fmt.Errorf("resolve comicvine key: %w", err)
+	}
+
+	// The gateway is the single ComicVine chokepoint (limiter + cache). The provider resolves
+	// its API key from the holder on each request (hot-swappable, no restart).
+	provider := metadata.NewComicVineProviderWithKeyFunc(cvKeyHolder.Get)
 	limiter := rate.NewLimiter(rate.Every(parseRate(cfg.ComicVineRate)), 1)
 	gateway := metadata.NewGateway(provider, repos.MetadataCache, limiter, logger, metadataTTL)
 
@@ -240,7 +257,18 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// connectivity prober so Test probes the live, DB-resolved config.
 	downloadClientSvc := downloadclient.New(downloadclient.Deps{Repos: repos, Logger: logger, Prober: sabProvider})
 
-	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, renameConfigSvc, ddlConfigSvc, searchSvc, authSvc, eventBus, repos.Cover)
+	// MetadataProviderService owns the singleton DB-backed ComicVine config (ADR 0007),
+	// editable at runtime. On Update it writes the hot-swappable key holder the live provider
+	// resolves from, so a saved key takes effect on the next search with no restart. The
+	// ComicVine provider doubles as the key-validation prober for Test.
+	metadataProviderSvc := metadataprovider.New(metadataprovider.Deps{
+		Repos:  repos,
+		Logger: logger,
+		Holder: cvKeyHolder,
+		Prober: provider,
+	})
+
+	srv, err := newServer(cfg, logger, svc, jobSvc, indexerSvc, downloadClientSvc, metadataProviderSvc, renameConfigSvc, ddlConfigSvc, searchSvc, authSvc, eventBus, repos.Cover)
 	if err != nil {
 		_ = database.Close()
 		return err
@@ -299,7 +327,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 // newServer builds the h2c-wrapped HTTP server hosting the SeriesService + JobService
 // Connect handlers (with slog + otel interceptors) and the cover handler serving blobs
 // from SQLite, with CORS scoped to the Vite dev origin.
-func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobhistory.Service, indexerSvc *indexerconfig.Service, downloadClientSvc *downloadclient.Service, renameConfigSvc *renameconfig.Service, ddlConfigSvc *ddlconfig.Service, searchSvc *search.Service, authSvc *auth.Service, eventBus *events.Bus, covers transport.CoverStore) (*http.Server, error) {
+func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobSvc *jobhistory.Service, indexerSvc *indexerconfig.Service, downloadClientSvc *downloadclient.Service, metadataProviderSvc *metadataprovider.Service, renameConfigSvc *renameconfig.Service, ddlConfigSvc *ddlconfig.Service, searchSvc *search.Service, authSvc *auth.Service, eventBus *events.Bus, covers transport.CoverStore) (*http.Server, error) {
 	interceptors, err := transport.NewInterceptors(logger)
 	if err != nil {
 		return nil, fmt.Errorf("build interceptors: %w", err)
@@ -324,6 +352,10 @@ func newServer(cfg config.Config, logger *slog.Logger, svc *series.Service, jobS
 	downloadClientHandler := transport.NewDownloadClientHandler(downloadClientSvc)
 	downloadClientPath, downloadClientH := omnibusv1connect.NewDownloadClientServiceHandler(downloadClientHandler, connect.WithInterceptors(interceptors...))
 	mux.Handle("/api"+downloadClientPath, http.StripPrefix("/api", downloadClientH))
+
+	metadataProviderHandler := transport.NewMetadataProviderHandler(metadataProviderSvc)
+	metadataProviderPath, metadataProviderH := omnibusv1connect.NewMetadataProviderServiceHandler(metadataProviderHandler, connect.WithInterceptors(interceptors...))
+	mux.Handle("/api"+metadataProviderPath, http.StripPrefix("/api", metadataProviderH))
 
 	renameConfigHandler := transport.NewRenameConfigHandler(renameConfigSvc)
 	renameConfigPath, renameConfigH := omnibusv1connect.NewRenameConfigServiceHandler(renameConfigHandler, connect.WithInterceptors(interceptors...))
@@ -405,6 +437,51 @@ func sabnzbdResolver(repos *repository.Repositories) download.SABnzbdConfigResol
 			Category: row.Category,
 		}, nil
 	}
+}
+
+// seedComicVineConfig seeds the singleton comicvine_config row from OMNIBUS_COMICVINE_API_KEY
+// on first boot so existing deployments keep working after ComicVine config moved into the
+// DB. It only seeds when the DB row is empty/absent AND cfg.ComicVineAPIKey is non-empty — it
+// never overwrites a user-set DB row. The key is never logged.
+func seedComicVineConfig(ctx context.Context, repos *repository.Repositories, cfg config.Config, logger *slog.Logger) error {
+	row, err := repos.ComicVineConfig.Get(ctx)
+	if err != nil && !errors.Is(err, repository.ErrNoComicVineConfig) {
+		return err
+	}
+	if row.APIKey != "" {
+		// DB already has a user-set key; never overwrite it.
+		return nil
+	}
+	if cfg.ComicVineAPIKey == "" {
+		// Nothing to seed from.
+		return nil
+	}
+	nowISO := time.Now().UTC().Format(time.RFC3339)
+	if _, err := repos.ComicVineConfig.Upsert(ctx, repository.ComicVineConfigUpsert{
+		APIKey: cfg.ComicVineAPIKey,
+	}, nowISO); err != nil {
+		return err
+	}
+	logger.Info("seeded comicvine config from OMNIBUS_COMICVINE_API_KEY on first boot")
+	return nil
+}
+
+// newComicVineKeyHolder builds the hot-swappable ComicVine key holder, seeded from the DB
+// (the source of truth after first-boot seeding). When no row exists it falls back to the env
+// value. The key is held only in the holder and is never logged.
+func newComicVineKeyHolder(ctx context.Context, repos *repository.Repositories, cfg config.Config) (*metadataprovider.KeyHolder, error) {
+	row, err := repos.ComicVineConfig.Get(ctx)
+	if err != nil {
+		if errors.Is(err, repository.ErrNoComicVineConfig) {
+			return metadataprovider.NewKeyHolder(cfg.ComicVineAPIKey), nil
+		}
+		return nil, err
+	}
+	key := row.APIKey
+	if key == "" {
+		key = cfg.ComicVineAPIKey
+	}
+	return metadataprovider.NewKeyHolder(key), nil
 }
 
 // seedSabnzbdConfig seeds the singleton download_client_config row from OMNIBUS_SABNZBD_*
