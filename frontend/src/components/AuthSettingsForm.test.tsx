@@ -60,6 +60,27 @@ describe("AuthSettingsForm", () => {
     expect(onSubmit.mock.calls[0][0].password).toBe("s3cret");
   });
 
+  it("never produces a NaN mode from a malformed option value", () => {
+    const onSubmit = vi.fn<(v: AuthSettingsFormValues) => void>();
+    render(
+      <AuthSettingsForm
+        initial={{ mode: AuthMode.ON, username: "kyle" }}
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+      />,
+    );
+
+    const select = screen.getByLabelText(/authentication mode/i) as HTMLSelectElement;
+    // Simulate a malformed value that Number() would turn into NaN. The guard must reject it
+    // and keep the previously-selected known mode (WR-04) rather than submitting NaN.
+    fireEvent.change(select, { target: { value: "not-a-number" } });
+    fireEvent.click(screen.getByRole("button", { name: /save authentication settings/i }));
+
+    const submitted = onSubmit.mock.calls[0][0];
+    expect(Number.isNaN(submitted.mode)).toBe(false);
+    expect(submitted.mode).toBe(AuthMode.ON);
+  });
+
   it("has labelled controls and no axe violations", async () => {
     const { container } = render(
       <AuthSettingsForm

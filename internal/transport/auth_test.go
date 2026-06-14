@@ -190,6 +190,39 @@ func TestUpdateAuthConfigMapsInput(t *testing.T) {
 	require.Equal(t, "new-password", fake.gotInput.Password)
 }
 
+// TestUpdateAuthConfigRejectsUnknownMode asserts an unspecified/unknown AuthMode is rejected
+// with InvalidArgument rather than silently coerced to Off (which would disable auth on a
+// malformed write, WR-04). The service must never be called for a rejected mode.
+func TestUpdateAuthConfigRejectsUnknownMode(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []omnibusv1.AuthMode{
+		omnibusv1.AuthMode_AUTH_MODE_UNSPECIFIED,
+		omnibusv1.AuthMode(99), // out-of-range / corrupted value
+	} {
+		fake := &fakeAuthServicer{}
+		client := newAuthTestClient(t, fake)
+
+		_, err := client.UpdateAuthConfig(context.Background(),
+			connect.NewRequest(&omnibusv1.UpdateAuthConfigRequest{Mode: mode, Username: "admin"}))
+		require.Error(t, err)
+		require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+		require.Equal(t, auth.Input{}, fake.gotInput, "service must not be called for a rejected mode")
+	}
+}
+
+// TestUpdateAuthConfigAllowsOff asserts a legitimate Off mode remains settable (it is a known
+// mode, not an unknown one — WR-04 must not over-reject).
+func TestUpdateAuthConfigAllowsOff(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAuthServicer{updateResult: auth.Config{Mode: auth.ModeOff}}
+	client := newAuthTestClient(t, fake)
+
+	_, err := client.UpdateAuthConfig(context.Background(),
+		connect.NewRequest(&omnibusv1.UpdateAuthConfigRequest{Mode: omnibusv1.AuthMode_AUTH_MODE_OFF}))
+	require.NoError(t, err)
+	require.Equal(t, auth.ModeOff, fake.gotInput.Mode)
+}
+
 // TestUpdateAuthConfigMisconfigIsInvalidArgument asserts the fail-closed misconfig error
 // surfaces as InvalidArgument.
 func TestUpdateAuthConfigMisconfigIsInvalidArgument(t *testing.T) {

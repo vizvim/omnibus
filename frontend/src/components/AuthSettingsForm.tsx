@@ -90,7 +90,15 @@ export function AuthSettingsForm({
           aria-label="Authentication mode"
           className={selectClass}
           value={String(values.mode)}
-          onChange={(e) => set("mode", Number(e.target.value) as AuthMode)}
+          onChange={(e) => {
+            // Guard against a malformed option value producing NaN (then a meaningless
+            // mode the server would silently coerce to Off, disabling auth). Only ever set a
+            // known AuthMode (WR-04).
+            const next = Number(e.target.value);
+            if (modeOptions.some((o) => o.value === next)) {
+              set("mode", next as AuthMode);
+            }
+          }}
         >
           {modeOptions.map((opt) => (
             <option key={opt.value} value={String(opt.value)}>

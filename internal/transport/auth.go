@@ -26,6 +26,12 @@ const sessionMaxAge = 60 * 60 * 24 * 30
 // user-enumeration oracle, D-04).
 var errGenericAuth = errors.New("incorrect username or password")
 
+// errUnknownAuthMode is returned by UpdateAuthConfig when the requested AuthMode is not one
+// of the three known modes (including the proto3 zero value UNSPECIFIED). A malformed write
+// must be rejected, not silently coerced to Off — silently disabling auth on a corrupt
+// value is surprising and unsafe (WR-04). Mapped to InvalidArgument.
+var errUnknownAuthMode = errors.New("unknown auth mode; expected Off, On, or On-except-local")
+
 // AuthServicer is the subset of auth.Service the handler depends on. The transport layer
 // depends only on the service package, never on repository/db.
 type AuthServicer interface {
@@ -70,8 +76,14 @@ func (h *AuthHandler) UpdateAuthConfig(
 	ctx context.Context, req *connect.Request[omnibusv1.UpdateAuthConfigRequest],
 ) (*connect.Response[omnibusv1.UpdateAuthConfigResponse], error) {
 	m := req.Msg
+	// Reject an unknown/unspecified mode rather than silently coercing it to Off (which would
+	// disable auth on a malformed write). Legitimate Off (AUTH_MODE_OFF) remains settable.
+	mode, ok := knownModeFromProto(m.GetMode())
+	if !ok {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errUnknownAuthMode)
+	}
 	cfg, err := h.svc.UpdateConfig(ctx, auth.Input{
-		Mode:     modeFromProto(m.GetMode()),
+		Mode:     mode,
 		Username: m.GetUsername(),
 		Password: m.GetPassword(),
 	})
@@ -155,17 +167,22 @@ func authConfigToProto(c auth.Config) *omnibusv1.AuthConfig {
 	}
 }
 
-// modeFromProto maps the AuthMode proto enum to the domain mode string.
-func modeFromProto(m omnibusv1.AuthMode) string {
+// knownModeFromProto maps the AuthMode proto enum to the domain mode string, returning
+// ok=false for the proto3 zero value (UNSPECIFIED) and any out-of-range value. The caller
+// rejects a not-ok mode with InvalidArgument instead of silently coercing it to Off (WR-04).
+// AUTH_MODE_OFF is a known, legitimate mode and maps to (Off, true).
+func knownModeFromProto(m omnibusv1.AuthMode) (string, bool) {
 	switch m {
+	case omnibusv1.AuthMode_AUTH_MODE_OFF:
+		return auth.ModeOff, true
 	case omnibusv1.AuthMode_AUTH_MODE_ON:
-		return auth.ModeOn
+		return auth.ModeOn, true
 	case omnibusv1.AuthMode_AUTH_MODE_BYPASS_LOCAL:
-		return auth.ModeBypassLocal
-	case omnibusv1.AuthMode_AUTH_MODE_OFF, omnibusv1.AuthMode_AUTH_MODE_UNSPECIFIED:
-		return auth.ModeOff
+		return auth.ModeBypassLocal, true
+	case omnibusv1.AuthMode_AUTH_MODE_UNSPECIFIED:
+		return "", false
 	default:
-		return auth.ModeOff
+		return "", false
 	}
 }
 
