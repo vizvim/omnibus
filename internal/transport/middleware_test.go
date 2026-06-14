@@ -210,11 +210,36 @@ func TestAuthMiddlewareIgnoresXFF(t *testing.T) {
 	require.False(t, called, "a spoofed XFF cannot forge a local bypass")
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
 
-	// When a trusted proxy IS configured, the first XFF entry is honored.
-	r2 := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	// When a trusted proxy IS configured, the RIGHT-MOST XFF entry (the address the trusted
+	// proxy itself observed/appended) is honored.
+	r2 := httptest.NewRequest(http.MethodPost, "/api/omnibus.v1.SeriesService/ListSeries", http.NoBody)
 	r2.RemoteAddr = "203.0.113.7:5555"
 	r2.Header.Set("X-Forwarded-For", "10.0.0.5")
-	// A trusted proxy is configured, so the first XFF entry is honored.
 	_, called2 := serve(t, gate, true, r2)
-	require.True(t, called2, "behind a trusted proxy, a local XFF triggers the bypass")
+	require.True(t, called2, "behind a trusted proxy, a local right-most XFF triggers the bypass")
+}
+
+// TestAuthMiddlewareTrustProxyUsesRightmostXFF asserts that behind a trusted proxy a
+// client-spoofed left-most 127.0.0.1 does NOT win the local bypass when the right-most entry
+// (the value the trusted proxy appended) is a real public IP — the left-most entry is
+// client-controlled and must not be trusted (WR-01).
+func TestAuthMiddlewareTrustProxyUsesRightmostXFF(t *testing.T) {
+	t.Parallel()
+	gate := &fakeAuthGate{cfg: auth.Config{Mode: auth.ModeBypassLocal}, validToken: "good-token"}
+
+	// Attacker forges a local left-most hop; the trusted proxy appends the real public peer.
+	r := httptest.NewRequest(http.MethodPost, "/api/omnibus.v1.SeriesService/ListSeries", http.NoBody)
+	r.RemoteAddr = "10.0.0.1:5555" // the trusted proxy's own socket peer
+	r.Header.Set("X-Forwarded-For", "127.0.0.1, 203.0.113.7")
+
+	rec, called := serve(t, gate, true, r)
+	require.False(t, called, "a spoofed left-most local XFF must not forge a local bypass")
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	// Conversely, a genuine local right-most entry (proxy-observed) does bypass.
+	r2 := httptest.NewRequest(http.MethodPost, "/api/omnibus.v1.SeriesService/ListSeries", http.NoBody)
+	r2.RemoteAddr = "10.0.0.1:5555"
+	r2.Header.Set("X-Forwarded-For", "203.0.113.7, 10.1.2.3")
+	_, called2 := serve(t, gate, true, r2)
+	require.True(t, called2, "a genuine local right-most XFF triggers the bypass")
 }

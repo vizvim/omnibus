@@ -119,15 +119,23 @@ func NewAuthMiddleware(gate AuthGate, trustProxy bool, next http.Handler) http.H
 }
 
 // realClientIP resolves the request's client IP for the local-bypass decision. It uses the
-// real socket peer (r.RemoteAddr) by default — the only non-spoofable signal. The first
-// X-Forwarded-For entry is read ONLY when trustProxy is explicitly configured (the
-// operator vouches for the proxy chain); otherwise a client-supplied XFF is ignored so a
-// spoofed header cannot forge a local bypass (D-05, T-6-11).
+// real socket peer (r.RemoteAddr) by default — the only non-spoofable signal. The
+// X-Forwarded-For header is read ONLY when trustProxy is explicitly configured (the operator
+// vouches for the proxy chain); otherwise a client-supplied XFF is ignored so a spoofed
+// header cannot forge a local bypass (D-05, T-6-11).
+//
+// When trustProxy is set we trust the RIGHT-MOST parseable XFF entry — the address the
+// trusted reverse proxy itself observed and appended — NOT the left-most entry. The
+// left-most entry is the value the original client sent and is fully client-spoofable: a
+// remote attacker could otherwise send "X-Forwarded-For: 127.0.0.1" to forge a local bypass
+// (WR-01). This assumes the single trusted proxy appends the real peer it saw (the standard
+// reverse-proxy behavior).
 func realClientIP(r *http.Request, trustProxy bool) net.IP {
 	if trustProxy {
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			first := strings.TrimSpace(strings.Split(xff, ",")[0])
-			if ip := net.ParseIP(first); ip != nil {
+			parts := strings.Split(xff, ",")
+			last := strings.TrimSpace(parts[len(parts)-1])
+			if ip := net.ParseIP(last); ip != nil {
 				return ip
 			}
 		}
