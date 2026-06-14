@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package omnibus.v1;
+
+import "omnibus/v1/common.proto";
+
+option go_package = "github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1";
+
+// EventService is the single unified live-status server-streaming RPC (UI-05, D-08). The
+// SPA subscribes once via StreamEvents and fans the typed envelope into the existing
+// TanStack Query caches, superseding refetchInterval polling (D-10). The stream rides the
+// same auth gate as every other request — the session cookie on the initial stream request
+// is validated once by the wrapping middleware (no ungated side-channel, ADR 0008).
+service EventService {
+  // StreamEvents pushes a typed event envelope to the subscribed client as job/download/
+  // issue producers publish to the in-process bus. It returns cleanly when the client
+  // context is canceled (no leak).
+  rpc StreamEvents(StreamEventsRequest) returns (stream EventEnvelope);
+}
+
+message StreamEventsRequest {}
+
+// EventEnvelope is the discriminated-union event the producers publish and the stream
+// emits. occurred_at is the RFC3339 server timestamp; exactly one oneof case is set.
+message EventEnvelope {
+  // occurred_at is the RFC3339 timestamp the event was produced (OBS-01).
+  string occurred_at = 1;
+  oneof event {
+    // download_progress reports a download's percent + status as the poll/fetch loop runs.
+    DownloadProgressEvent download_progress = 2;
+    // job_state reports a background job-kind state transition (running/completed/failed).
+    JobStateEvent job_state = 3;
+    // issue_status reports an issue's lifecycle status change (Wanted->Snatched->…).
+    IssueStatusEvent issue_status = 4;
+    // timeline reports a new per-issue timeline event (OBS-01), mirroring issue_events.
+    TimelineEvent timeline = 5;
+  }
+}
+
+// DownloadProgressEvent carries live progress for one in-flight download.
+message DownloadProgressEvent {
+  int64 issue_id = 1;
+  int64 download_id = 2;
+  // percent is 0..100 completion.
+  double percent = 3;
+  // status is the download-status string (queued/downloading/completed/failed).
+  string status = 4;
+}
+
+// JobStateEvent carries a background job-kind state transition.
+message JobStateEvent {
+  // kind is the job kind (e.g. "import_series", "download_poll").
+  string kind = 1;
+  // state is the run state (e.g. "running", "completed", "failed").
+  string state = 2;
+}
+
+// IssueStatusEvent carries an issue's lifecycle status change.
+message IssueStatusEvent {
+  int64 issue_id = 1;
+  IssueStatus status = 2;
+}
+
+// TimelineEvent mirrors a per-issue issue_events row (OBS-01) so the timeline view updates
+// live without a refetch.
+message TimelineEvent {
+  int64 issue_id = 1;
+  // event_type is the issue_events.event_type (e.g. "download-progress", "failed").
+  string event_type = 2;
+  // payload_json is the issue_events.payload_json blob.
+  string payload_json = 3;
+}

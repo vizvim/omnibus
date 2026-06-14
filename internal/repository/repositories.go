@@ -20,6 +20,7 @@ type Repositories struct {
 	RenameConfig   *RenameConfigRepository
 	DDLConfig      *DDLConfigRepository
 	Blacklist      *BlacklistRepository
+	AuthConfig     *AuthConfigRepository
 }
 
 // NewRepositories constructs all repositories bound to the read/write pools.
@@ -40,5 +41,6 @@ func NewRepositories(d *db.DB) *Repositories {
 		RenameConfig:   NewRenameConfigRepository(d),
 		DDLConfig:      NewDDLConfigRepository(d),
 		Blacklist:      NewBlacklistRepository(d),
+		AuthConfig:     NewAuthConfigRepository(d),
 	}
 }

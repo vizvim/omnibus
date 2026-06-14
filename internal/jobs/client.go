@@ -16,18 +16,29 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riversqlite"
 	"github.com/riverqueue/river/rivermigrate"
+
+	omnibusv1 "github.com/vizvim/omnibus/gen/go/omnibus/v1"
 )
 
 // defaultMaxAttempts bounds River's retry/backoff for a job before it is discarded.
 const defaultMaxAttempts = 5
 
+// Publisher is the live-status fan-out seam (UI-05, D-08): the jobs client publishes a
+// JobStateEvent envelope when a job is enqueued so the Activity view updates live. events.Bus
+// satisfies it via Publish. A nil publisher disables emission (no-op), so the engine's
+// correctness never depends on it.
+type Publisher interface {
+	Publish(env *omnibusv1.EventEnvelope)
+}
+
 // Client wraps the River client and the queue configuration omnibus runs. All writes
 // flow through the single-writer write pool; job-run history reads go through the
 // read pool (ADR 0002).
 type Client struct {
-	river  *river.Client[*sql.Tx]
-	readDB *sql.DB
-	logger *slog.Logger
+	river     *river.Client[*sql.Tx]
+	readDB    *sql.DB
+	logger    *slog.Logger
+	publisher Publisher
 }
 
 // New constructs the jobs client against the single-writer write pool (for River's own
@@ -112,6 +123,25 @@ func New(ctx context.Context, writeDB, readDB *sql.DB, maxWorkers int, sweepInte
 	return &Client{river: riverClient, readDB: readDB, logger: logger}, nil
 }
 
+// SetPublisher wires the live-status event publisher after construction (mirrors the
+// service<->jobs SetEnqueuer cycle resolution). A nil publisher leaves job-state emission as
+// a no-op. Emission is best-effort observability and never affects enqueue correctness.
+func (c *Client) SetPublisher(p Publisher) { c.publisher = p }
+
+// emitJobState publishes a JobStateEvent envelope to the bus if a publisher is wired (no-op
+// otherwise) so the Activity view sees enqueued/running jobs live (UI-05/D-08).
+func (c *Client) emitJobState(kind, state string) {
+	if c.publisher == nil {
+		return
+	}
+	c.publisher.Publish(&omnibusv1.EventEnvelope{
+		OccurredAt: time.Now().UTC().Format(time.RFC3339),
+		Event: &omnibusv1.EventEnvelope_JobState{
+			JobState: &omnibusv1.JobStateEvent{Kind: kind, State: state},
+		},
+	})
+}
+
 // Start begins working jobs. Jobs executed by the client inherit from ctx.
 func (c *Client) Start(ctx context.Context) error {
 	if err := c.river.Start(ctx); err != nil {
@@ -140,6 +170,7 @@ func (c *Client) EnqueueImport(ctx context.Context, seriesID, comicvineVolumeID 
 	if err != nil {
 		return fmt.Errorf("enqueue import for series %d: %w", seriesID, err)
 	}
+	c.emitJobState("import_series", "queued")
 	return nil
 }
 
@@ -154,6 +185,7 @@ func (c *Client) EnqueueRefresh(ctx context.Context, seriesID, comicvineVolumeID
 	if err != nil {
 		return fmt.Errorf("enqueue refresh for series %d: %w", seriesID, err)
 	}
+	c.emitJobState("refresh_series", "queued")
 	return nil
 }
 

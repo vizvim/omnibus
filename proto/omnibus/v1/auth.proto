@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package omnibus.v1;
+
+option go_package = "github.com/vizvim/omnibus/gen/go/omnibus/v1;omnibusv1";
+
+// AuthMode is the three-state optional-auth setting (D-01), mirroring Sonarr/Radarr's
+// authentication modes. OFF is the default on a fresh install (auth is opt-in, ADR 0008).
+enum AuthMode {
+  // AUTH_MODE_UNSPECIFIED is the proto3 zero value; the service treats it as OFF.
+  AUTH_MODE_UNSPECIFIED = 0;
+  // AUTH_MODE_OFF disables the gate entirely — every request passes (default, D-01).
+  AUTH_MODE_OFF = 1;
+  // AUTH_MODE_ON gates every request: a valid session cookie is required (D-03/D-04).
+  AUTH_MODE_ON = 2;
+  // AUTH_MODE_BYPASS_LOCAL gates remote requests but lets loopback/RFC1918 peers
+  // through, keyed on the real socket peer IP (D-05).
+  AUTH_MODE_BYPASS_LOCAL = 3;
+}
+
+// AuthConfig is the DB-backed, runtime-editable optional-auth configuration (AUTH-01,
+// ADR 0008). Unlike RenameConfig it carries a secret (the password), so the READ view
+// NEVER exposes the stored hash — it only reports whether a credential is configured. The
+// password is write-only on the update request (mirrors DownloadClientConfig's APIKey).
+message AuthConfig {
+  // mode is the three-state auth setting (Off/On/BypassLocal, D-01).
+  AuthMode mode = 1;
+  // username is the single-user login name (no secret — safe to return).
+  string username = 2;
+  // configured is true when a password hash is stored. The hash itself is NEVER
+  // returned; the UI shows "configured"/"not configured" (D-02).
+  bool configured = 3;
+}
+
+message GetAuthConfigRequest {}
+
+message GetAuthConfigResponse {
+  AuthConfig config = 1;
+}
+
+message UpdateAuthConfigRequest {
+  // mode is the three-state auth setting to persist (D-01).
+  AuthMode mode = 1;
+  // username is the single-user login name.
+  string username = 2;
+  // password is write-only: a non-empty value is bcrypt-hashed and stored; an empty
+  // value keeps the existing stored hash (edit-without-retype, mirrors DownloadClientForm
+  // masking). It is NEVER returned in any response.
+  string password = 3;
+}
+
+message UpdateAuthConfigResponse {
+  AuthConfig config = 1;
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message LoginResponse {}
+
+message LogoutRequest {}
+
+message LogoutResponse {}
+
+// AuthService owns the optional single-user auth gate (AUTH-01, ADR 0008). It is a
+// domain-segmented service (ADR 0007) persisting its config as user_config keys (no
+// migration). GetAuthConfig/UpdateAuthConfig manage the setting + hashed credential;
+// Login validates credentials and sets a signed, httpOnly, SameSite session cookie;
+// Logout clears it. Enforcement lives in the http.Handler gate middleware, not here.
+service AuthService {
+  // GetAuthConfig returns the current auth config, defaulting to Off on a fresh install
+  // (D-01). The response carries `configured` but never the password hash.
+  rpc GetAuthConfig(GetAuthConfigRequest) returns (GetAuthConfigResponse);
+  // UpdateAuthConfig persists the auth config at runtime (no restart). An empty password
+  // keeps the existing hash; enabling auth without a stored credential is rejected with
+  // InvalidArgument (misconfig -> fail-closed, D-04).
+  rpc UpdateAuthConfig(UpdateAuthConfigRequest) returns (UpdateAuthConfigResponse);
+  // Login validates the username/password against the stored bcrypt hash and, on success,
+  // sets the signed session cookie. Bad credentials return Unauthenticated with a single
+  // generic message (no user-enumeration oracle, D-04).
+  rpc Login(LoginRequest) returns (LoginResponse);
+  // Logout clears the session cookie.
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+}

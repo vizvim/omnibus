@@ -1,6 +1,27 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { toHaveNoViolations } from "jest-axe";
+import { afterEach, expect } from "vitest";
+
+// Register the jest-axe matcher globally so every component test can assert
+// `expect(container).toHaveNoViolations()` (D-12 accessibility gate). The axe
+// assertions themselves are written in Plan 05; this only installs the matcher.
+expect.extend(toHaveNoViolations);
+
+// Radix UI primitives (DropdownMenu, etc.) call a few DOM APIs that jsdom does not implement.
+// Polyfill them so menus open/close in component tests without throwing.
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false;
+}
+if (!Element.prototype.setPointerCapture) {
+  Element.prototype.setPointerCapture = () => {};
+}
+if (!Element.prototype.releasePointerCapture) {
+  Element.prototype.releasePointerCapture = () => {};
+}
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
 
 // Unmount React trees between tests so the DOM does not leak across cases.
 afterEach(() => {

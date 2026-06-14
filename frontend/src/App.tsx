@@ -3,9 +3,11 @@ import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "./components/layout/AppShell";
 import { CommandPalette } from "./components/layout/CommandPalette";
 import { titleFor, type Navigate, type Route } from "./components/layout/nav";
+import { useAuthGate } from "./lib/auth";
 import { Activity } from "./pages/Activity";
 import { Indexers } from "./pages/Indexers";
 import { Library } from "./pages/Library";
+import { LoginScreen } from "./pages/LoginScreen";
 import { Search } from "./pages/Search";
 import { SeriesDetail } from "./pages/SeriesDetail";
 import { Settings } from "./pages/Settings";
@@ -25,6 +27,13 @@ export function App({
   const [seriesId, setSeriesId] = useState<bigint | undefined>(initialSeriesId);
   const [seed, setSeed] = useState("");
   const [commandOpen, setCommandOpen] = useState(false);
+
+  // The optional-auth gate sits ABOVE the internal router (D-04, T-6-30): when auth is
+  // enabled and there is no valid session, render the full-page Login INSTEAD of the
+  // AppShell, so the shell never renders in a partially-authed state. When auth is Off or
+  // its state is unknown, the shell renders as before — the Route union + NAV_ITEMS are
+  // untouched.
+  const { enabled, authed } = useAuthGate();
 
   const navigate = useCallback<Navigate>((next, target) => {
     if (target?.seriesId !== undefined) setSeriesId(target.seriesId);
@@ -53,6 +62,11 @@ export function App({
   useEffect(() => {
     document.title = `${titleFor(route)} · omnibus`;
   }, [route]);
+
+  // Gate short-circuit: enabled + unauthed -> full-page Login, no shell.
+  if (enabled && !authed) {
+    return <LoginScreen />;
+  }
 
   return (
     <AppShell active={route} onNavigate={navigate} onOpenCommand={() => setCommandOpen(true)}>

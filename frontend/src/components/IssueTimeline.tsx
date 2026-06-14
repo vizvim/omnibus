@@ -2,17 +2,26 @@ import { useQuery } from "@connectrpc/connect-query";
 import { WifiOff } from "lucide-react";
 
 import { getIssueTimeline } from "../gen/omnibus/v1/search-SearchService_connectquery";
+import { useConnectionState } from "../lib/transport";
 import { EmptyState } from "./EmptyState";
 import { TimelineEvent } from "./TimelineEvent";
 
 // IssueTimeline renders the per-issue event timeline (OBS-01): a single-column
-// chronological list, most-recent at the top (the focal point). It polls GetIssueTimeline
-// so new events appear as the search loop runs.
+// chronological list, most-recent at the top (the focal point). The live stream now drives
+// updates — stream timeline/download-progress events invalidate this query so new events
+// appear without polling (D-08/D-10). Polling is demoted to an offline-only fallback: it runs
+// only while the stream is disconnected, so the network tab shows no periodic GET while live.
 export function IssueTimeline({ issueId }: { issueId: bigint }) {
+  const connection = useConnectionState();
   const timeline = useQuery(
     getIssueTimeline,
     { issueId },
-    { retry: false, refetchInterval: 5000 },
+    {
+      retry: false,
+      // Fallback poll only when the live stream is offline (D-10); the stream is the default
+      // path otherwise.
+      refetchInterval: connection === "offline" ? 5000 : false,
+    },
   );
 
   if (timeline.isError) {

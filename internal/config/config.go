@@ -19,6 +19,9 @@ import (
 // envPrefix is the prefix for environment overrides (OMNIBUS_HTTP_ADDR, ...).
 const envPrefix = "OMNIBUS_"
 
+// redacted is the masked placeholder emitted in LogValue for any present secret.
+const redacted = "REDACTED"
+
 // Config is the typed runtime configuration. koanf tags map snake_case keys (from
 // file or the OMNIBUS_-prefixed, lowercased env vars) onto these fields.
 type Config struct {
@@ -68,6 +71,16 @@ type Config struct {
 	// RSSPollIntervalMinutes is how often each enabled RSS indexer's feed is polled for
 	// auto-grab (D-15). Fixed default (30m), env-overridable.
 	RSSPollIntervalMinutes int `koanf:"rss_poll_interval_minutes"`
+	// AuthSessionSecret signs the optional-auth session cookie (HMAC-SHA256, AUTH-01).
+	// Secret — redacted in LogValue, never logged. Sourced from OMNIBUS_AUTH_SESSION_SECRET;
+	// when empty the app generates a persisted secret on first boot (see app wiring) so the
+	// gate still works out of the box without operator setup. Changing it invalidates all
+	// outstanding sessions.
+	AuthSessionSecret string `koanf:"auth_session_secret"`
+	// AuthTrustProxy, when true, lets the gate read the first X-Forwarded-For entry for the
+	// local-bypass peer-IP decision (only safe behind an explicitly trusted reverse proxy,
+	// D-05). Default false: the gate uses the real socket peer (non-spoofable).
+	AuthTrustProxy bool `koanf:"auth_trust_proxy"`
 }
 
 // Load reads configuration. If filePath is non-empty it is parsed as YAML first;
@@ -93,6 +106,8 @@ func Load(filePath string) (Config, error) {
 		"auto_search_batch_size":     20,
 		"search_attempt_cap":         10,
 		"rss_poll_interval_minutes":  30,
+		"auth_session_secret":        "",
+		"auth_trust_proxy":           false,
 	}
 	if err := k.Load(confmap.Provider(defaults, "."), nil); err != nil {
 		return Config{}, fmt.Errorf("load defaults: %w", err)
@@ -119,16 +134,21 @@ func Load(filePath string) (Config, error) {
 	return cfg, nil
 }
 
-// LogValue implements slog.LogValuer so the ComicVine API key is never written to
-// logs. Only non-secret fields are emitted; the key is masked.
+// LogValue implements slog.LogValuer so secrets (the ComicVine API key, the SABnzbd API
+// key, and the auth session-signing secret) are never written to logs. Only non-secret
+// fields are emitted; each secret is masked to REDACTED when present.
 func (c Config) LogValue() slog.Value {
 	key := ""
 	if c.ComicVineAPIKey != "" {
-		key = "REDACTED"
+		key = redacted
 	}
 	sabKey := ""
 	if c.SabnzbdAPIKey != "" {
-		sabKey = "REDACTED"
+		sabKey = redacted
+	}
+	sessionSecret := ""
+	if c.AuthSessionSecret != "" {
+		sessionSecret = redacted
 	}
 	return slog.GroupValue(
 		slog.String("http_addr", c.HTTPAddr),
@@ -141,5 +161,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("sabnzbd_url", c.SabnzbdURL),
 		slog.String("sabnzbd_api_key", sabKey),
 		slog.String("sabnzbd_category", c.SabnzbdCategory),
+		slog.String("auth_session_secret", sessionSecret),
+		slog.Bool("auth_trust_proxy", c.AuthTrustProxy),
 	)
 }

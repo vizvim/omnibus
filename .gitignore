@@ -33,7 +33,12 @@ go.work.sum
 
 # Frontend
 frontend/node_modules/
-frontend/dist/
+# Ignore built SPA output but keep a committed placeholder index.html so
+# `//go:embed frontend/dist` compiles in a clean checkout / dev build (a real
+# `vite build` overwrites the directory and its output stays ignored). The dir itself
+# is matched with /* (not a trailing slash) so the negation below can re-include the file.
+frontend/dist/*
+!frontend/dist/index.html
 frontend/.vite/
 
 # Local runtime data (SQLite db, downloaded covers under /data or ./.dev)
